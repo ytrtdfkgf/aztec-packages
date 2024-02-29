@@ -1,7 +1,6 @@
 use crate::{
     context::{inputs::PrivateContextInputs, interface::ContextInterface},
-    key::nullifier_key::validate_nullifier_key_against_address,
-    messaging::process_l1_to_l2_message,
+    key::nullifier_key::validate_nullifier_key_against_address, messaging::process_l1_to_l2_message,
     oracle::{
     arguments, call_private_function::call_private_function_internal,
     enqueue_public_function_call::enqueue_public_function_call_internal, context::get_portal_address,
@@ -11,15 +10,14 @@ use crate::{
 };
 use dep::protocol_types::{
     abis::{
-        call_context::CallContext, function_data::FunctionData, function_selector::FunctionSelector,
-        nullifier_key_validation_request::NullifierKeyValidationRequest,
-        private_call_stack_item::PrivateCallStackItem,
-        private_circuit_public_inputs::PrivateCircuitPublicInputs,
-        public_call_stack_item::PublicCallStackItem,
-        public_circuit_public_inputs::PublicCircuitPublicInputs,
-        read_request::ReadRequest,
-        side_effect::{SideEffect, SideEffectLinkedToNoteHash}
-    },
+    call_context::CallContext, function_data::FunctionData, function_selector::FunctionSelector,
+    nullifier_key_validation_request::NullifierKeyValidationRequest,
+    private_call_stack_item::PrivateCallStackItem,
+    private_circuit_public_inputs::PrivateCircuitPublicInputs,
+    public_call_stack_item::PublicCallStackItem,
+    public_circuit_public_inputs::PublicCircuitPublicInputs, read_request::ReadRequest,
+    side_effect::{SideEffect, SideEffectLinkedToNoteHash}
+},
     address::{AztecAddress, EthAddress},
     constants::{
     MAX_NEW_NOTE_HASHES_PER_CALL, MAX_NEW_L2_TO_L1_MSGS_PER_CALL, MAX_NEW_NULLIFIERS_PER_CALL,
@@ -466,7 +464,8 @@ impl PrivateContext {
                 unencrypted_logs_hash: [0; NUM_FIELDS_PER_SHA256],
                 unencrypted_log_preimages_length: 0,
                 historical_header: Header::empty(),
-                prover_address: AztecAddress::zero()
+                prover_address: AztecAddress::zero(),
+                reverted: false
             },
             is_execution_request: true
         };

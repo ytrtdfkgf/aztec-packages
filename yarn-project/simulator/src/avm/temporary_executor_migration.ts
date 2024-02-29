@@ -105,5 +105,7 @@ export function temporaryConvertAvmResults(
     returnValues,
     nestedExecutions,
     unencryptedLogs,
+    reverted: result.reverted,
+    revertReason: result.revertReason,
   };
 }

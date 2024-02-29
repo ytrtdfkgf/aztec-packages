@@ -44,6 +44,10 @@ export class PublicKernelCircuitPublicInputs {
      * Indicates whether the teardown kernel is needed.
      */
     public needsTeardown: boolean,
+    /**
+     * Indicates whether execution of the public circuit reverted.
+     */
+    public reverted: boolean,
   ) {}
 
   toBuffer() {
@@ -55,6 +59,7 @@ export class PublicKernelCircuitPublicInputs {
       this.needsSetup,
       this.needsAppLogic,
       this.needsTeardown,
+      this.reverted,
     );
   }
 
@@ -80,6 +85,7 @@ export class PublicKernelCircuitPublicInputs {
       reader.readBoolean(),
       reader.readBoolean(),
       reader.readBoolean(),
+      reader.readBoolean(),
     );
   }
 
@@ -92,6 +98,7 @@ export class PublicKernelCircuitPublicInputs {
       true,
       true,
       true,
+      false,
     );
   }
 }

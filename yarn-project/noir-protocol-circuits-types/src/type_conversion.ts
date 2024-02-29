@@ -1185,6 +1185,7 @@ export function mapPublicKernelCircuitPublicInputsToNoir(
     needs_setup: inputs.needsSetup,
     needs_app_logic: inputs.needsAppLogic,
     needs_teardown: inputs.needsTeardown,
+    reverted: inputs.reverted,
   };
 }
 
@@ -1406,6 +1407,7 @@ export function mapPublicKernelCircuitPublicInputsFromNoir(
     inputs.needs_setup,
     inputs.needs_app_logic,
     inputs.needs_teardown,
+    inputs.reverted,
   );
 }
 
@@ -1557,6 +1559,7 @@ export function mapPublicCircuitPublicInputsToNoir(
     historical_header: mapHeaderToNoir(publicInputs.historicalHeader),
 
     prover_address: mapAztecAddressToNoir(publicInputs.proverAddress),
+    reverted: publicInputs.reverted,
   };
 }
 /**

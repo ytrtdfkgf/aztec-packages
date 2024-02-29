@@ -1,18 +1,22 @@
 import { FunctionL2Logs } from '@aztec/circuit-types';
 import {
   AztecAddress,
-  CallContext,
   ContractStorageRead,
   ContractStorageUpdateRequest,
   Fr,
-  FunctionData,
   L2ToL1Message,
+  PublicCallRequest,
   PublicDataRead,
   PublicDataUpdateRequest,
   SideEffect,
   SideEffectLinkedToNoteHash,
 } from '@aztec/circuits.js';
 import { computePublicDataTreeLeafSlot, computePublicDataTreeValue } from '@aztec/circuits.js/hash';
+
+/**
+ * The execution of a public function.
+ */
+export type PublicExecution = Pick<PublicCallRequest, 'contractAddress' | 'functionData' | 'callContext' | 'args'>;
 
 /**
  * The public function execution result.
@@ -39,20 +43,14 @@ export interface PublicExecutionResult {
    * Note: These are preimages to `unencryptedLogsHash`.
    */
   unencryptedLogs: FunctionL2Logs;
-}
-
-/**
- * The execution of a public function.
- */
-export interface PublicExecution {
-  /** Address of the contract being executed. */
-  contractAddress: AztecAddress;
-  /** Function of the contract being called. */
-  functionData: FunctionData;
-  /** Arguments for the call. */
-  args: Fr[];
-  /** Context of the call. */
-  callContext: CallContext;
+  /**
+   * Whether the execution reverted.
+   */
+  reverted: boolean;
+  /**
+   * The revert reason if the execution reverted.
+   */
+  revertReason: Error | undefined;
 }
 
 /**
@@ -63,7 +61,7 @@ export interface PublicExecution {
 export function isPublicExecutionResult(
   input: PublicExecution | PublicExecutionResult,
 ): input is PublicExecutionResult {
-  return !!(input as PublicExecutionResult).execution;
+  return 'execution' in input && input.execution !== undefined;
 }
 
 /**

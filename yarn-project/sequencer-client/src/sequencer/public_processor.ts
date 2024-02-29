@@ -13,7 +13,13 @@ import { ContractsDataSourcePublicDB, WorldStateDB, WorldStatePublicDB } from '.
 import { RealPublicKernelCircuitSimulator } from '../simulator/public_kernel.js';
 import { AbstractPhaseManager } from './abstract_phase_manager.js';
 import { PhaseManagerFactory } from './phase_manager_factory.js';
-import { FailedTx, ProcessedTx, makeEmptyProcessedTx, makeProcessedTx } from './processed_tx.js';
+import {
+  FailedTx,
+  ProcessedTx,
+  getPreviousOutputAndProof,
+  makeEmptyProcessedTx,
+  makeProcessedTx,
+} from './processed_tx.js';
 
 /**
  * Creates new instances of PublicProcessor given the provided merkle tree db and contract data source.
@@ -97,17 +103,13 @@ export class PublicProcessor {
         this.publicStateDB,
       );
       this.log(`Beginning processing in phase ${phase?.phase} for tx ${tx.getTxHash()}`);
-      let { publicKernelPublicInput, publicKernelProof } = AbstractPhaseManager.getKernelOutputAndProof(
-        tx,
-        undefined,
-        undefined,
-      );
+      let { publicKernelPublicInput, previousProof: proof } = getPreviousOutputAndProof(tx, undefined, undefined);
       const timer = new Timer();
       try {
         while (phase) {
-          const output = await phase.handle(tx, publicKernelPublicInput, publicKernelProof);
+          const output = await phase.handle(tx, publicKernelPublicInput, proof);
           publicKernelPublicInput = output.publicKernelOutput;
-          publicKernelProof = output.publicKernelProof;
+          proof = output.publicKernelProof;
           phase = PhaseManagerFactory.phaseFromOutput(
             publicKernelPublicInput,
             phase,
@@ -122,7 +124,7 @@ export class PublicProcessor {
           );
         }
 
-        const processedTransaction = makeProcessedTx(tx, publicKernelPublicInput, publicKernelProof);
+        const processedTransaction = makeProcessedTx(tx, publicKernelPublicInput, proof);
         result.push(processedTransaction);
 
         this.log(`Processed public part of ${tx.data.endNonRevertibleData.newNullifiers[0].value}`, {

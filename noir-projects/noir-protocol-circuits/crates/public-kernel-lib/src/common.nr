@@ -52,22 +52,23 @@ pub fn initialize_end_values(
     // Ensure the arrays are the same as previously, before we start pushing more data onto them in other
     // functions within this circuit:
     let start = previous_kernel.public_inputs.end;
+    if circuit_outputs.reverted == false {
+        circuit_outputs.end.new_note_hashes = array_to_bounded_vec(start.new_note_hashes);
+        circuit_outputs.end.new_nullifiers = array_to_bounded_vec(start.new_nullifiers);
 
-    circuit_outputs.end.new_note_hashes = array_to_bounded_vec(start.new_note_hashes);
-    circuit_outputs.end.new_nullifiers = array_to_bounded_vec(start.new_nullifiers);
+        circuit_outputs.end.private_call_stack = array_to_bounded_vec(start.private_call_stack);
+        circuit_outputs.end.public_call_stack = array_to_bounded_vec(start.public_call_stack);
+        circuit_outputs.end.new_l2_to_l1_msgs = array_to_bounded_vec(start.new_l2_to_l1_msgs);
 
-    circuit_outputs.end.private_call_stack = array_to_bounded_vec(start.private_call_stack);
-    circuit_outputs.end.public_call_stack = array_to_bounded_vec(start.public_call_stack);
-    circuit_outputs.end.new_l2_to_l1_msgs = array_to_bounded_vec(start.new_l2_to_l1_msgs);
+        circuit_outputs.end.public_data_update_requests = array_to_bounded_vec(start.public_data_update_requests);
+        circuit_outputs.end.public_data_reads = array_to_bounded_vec(start.public_data_reads);
 
-    circuit_outputs.end.public_data_update_requests = array_to_bounded_vec(start.public_data_update_requests);
-    circuit_outputs.end.public_data_reads = array_to_bounded_vec(start.public_data_reads);
+        // Public kernel does not modify encrypted logs values --> we just copy them to output
+        circuit_outputs.end.encrypted_logs_hash = start.encrypted_logs_hash;
+        circuit_outputs.end.encrypted_log_preimages_length = start.encrypted_log_preimages_length;
 
-    // Public kernel does not modify encrypted logs values --> we just copy them to output
-    circuit_outputs.end.encrypted_logs_hash = start.encrypted_logs_hash;
-    circuit_outputs.end.encrypted_log_preimages_length = start.encrypted_log_preimages_length;
-
-    circuit_outputs.end.new_contracts = array_to_bounded_vec(previous_kernel.public_inputs.end.new_contracts);
+        circuit_outputs.end.new_contracts = array_to_bounded_vec(previous_kernel.public_inputs.end.new_contracts);
+    }
 
     let start_non_revertible = previous_kernel.public_inputs.end_non_revertible;
     circuit_outputs.end_non_revertible.new_note_hashes = array_to_bounded_vec(start_non_revertible.new_note_hashes);

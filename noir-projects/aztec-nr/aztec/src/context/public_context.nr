@@ -1,7 +1,6 @@
 use crate::{
-    context::{inputs::PublicContextInputs, interface::ContextInterface}, 
-    messaging::process_l1_to_l2_message,
-    oracle::{arguments, public_call::call_public_function_internal}
+    context::{inputs::PublicContextInputs, interface::ContextInterface},
+    messaging::process_l1_to_l2_message, oracle::{arguments, public_call::call_public_function_internal}
 };
 use dep::protocol_types::{
     abis::{
@@ -154,7 +153,8 @@ impl PublicContext {
             unencrypted_logs_hash,
             unencrypted_log_preimages_length,
             historical_header: self.inputs.historical_header,
-            prover_address: self.prover_address
+            prover_address: self.prover_address,
+            reverted: false
         };
         pub_circuit_pub_inputs
     }

@@ -1,3 +1,4 @@
+import { FunctionL2Logs } from '@aztec/circuit-types';
 import { GlobalVariables, Header, PublicCircuitPublicInputs } from '@aztec/circuits.js';
 import { createDebugLogger } from '@aztec/foundation/log';
 
@@ -11,13 +12,15 @@ import {
   temporaryConvertAvmResults,
   temporaryCreateAvmExecutionEnvironment,
 } from '../avm/temporary_executor_migration.js';
+import { AcirSimulator } from '../client/simulator.js';
 import { ExecutionError, createSimulationError } from '../common/errors.js';
 import { SideEffectCounter } from '../common/index.js';
 import { PackedArgsCache } from '../common/packed_args_cache.js';
-import { AcirSimulator } from '../index.js';
 import { CommitmentsDB, PublicContractsDB, PublicStateDB } from './db.js';
 import { PublicExecution, PublicExecutionResult, checkValidStaticCall } from './execution.js';
 import { PublicExecutionContext } from './public_execution_context.js';
+
+// import { PublicExecutionContext } from './public_execution_context.js';
 
 /**
  * Execute a public function and return the execution result.
@@ -34,9 +37,21 @@ export async function executePublicFunction(
 
   const initialWitness = context.getInitialWitness();
   const acvmCallback = new Oracle(context);
-  const { partialWitness } = await acvm(await AcirSimulator.getSolver(), acir, initialWitness, acvmCallback).catch(
-    (err: Error) => {
-      throw new ExecutionError(
+  const { partialWitness, reverted, revertReason } = await acvm(
+    await AcirSimulator.getSolver(),
+    acir,
+    initialWitness,
+    acvmCallback,
+  )
+    .then(result => ({
+      partialWitness: result.partialWitness,
+      reverted: false,
+      revertReason: undefined,
+    }))
+    .catch((err: Error) => ({
+      partialWitness: undefined,
+      reverted: true,
+      revertReason: new ExecutionError(
         err.message,
         {
           contractAddress,
@@ -44,9 +59,28 @@ export async function executePublicFunction(
         },
         extractCallStack(err),
         { cause: err },
-      );
-    },
-  );
+      ),
+    }));
+
+  if (reverted) {
+    return {
+      execution,
+      returnValues: [],
+      newNoteHashes: [],
+      newL2ToL1Messages: [],
+      newNullifiers: [],
+      contractStorageReads: [],
+      contractStorageUpdateRequests: [],
+      nestedExecutions: [],
+      unencryptedLogs: FunctionL2Logs.empty(),
+      reverted,
+      revertReason,
+    };
+  }
+
+  if (!partialWitness) {
+    throw new Error('No partial witness returned from ACVM');
+  }
 
   const returnWitness = extractReturnWitness(acir, partialWitness);
   const {
@@ -86,6 +120,8 @@ export async function executePublicFunction(
     returnValues,
     nestedExecutions,
     unencryptedLogs,
+    reverted: false,
+    revertReason: undefined,
   };
 }
 

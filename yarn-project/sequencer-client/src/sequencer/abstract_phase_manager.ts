@@ -21,8 +21,6 @@ import {
   MembershipWitness,
   PrivateKernelTailCircuitPublicInputs,
   Proof,
-  PublicAccumulatedNonRevertibleData,
-  PublicAccumulatedRevertibleData,
   PublicCallData,
   PublicCallRequest,
   PublicCallStackItem,
@@ -158,43 +156,6 @@ export abstract class AbstractPhaseManager {
     return calls;
   }
 
-  public static getKernelOutputAndProof(
-    tx: Tx,
-    publicKernelPublicInput?: PublicKernelCircuitPublicInputs,
-    previousPublicKernelProof?: Proof,
-  ): {
-    /**
-     * the output of the public kernel circuit for this phase
-     */
-    publicKernelPublicInput: PublicKernelCircuitPublicInputs;
-    /**
-     * the proof of the public kernel circuit for this phase
-     */
-    publicKernelProof: Proof;
-  } {
-    if (publicKernelPublicInput && previousPublicKernelProof) {
-      return {
-        publicKernelPublicInput: publicKernelPublicInput,
-        publicKernelProof: previousPublicKernelProof,
-      };
-    } else {
-      const publicKernelPublicInput = new PublicKernelCircuitPublicInputs(
-        tx.data.aggregationObject,
-        PublicAccumulatedNonRevertibleData.fromPrivateAccumulatedNonRevertibleData(tx.data.endNonRevertibleData),
-        PublicAccumulatedRevertibleData.fromPrivateAccumulatedRevertibleData(tx.data.end),
-        tx.data.constants,
-        tx.data.needsSetup,
-        tx.data.needsAppLogic,
-        tx.data.needsTeardown,
-      );
-      const publicKernelProof = previousPublicKernelProof || tx.proof;
-      return {
-        publicKernelPublicInput,
-        publicKernelProof,
-      };
-    }
-  }
-
   protected async processEnqueuedPublicCalls(
     tx: Tx,
     previousPublicKernelOutput: PublicKernelCircuitPublicInputs,
@@ -242,6 +203,12 @@ export abstract class AbstractPhaseManager {
         const callData = await this.getPublicCallData(result, isExecutionRequest);
 
         [kernelOutput, kernelProof] = await this.runKernelCircuit(callData, kernelOutput, kernelProof);
+
+        if (kernelOutput.reverted) {
+          // halt immediately if the public kernel circuit has reverted.
+          // return no logs, as they should not go on-chain.
+          return [kernelOutput, kernelProof, []];
+        }
 
         if (!enqueuedExecutionResult) {
           enqueuedExecutionResult = result;
@@ -334,6 +301,7 @@ export abstract class AbstractPhaseManager {
       unencryptedLogsHash,
       unencryptedLogPreimagesLength,
       historicalHeader: this.historicalHeader,
+      reverted: result.reverted,
     });
   }
 
