@@ -206,9 +206,9 @@ describe('ACIR public execution simulator', () => {
         const recipientBalance = new Fr(20n);
         mockStore(senderBalance, recipientBalance);
 
-        await expect(executor.simulate(execution, GlobalVariables.empty())).rejects.toThrowError(
-          'Assertion failed: attempt to subtract with underflow',
-        );
+        const { reverted, revertReason } = await executor.simulate(execution, GlobalVariables.empty());
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch('Assertion failed: attempt to subtract with underflow');
       });
     });
   });
@@ -270,7 +270,10 @@ describe('ACIR public execution simulator', () => {
         );
 
         if (isInternal === undefined) {
-          await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError(/Method not found -/);
+          const { reverted, revertReason } = await executor.simulate(execution, globalVariables);
+
+          expect(reverted).toBe(true);
+          expect(revertReason?.message).toMatch('Error awaiting `foreign_call_handler`');
         } else {
           const result = await executor.simulate(execution, globalVariables);
 
@@ -509,7 +512,9 @@ describe('ACIR public execution simulator', () => {
 
         const execution: PublicExecution = { contractAddress, functionData, args, callContext };
         executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
-        await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError('Message not in state');
+        const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch(`Message not in state`);
       });
 
       it('Invalid recipient', async () => {
@@ -524,7 +529,9 @@ describe('ACIR public execution simulator', () => {
 
         const execution: PublicExecution = { contractAddress, functionData, args, callContext };
         executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
-        await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError('Message not in state');
+        const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch(`Message not in state`);
       });
 
       it('Invalid sender', async () => {
@@ -539,7 +546,9 @@ describe('ACIR public execution simulator', () => {
 
         const execution: PublicExecution = { contractAddress, functionData, args, callContext };
         executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
-        await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError('Message not in state');
+        const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch(`Message not in state`);
       });
 
       it('Invalid chainid', async () => {
@@ -554,7 +563,9 @@ describe('ACIR public execution simulator', () => {
 
         const execution: PublicExecution = { contractAddress, functionData, args, callContext };
         executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
-        await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError('Message not in state');
+        const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch(`Message not in state`);
       });
 
       it('Invalid version', async () => {
@@ -569,7 +580,9 @@ describe('ACIR public execution simulator', () => {
 
         const execution: PublicExecution = { contractAddress, functionData, args, callContext };
         executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
-        await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError('Message not in state');
+        const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch(`Message not in state`);
       });
 
       it('Invalid Content', async () => {
@@ -585,7 +598,9 @@ describe('ACIR public execution simulator', () => {
 
         const execution: PublicExecution = { contractAddress, functionData, args, callContext };
         executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
-        await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError('Message not in state');
+        const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch(`Message not in state`);
       });
 
       it('Invalid secret', async () => {
@@ -601,7 +616,9 @@ describe('ACIR public execution simulator', () => {
 
         const execution: PublicExecution = { contractAddress, functionData, args, callContext };
         executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
-        await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError('Message not in state');
+        const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+        expect(reverted).toBe(true);
+        expect(revertReason?.message).toMatch(`Message not in state`);
       });
     });
   });
@@ -688,9 +705,9 @@ describe('ACIR public execution simulator', () => {
           const execution: PublicExecution = { contractAddress, functionData, args, callContext };
           executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
 
-          await expect(executor.simulate(execution, globalVariables)).rejects.toThrowError(
-            `Invalid ${description.toLowerCase()}`,
-          );
+          const { revertReason, reverted } = await executor.simulate(execution, globalVariables);
+          expect(reverted).toBe(true);
+          expect(revertReason?.message).toMatch(`Invalid ${description.toLowerCase()}`);
         });
       });
     });
@@ -738,7 +755,9 @@ describe('ACIR public execution simulator', () => {
       const execution: PublicExecution = { contractAddress, functionData, args, callContext };
       executor = new PublicExecutor(publicState, publicContracts, commitmentsDb, header);
 
-      await expect(executor.simulate(execution, GlobalVariables.empty())).rejects.toThrowError('Invalid header hash');
+      const { revertReason, reverted } = await executor.simulate(execution, GlobalVariables.empty());
+      expect(reverted).toBe(true);
+      expect(revertReason?.message).toMatch(`Invalid header hash`);
     });
   });
 });

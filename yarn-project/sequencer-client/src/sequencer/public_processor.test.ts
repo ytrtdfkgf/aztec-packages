@@ -343,13 +343,6 @@ describe('public_processor', () => {
             })
               .withReverted(new SimulationError('Simulation Failed', []))
               .build(),
-            // This one should not get called at all
-            // PublicExecutionResultBuilder.fromFunctionCall({
-            //   from: callRequests[1].contractAddress,
-            //   tx: makeFunctionCall(enqueuedExecutionContractAddress, makeSelector(5)),
-            // })
-            //   .withReverted(new SimulationError('Simulation Failed', []))
-            //   .build(),
           )
           .build(),
 
