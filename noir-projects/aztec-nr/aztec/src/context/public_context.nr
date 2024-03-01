@@ -1,6 +1,7 @@
 use crate::{
     context::{inputs::PublicContextInputs, interface::ContextInterface},
-    messaging::process_l1_to_l2_message, oracle::{arguments, public_call::call_public_function_internal}
+    messaging::process_l1_to_l2_message,
+    oracle::{arguments, public_call::call_public_function_internal}
 };
 use dep::protocol_types::{
     abis::{

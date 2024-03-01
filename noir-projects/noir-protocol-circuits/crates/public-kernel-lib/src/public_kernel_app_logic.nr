@@ -26,7 +26,6 @@ impl PublicKernelAppLogicCircuitPrivateInputs {
         public_inputs.reverted = self.public_call.call_stack_item.public_inputs.reverted;
 
         // initialise the end state with our provided previous kernel state
-
         common::initialize_end_values(self.previous_kernel, &mut public_inputs);
 
         // validate the inputs common to all invocation circumstances

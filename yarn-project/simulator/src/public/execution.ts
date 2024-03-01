@@ -14,11 +14,6 @@ import {
 import { computePublicDataTreeLeafSlot, computePublicDataTreeValue } from '@aztec/circuits.js/hash';
 
 /**
- * The execution of a public function.
- */
-export type PublicExecution = Pick<PublicCallRequest, 'contractAddress' | 'functionData' | 'callContext' | 'args'>;
-
-/**
  * The public function execution result.
  */
 export interface PublicExecutionResult {
@@ -52,6 +47,11 @@ export interface PublicExecutionResult {
    */
   revertReason: Error | undefined;
 }
+
+/**
+ * The execution of a public function.
+ */
+export type PublicExecution = Pick<PublicCallRequest, 'contractAddress' | 'functionData' | 'callContext' | 'args'>;
 
 /**
  * Returns if the input is a public execution result and not just a public execution.

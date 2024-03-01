@@ -1,6 +1,7 @@
 use crate::{
     context::{inputs::PrivateContextInputs, interface::ContextInterface},
-    key::nullifier_key::validate_nullifier_key_against_address, messaging::process_l1_to_l2_message,
+    key::nullifier_key::validate_nullifier_key_against_address,
+    messaging::process_l1_to_l2_message,
     oracle::{
     arguments, call_private_function::call_private_function_internal,
     enqueue_public_function_call::enqueue_public_function_call_internal, context::get_portal_address,
@@ -15,7 +16,8 @@ use dep::protocol_types::{
     private_call_stack_item::PrivateCallStackItem,
     private_circuit_public_inputs::PrivateCircuitPublicInputs,
     public_call_stack_item::PublicCallStackItem,
-    public_circuit_public_inputs::PublicCircuitPublicInputs, read_request::ReadRequest,
+    public_circuit_public_inputs::PublicCircuitPublicInputs,
+    read_request::ReadRequest,
     side_effect::{SideEffect, SideEffectLinkedToNoteHash}
 },
     address::{AztecAddress, EthAddress},

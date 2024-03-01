@@ -1,7 +1,4 @@
-use dep::protocol_types::{
-  abis::function_selector::FunctionSelector,
-  address::{AztecAddress, EthAddress},
-};
+use dep::protocol_types::{abis::function_selector::FunctionSelector, address::{AztecAddress, EthAddress}};
 
 trait ContextInterface {
     fn push_new_note_hash(&mut self, note_hash: Field);

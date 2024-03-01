@@ -261,14 +261,13 @@ describe('public_processor', () => {
 
       const publicExecutionResult = PublicExecutionResultBuilder.fromPublicCallRequest({
         request: callRequest,
-      })
-        .withNestedExecutions(
+        nestedExecutions: [
           PublicExecutionResultBuilder.fromFunctionCall({
             from: callRequest.contractAddress,
             tx: makeFunctionCall(),
           }).build(),
-        )
-        .build();
+        ],
+      }).build();
 
       publicExecutor.simulate.mockResolvedValue(publicExecutionResult);
 
@@ -321,42 +320,42 @@ describe('public_processor', () => {
       let simulatorCallCount = 0;
       const simulatorResults: PublicExecutionResult[] = [
         // Setup
-        PublicExecutionResultBuilder.fromPublicCallRequest({ request: callRequests[0] })
-          .withContractStorageUpdateRequest(new ContractStorageUpdateRequest(contractSlotA, fr(0x101)))
-          .build(),
+        PublicExecutionResultBuilder.fromPublicCallRequest({
+          request: callRequests[0],
+          contractStorageUpdateRequests: [new ContractStorageUpdateRequest(contractSlotA, fr(0x101))],
+        }).build(),
 
         // App Logic
-        PublicExecutionResultBuilder.fromPublicCallRequest({ request: callRequests[2] })
-          .withNestedExecutions(
+        PublicExecutionResultBuilder.fromPublicCallRequest({
+          request: callRequests[2],
+          nestedExecutions: [
             PublicExecutionResultBuilder.fromFunctionCall({
               from: callRequests[1].contractAddress,
               tx: makeFunctionCall(enqueuedExecutionContractAddress, makeSelector(5)),
-            })
-              .withContractStorageUpdateRequest(
+              contractStorageUpdateRequests: [
                 new ContractStorageUpdateRequest(contractSlotA, fr(0x102)),
                 new ContractStorageUpdateRequest(contractSlotB, fr(0x151)),
-              )
-              .build(),
+              ],
+            }).build(),
             PublicExecutionResultBuilder.fromFunctionCall({
               from: callRequests[1].contractAddress,
               tx: makeFunctionCall(enqueuedExecutionContractAddress, makeSelector(5)),
-            })
-              .withReverted(new SimulationError('Simulation Failed', []))
-              .build(),
-          )
-          .build(),
+              revertReason: new SimulationError('Simulation Failed', []),
+            }).build(),
+          ],
+        }).build(),
 
         // Teardown
-        PublicExecutionResultBuilder.fromPublicCallRequest({ request: callRequests[1] })
-          .withNestedExecutions(
+        PublicExecutionResultBuilder.fromPublicCallRequest({
+          request: callRequests[1],
+          nestedExecutions: [
             PublicExecutionResultBuilder.fromFunctionCall({
               from: callRequests[1].contractAddress,
               tx: makeFunctionCall(enqueuedExecutionContractAddress, makeSelector(5)),
-            })
-              .withContractStorageUpdateRequest(new ContractStorageUpdateRequest(contractSlotC, fr(0x201)))
-              .build(),
-          )
-          .build(),
+              contractStorageUpdateRequests: [new ContractStorageUpdateRequest(contractSlotC, fr(0x201))],
+            }).build(),
+          ],
+        }).build(),
       ];
 
       publicExecutor.simulate.mockImplementation(execution => {
@@ -439,33 +438,33 @@ describe('public_processor', () => {
         PublicExecutionResultBuilder.fromPublicCallRequest({ request: callRequests[0] }).build(),
 
         // App Logic
-        PublicExecutionResultBuilder.fromPublicCallRequest({ request: callRequests[2] })
-          .withContractStorageUpdateRequest(
+        PublicExecutionResultBuilder.fromPublicCallRequest({
+          request: callRequests[2],
+          contractStorageUpdateRequests: [
             new ContractStorageUpdateRequest(contractSlotA, fr(0x101)),
             new ContractStorageUpdateRequest(contractSlotB, fr(0x151)),
-          )
-          .build(),
+          ],
+        }).build(),
 
         // Teardown
-        PublicExecutionResultBuilder.fromPublicCallRequest({ request: callRequests[1] })
-          .withNestedExecutions(
+        PublicExecutionResultBuilder.fromPublicCallRequest({
+          request: callRequests[1],
+          nestedExecutions: [
             PublicExecutionResultBuilder.fromFunctionCall({
               from: callRequests[1].contractAddress,
               tx: makeFunctionCall(enqueuedExecutionContractAddress, makeSelector(5)),
-            })
-              .withContractStorageUpdateRequest(
+              contractStorageUpdateRequests: [
                 new ContractStorageUpdateRequest(contractSlotA, fr(0x101)),
                 new ContractStorageUpdateRequest(contractSlotC, fr(0x201)),
-              )
-              .build(),
+              ],
+            }).build(),
             PublicExecutionResultBuilder.fromFunctionCall({
               from: callRequests[1].contractAddress,
               tx: makeFunctionCall(enqueuedExecutionContractAddress, makeSelector(5)),
-            })
-              .withContractStorageUpdateRequest(new ContractStorageUpdateRequest(contractSlotA, fr(0x102)))
-              .build(),
-          )
-          .build(),
+              contractStorageUpdateRequests: [new ContractStorageUpdateRequest(contractSlotA, fr(0x102))],
+            }).build(),
+          ],
+        }).build(),
       ];
 
       publicExecutor.simulate.mockImplementation(execution => {
@@ -552,12 +551,14 @@ class PublicExecutionResultBuilder {
     returnValues = [new Fr(1n)],
     nestedExecutions = [],
     contractStorageUpdateRequests = [],
+    revertReason,
   }: {
     from: AztecAddress;
     tx: FunctionCall;
     returnValues?: Fr[];
     nestedExecutions?: PublicExecutionResult[];
     contractStorageUpdateRequests?: ContractStorageUpdateRequest[];
+    revertReason?: Error;
   }) {
     const builder = new PublicExecutionResultBuilder({
       callContext: new CallContext(from, tx.to, EthAddress.ZERO, tx.functionData.selector, false, false, false, 0),
@@ -569,6 +570,9 @@ class PublicExecutionResultBuilder {
     builder.withNestedExecutions(...nestedExecutions);
     builder.withContractStorageUpdateRequest(...contractStorageUpdateRequests);
     builder.withReturnValues(...returnValues);
+    if (revertReason) {
+      builder.withReverted(revertReason);
+    }
 
     return builder;
   }
