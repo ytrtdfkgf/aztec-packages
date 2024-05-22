@@ -1,4 +1,5 @@
 use dep::protocol_types::{constants::{MAX_NOTE_HASH_READ_REQUESTS_PER_CALL, GET_NOTES_ORACLE_RETURN_LENGTH}};
+use dep::unsafe::Unconstrained;
 use crate::context::PrivateContext;
 use crate::note::{
     constants::{GET_NOTE_ORACLE_RETURN_LENGTH, MAX_NOTES_PER_PAGE, VIEW_NOTE_ORACLE_RETURN_LENGTH},
@@ -88,14 +89,17 @@ pub fn get_note<Note, N>(
     context: &mut PrivateContext,
     storage_slot: Field
 ) -> Note where Note: NoteInterface<N> {
-    let note = get_note_internal(storage_slot);
+    let unsafe_note = get_note_internal(storage_slot);
+    unsafe_note.make_constrained(
+        |note| {
+        check_note_header(*context, storage_slot, note);
 
-    check_note_header(*context, storage_slot, note);
+        let note_hash_for_read_request = compute_note_hash_for_read_request(note);
+        context.push_note_hash_read_request(note_hash_for_read_request);
 
-    let note_hash_for_read_request = compute_note_hash_for_read_request(note);
-
-    context.push_note_hash_read_request(note_hash_for_read_request);
-    note
+        note
+    }
+    )
 }
 
 pub fn get_notes<Note, N, FILTER_ARGS>(
@@ -103,9 +107,11 @@ pub fn get_notes<Note, N, FILTER_ARGS>(
     storage_slot: Field,
     options: NoteGetterOptions<Note, N, FILTER_ARGS>
 ) -> [Option<Note>; MAX_NOTE_HASH_READ_REQUESTS_PER_CALL] where Note: NoteInterface<N> {
-    let opt_notes = get_notes_internal(storage_slot, options);
-
-    _get_notes_constrain_get_notes_internal(context, storage_slot, opt_notes, options)
+    get_notes_internal(storage_slot, options).make_constrained(
+        |opt_notes| {
+            _get_notes_constrain_get_notes_internal(context, storage_slot, opt_notes, options)
+        }
+    )
 }
 
 pub fn _get_notes_constrain_get_notes_internal<Note, N, FILTER_ARGS>(
@@ -150,10 +156,11 @@ pub fn _get_notes_constrain_get_notes_internal<Note, N, FILTER_ARGS>(
     returned_notes
 }
 
-unconstrained fn get_note_internal<Note, N>(storage_slot: Field) -> Note where Note: NoteInterface<N> {
+unconstrained fn get_note_internal<Note, N>(storage_slot: Field) -> Unconstrained<Note> where Note: NoteInterface<N> {
     let placeholder_note = [Option::none()];
     let placeholder_fields = [0; GET_NOTE_ORACLE_RETURN_LENGTH];
     let placeholder_note_length = [0; N];
+
     oracle::notes::get_notes(
         storage_slot,
         0,
@@ -172,50 +179,21 @@ unconstrained fn get_note_internal<Note, N>(storage_slot: Field) -> Note where N
         placeholder_note,
         placeholder_fields,
         placeholder_note_length
-    )[0].unwrap() // Notice: we don't allow dummies to be returned from get_note (singular).
+    ).transform(
+        |opt_notes: [Option<Note>; 1]|
+        opt_notes[0].unwrap() // Notice: we don't allow dummies to be returned from get_note (singular)
+    )
 }
 
 unconstrained fn get_notes_internal<Note, N, FILTER_ARGS>(
     storage_slot: Field,
     options: NoteGetterOptions<Note, N, FILTER_ARGS>
-) -> [Option<Note>; MAX_NOTE_HASH_READ_REQUESTS_PER_CALL] where Note: NoteInterface<N> {
+) -> Unconstrained<[Option<Note>; MAX_NOTE_HASH_READ_REQUESTS_PER_CALL]> where Note: NoteInterface<N> {
     let (num_selects, select_by_indexes, select_by_offsets, select_by_lengths, select_values, select_comparators, sort_by_indexes, sort_by_offsets, sort_by_lengths, sort_order) = flatten_options(options.selects, options.sorts);
     let placeholder_opt_notes = [Option::none(); MAX_NOTE_HASH_READ_REQUESTS_PER_CALL];
     let placeholder_fields = [0; GET_NOTES_ORACLE_RETURN_LENGTH];
     let placeholder_note_length = [0; N];
-    let opt_notes = oracle::notes::get_notes(
-        storage_slot,
-        num_selects,
-        select_by_indexes,
-        select_by_offsets,
-        select_by_lengths,
-        select_values,
-        select_comparators,
-        sort_by_indexes,
-        sort_by_offsets,
-        sort_by_lengths,
-        sort_order,
-        options.limit,
-        options.offset,
-        options.status,
-        placeholder_opt_notes,
-        placeholder_fields,
-        placeholder_note_length
-    );
 
-    let filter = options.filter;
-    let filter_args = options.filter_args;
-    filter(opt_notes, filter_args)
-}
-
-unconstrained pub fn view_notes<Note, N>(
-    storage_slot: Field,
-    options: NoteViewerOptions<Note, N>
-) -> [Option<Note>; MAX_NOTES_PER_PAGE] where Note: NoteInterface<N> {
-    let (num_selects, select_by_indexes, select_by_offsets, select_by_lengths, select_values, select_comparators, sort_by_indexes, sort_by_offsets, sort_by_lengths, sort_order) = flatten_options(options.selects, options.sorts);
-    let placeholder_opt_notes = [Option::none(); MAX_NOTES_PER_PAGE];
-    let placeholder_fields = [0; VIEW_NOTE_ORACLE_RETURN_LENGTH];
-    let placeholder_note_length = [0; N];
     oracle::notes::get_notes(
         storage_slot,
         num_selects,
@@ -235,6 +213,36 @@ unconstrained pub fn view_notes<Note, N>(
         placeholder_fields,
         placeholder_note_length
     )
+}
+
+unconstrained pub fn view_notes<Note, N>(
+    storage_slot: Field,
+    options: NoteViewerOptions<Note, N>
+) -> [Option<Note>; MAX_NOTES_PER_PAGE] where Note: NoteInterface<N> {
+    let (num_selects, select_by_indexes, select_by_offsets, select_by_lengths, select_values, select_comparators, sort_by_indexes, sort_by_offsets, sort_by_lengths, sort_order) = flatten_options(options.selects, options.sorts);
+    let placeholder_opt_notes = [Option::none(); MAX_NOTES_PER_PAGE];
+    let placeholder_fields = [0; VIEW_NOTE_ORACLE_RETURN_LENGTH];
+    let placeholder_note_length = [0; N];
+
+    oracle::notes::get_notes(
+        storage_slot,
+        num_selects,
+        select_by_indexes,
+        select_by_offsets,
+        select_by_lengths,
+        select_values,
+        select_comparators,
+        sort_by_indexes,
+        sort_by_offsets,
+        sort_by_lengths,
+        sort_order,
+        options.limit,
+        options.offset,
+        options.status,
+        placeholder_opt_notes,
+        placeholder_fields,
+        placeholder_note_length
+    ).make_constrained(|opt_notes| opt_notes) // <- we're not constraining anything, but we don't want to pollute the API
 }
 
 unconstrained fn flatten_options<Note, N>(
