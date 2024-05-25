@@ -125,8 +125,6 @@ export class AccountManager {
         );
       }
       await this.#register();
-      const { chainId, protocolVersion } = await this.pxe.getNodeInfo();
-      const deployWallet = new SignerlessWallet(this.pxe, new DefaultMultiCallEntrypoint(chainId, protocolVersion));
 
       // We use a signerless wallet with the multi call entrypoint in order to make multiple calls in one go
       // If we used getWallet, the deployment would get routed via the account contract entrypoint
@@ -135,7 +133,7 @@ export class AccountManager {
       this.deployMethod = new DeployAccountMethod(
         this.accountContract.getAuthWitnessProvider(this.getCompleteAddress()),
         this.getPublicKeysHash(),
-        deployWallet,
+        await this.getDeployWallet(),
         this.accountContract.getContractArtifact(),
         args,
         'constructor',
@@ -143,6 +141,17 @@ export class AccountManager {
       );
     }
     return this.deployMethod;
+  }
+
+  /**
+   * Returns a wallet implementation for issuing the deployment.
+   */
+  protected async getDeployWallet() {
+    // We use a signerless wallet with the multi call entrypoint in order to make multiple calls in one go
+    // If we used getWallet, the deployment would get routed via the account contract entrypoint
+    // and it can't be used unless the contract is initialized
+    const { chainId, protocolVersion } = await this.pxe.getNodeInfo();
+    return new SignerlessWallet(this.pxe, new DefaultMultiCallEntrypoint(chainId, protocolVersion));
   }
 
   /**

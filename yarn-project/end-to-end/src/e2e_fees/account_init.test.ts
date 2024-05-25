@@ -1,6 +1,6 @@
-import { getSchnorrAccount } from '@aztec/accounts/schnorr';
+import { SchnorrAccountContract, getSchnorrAccount } from '@aztec/accounts/schnorr';
 import {
-  type AccountManager,
+  AccountManager,
   type AccountWallet,
   type DebugLogger,
   Fr,
@@ -10,12 +10,24 @@ import {
   PrivateFeePaymentMethod,
   PublicFeePaymentMethod,
   Schnorr,
+  SignerlessWallet,
   type Wallet,
   computeSecretHash,
   deriveKeys,
 } from '@aztec/aztec.js';
-import { type AztecAddress, type CompleteAddress, Fq, type GasSettings } from '@aztec/circuits.js';
-import { type TokenContract as BananaCoin, type FPCContract, SchnorrAccountContract } from '@aztec/noir-contracts.js';
+import { type EntrypointInterface, EntrypointPayload, type ExecutionRequestInit } from '@aztec/aztec.js/entrypoint';
+// eslint-disable-next-line no-restricted-imports
+import { FunctionCall, PackedValues, TxExecutionRequest } from '@aztec/circuit-types';
+import { type AztecAddress, GasSettings, GeneratorIndex, TxContext } from '@aztec/circuits.js';
+import { type CompleteAddress, Fq } from '@aztec/circuits.js';
+import { type FunctionAbi, FunctionSelector, FunctionType, encodeArguments } from '@aztec/foundation/abi';
+import { padArrayEnd } from '@aztec/foundation/collection';
+import {
+  type TokenContract as BananaCoin,
+  SchnorrAccountContract as BobsAccountContract,
+  type FPCContract,
+} from '@aztec/noir-contracts.js';
+import { GasTokenAddress } from '@aztec/protocol-contracts/gas-token';
 
 import { jest } from '@jest/globals';
 
@@ -96,7 +108,13 @@ describe('e2e_fees account_init', () => {
       await expect(t.gasBalances(bobsAddress)).resolves.toEqual([bobsInitialGas - tx.transactionFee!]);
     });
 
-    it.skip('pays natively in the gas token by bridging funds themselves', async () => {
+    it.skip('pays natively in the gas token by bridging funds themselves (with NativeFeePaymentMethodWithClaim)', async () => {
+      // This test is skipped because the NativeFeePaymentMethodWithClaim does not work when
+      // deploying an account. This method requires enqueueing a public function call for setup
+      // that claims the balance bridged, but since account deployment starts with a multicall
+      // entrypoint (as opposed to the account contract entrypoint), and only the first function
+      // in the call stack can enqueue a setup public function call, the claim is processed as
+      // in the application phase. We work around this in the test below.
       const { secret } = await t.gasBridgeTestHarness.prepareTokensOnL1(
         t.INITIAL_GAS_BALANCE,
         t.INITIAL_GAS_BALANCE,
@@ -107,6 +125,56 @@ describe('e2e_fees account_init', () => {
       const tx = await bobsAccountManager.deploy({ fee: { gasSettings, paymentMethod } }).wait();
       expect(tx.transactionFee!).toBeGreaterThan(0n);
       await expect(t.gasBalances(bobsAddress)).resolves.toEqual([t.INITIAL_GAS_BALANCE - tx.transactionFee!]);
+    });
+
+    it('pays natively in the gas token by bridging funds themselves (with workaround)', async () => {
+      // As a workaround for the test above, we use the vanilla native fee payment method, but prepend
+      // a call to
+      const { secret: claimSecret } = await t.gasBridgeTestHarness.prepareTokensOnL1(
+        t.INITIAL_GAS_BALANCE,
+        t.INITIAL_GAS_BALANCE,
+        bobsAddress,
+      );
+
+      const { chainId, protocolVersion } = await pxe.getNodeInfo();
+      const entrypoint = new WorkaroundMulticallEntrypointWithClaimAsFee(
+        bobsAddress,
+        chainId,
+        protocolVersion,
+        t.INITIAL_GAS_BALANCE,
+        claimSecret,
+      );
+      const deployWallet = new SignerlessWallet(pxe, entrypoint);
+
+      bobsAccountManager = new (class extends AccountManager {
+        protected override getDeployWallet(): Promise<SignerlessWallet> {
+          return Promise.resolve(deployWallet);
+        }
+      })(pxe, bobsSecretKey, new SchnorrAccountContract(bobsPrivateSigningKey), bobsAccountManager.salt);
+
+      const paymentMethod = new NativeFeePaymentMethod(bobsAddress);
+      const tx = await bobsAccountManager.deploy({ fee: { gasSettings, paymentMethod } }).wait();
+
+      // HACK: We can modify the deployRequest because the deployMethod caches a reference to it,
+      // so when we then send it, it will send the modified reference. This is horrible and we
+      // need a better API for this.
+      // const tx = await deployMethod
+      //   .send({
+      //     contractAddressSalt: bobsAccountManager.salt,
+      //     skipClassRegistration: true,
+      //     skipPublicDeployment: true,
+      //     skipInitialization: false,
+      //     universalDeploy: true,
+      //     fee: { gasSettings, paymentMethod },
+      //   })
+      //   .wait();
+
+      // Check fee payment
+      expect(tx.transactionFee!).toBeGreaterThan(0n);
+      await expect(t.gasBalances(bobsAddress)).resolves.toEqual([t.INITIAL_GAS_BALANCE - tx.transactionFee!]);
+
+      // Check that Bob can now use his wallet for sending txs
+      await bananaCoin.withWallet(bobsWallet).methods.transfer_public(bobsAddress, aliceAddress, 0n, 0n).send().wait();
     });
 
     it('pays privately through an FPC', async () => {
@@ -190,7 +258,7 @@ describe('e2e_fees account_init', () => {
 
       // and deploys bob's account, paying the fee from her balance
       const paymentMethod = new NativeFeePaymentMethod(aliceAddress);
-      const tx = await SchnorrAccountContract.deployWithPublicKeysHash(
+      const tx = await BobsAccountContract.deployWithPublicKeysHash(
         bobsPublicKeysHash,
         aliceWallet,
         bobsSigningPubKey.x,
@@ -215,3 +283,163 @@ describe('e2e_fees account_init', () => {
     });
   });
 });
+
+// HACKs below this line to make the claim-and-pay-fee-natively flow work with the current circuits.
+// We should be able to remove this once we can enqueue public setup calls outside the first function call.
+// See https://github.com/AztecProtocol/aztec-packages/issues/5615
+class WorkaroundMulticallEntrypointWithClaimAsFee implements EntrypointInterface {
+  constructor(
+    private address: AztecAddress,
+    private chainId: number,
+    private version: number,
+    private claimAmount: bigint,
+    private claimSecret: Fr,
+  ) {}
+
+  createTxExecutionRequest(exec: ExecutionRequestInit): Promise<TxExecutionRequest> {
+    const { calls, fee, authWitnesses = [], packedArguments = [] } = exec;
+
+    const claim = {
+      to: GasTokenAddress,
+      name: 'claim',
+      selector: FunctionSelector.fromSignature('claim((Field),Field,Field)'),
+      isStatic: false,
+      args: [this.address, new Fr(this.claimAmount), this.claimSecret],
+      returnTypes: [],
+      type: FunctionType.PRIVATE,
+    };
+
+    const appPayload = EntrypointPayload.fromAppExecution(calls);
+    const feePayload = MulticallEntrypointFeePayload.fromMulticallFunctionCalls([claim]);
+
+    const abi = this.getEntrypointAbi();
+    const entrypointPackedArgs = PackedValues.fromValues(encodeArguments(abi, [appPayload, feePayload]));
+    const gasSettings = fee?.gasSettings ?? GasSettings.default();
+
+    const txRequest = TxExecutionRequest.from({
+      firstCallArgsHash: entrypointPackedArgs.hash,
+      origin: this.address,
+      functionSelector: FunctionSelector.fromNameAndParameters(abi.name, abi.parameters),
+      txContext: new TxContext(this.chainId, this.version, gasSettings),
+      argsOfCalls: [
+        ...appPayload.packedArguments,
+        ...feePayload.packedArguments,
+        ...packedArguments,
+        entrypointPackedArgs,
+      ],
+      authWitnesses,
+    });
+
+    return Promise.resolve(txRequest);
+  }
+
+  private getEntrypointAbi() {
+    return {
+      name: 'entrypoint_with_fee',
+      isInitializer: false,
+      functionType: 'private',
+      isInternal: false,
+      isStatic: false,
+      parameters: [
+        {
+          name: 'app_payload',
+          type: {
+            kind: 'struct',
+            path: 'authwit::entrypoint::app::AppPayload',
+            fields: [
+              {
+                name: 'function_calls',
+                type: {
+                  kind: 'array',
+                  length: 4,
+                  type: {
+                    kind: 'struct',
+                    path: 'authwit::entrypoint::function_call::FunctionCall',
+                    fields: [
+                      { name: 'args_hash', type: { kind: 'field' } },
+                      {
+                        name: 'function_selector',
+                        type: {
+                          kind: 'struct',
+                          path: 'authwit::aztec::protocol_types::abis::function_selector::FunctionSelector',
+                          fields: [{ name: 'inner', type: { kind: 'integer', sign: 'unsigned', width: 32 } }],
+                        },
+                      },
+                      {
+                        name: 'target_address',
+                        type: {
+                          kind: 'struct',
+                          path: 'authwit::aztec::protocol_types::address::AztecAddress',
+                          fields: [{ name: 'inner', type: { kind: 'field' } }],
+                        },
+                      },
+                      { name: 'is_public', type: { kind: 'boolean' } },
+                      { name: 'is_static', type: { kind: 'boolean' } },
+                    ],
+                  },
+                },
+              },
+              { name: 'nonce', type: { kind: 'field' } },
+            ],
+          },
+          visibility: 'public',
+        },
+        {
+          name: 'fee_payload',
+          type: {
+            kind: 'struct',
+            path: 'authwit::entrypoint::fee::FeePayload',
+            fields: [
+              {
+                name: 'function_calls',
+                type: {
+                  kind: 'array',
+                  length: 2,
+                  type: {
+                    kind: 'struct',
+                    path: 'authwit::entrypoint::function_call::FunctionCall',
+                    fields: [
+                      { name: 'args_hash', type: { kind: 'field' } },
+                      {
+                        name: 'function_selector',
+                        type: {
+                          kind: 'struct',
+                          path: 'authwit::aztec::protocol_types::abis::function_selector::FunctionSelector',
+                          fields: [{ name: 'inner', type: { kind: 'integer', sign: 'unsigned', width: 32 } }],
+                        },
+                      },
+                      {
+                        name: 'target_address',
+                        type: {
+                          kind: 'struct',
+                          path: 'authwit::aztec::protocol_types::address::AztecAddress',
+                          fields: [{ name: 'inner', type: { kind: 'field' } }],
+                        },
+                      },
+                      { name: 'is_public', type: { kind: 'boolean' } },
+                      { name: 'is_static', type: { kind: 'boolean' } },
+                    ],
+                  },
+                },
+              },
+              { name: 'nonce', type: { kind: 'field' } },
+              { name: 'is_fee_payer', type: { kind: 'boolean' } },
+            ],
+          },
+          visibility: 'public',
+        },
+      ],
+      returnTypes: [],
+    } as FunctionAbi;
+  }
+}
+
+class MulticallEntrypointFeePayload extends EntrypointPayload {
+  static fromMulticallFunctionCalls(functionCalls: FunctionCall[]): MulticallEntrypointFeePayload {
+    const paddedCalls = padArrayEnd(functionCalls, FunctionCall.empty(), 2);
+    return new MulticallEntrypointFeePayload(paddedCalls, GeneratorIndex.FEE_PAYLOAD);
+  }
+  override toFields(): Fr[] {
+    return [...this.functionCallsToFields(), this.nonce];
+  }
+}
