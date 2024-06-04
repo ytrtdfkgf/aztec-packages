@@ -71,9 +71,14 @@ export interface P2PConfig {
   announceUdpHostname?: string;
 
   /**
-   * Port to announce.
+   * TCP Port to announce.
    */
-  announcePort?: number;
+  announceTcpPort?: number;
+
+  /**
+   * UDP Port to announce.
+   */
+  announceUdpPort?: number;
 
   /**
    * Whether to enable NAT from libp2p (ignored for bootstrap node).
@@ -124,7 +129,8 @@ export function getP2PConfigEnvVars(): P2PConfig {
     BOOTSTRAP_NODES,
     P2P_ANNOUNCE_TCP_HOSTNAME,
     P2P_ANNOUNCE_UDP_HOSTNAME,
-    P2P_ANNOUNCE_PORT,
+    P2P_ANNOUNCE_TCP_PORT,
+    P2P_ANNOUNCE_UDP_PORT,
     P2P_NAT_ENABLED,
     P2P_MIN_PEERS,
     P2P_MAX_PEERS,
@@ -140,14 +146,15 @@ export function getP2PConfigEnvVars(): P2PConfig {
     p2pL2QueueSize: P2P_L2_BLOCK_QUEUE_SIZE ? +P2P_L2_BLOCK_QUEUE_SIZE : 1000,
     tcpListenPort: P2P_TCP_LISTEN_PORT ? +P2P_TCP_LISTEN_PORT : 40400,
     tcpListenIp: P2P_TCP_LISTEN_IP ? P2P_TCP_LISTEN_IP : '0.0.0.0',
-    udpListenPort: P2P_UDP_LISTEN_PORT ? +P2P_UDP_LISTEN_PORT : 40400,
+    udpListenPort: P2P_UDP_LISTEN_PORT ? +P2P_UDP_LISTEN_PORT : 40300,
     udpListenIp: P2P_UDP_LISTEN_IP ? P2P_UDP_LISTEN_IP : '0.0.0.0',
     peerIdPrivateKey: PEER_ID_PRIVATE_KEY,
     bootstrapNodes: BOOTSTRAP_NODES ? BOOTSTRAP_NODES.split(',') : [],
     transactionProtocol: P2P_TX_PROTOCOL ? P2P_TX_PROTOCOL : '/aztec/0.1.0',
     announceTcpHostname: P2P_ANNOUNCE_TCP_HOSTNAME,
     announceUdpHostname: P2P_ANNOUNCE_UDP_HOSTNAME,
-    announcePort: P2P_ANNOUNCE_PORT ? +P2P_ANNOUNCE_PORT : undefined,
+    announceTcpPort: P2P_ANNOUNCE_TCP_PORT ? +P2P_ANNOUNCE_TCP_PORT : undefined,
+    announceUdpPort: P2P_ANNOUNCE_UDP_PORT ? +P2P_ANNOUNCE_UDP_PORT : undefined,
     enableNat: P2P_NAT_ENABLED === 'true',
     minPeerCount: P2P_MIN_PEERS ? +P2P_MIN_PEERS : 10,
     maxPeerCount: P2P_MAX_PEERS ? +P2P_MAX_PEERS : 100,

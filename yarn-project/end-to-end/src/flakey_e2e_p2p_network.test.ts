@@ -21,7 +21,7 @@ import { setup } from './fixtures/utils.js';
 const NUM_NODES = 4;
 const NUM_TXS_PER_BLOCK = 4;
 const NUM_TXS_PER_NODE = 2;
-const BOOT_NODE_TCP_PORT = 40400;
+const BOOT_NODE_UDP_PORT = 40400;
 
 interface NodeContext {
   node: AztecNodeService;
@@ -74,10 +74,10 @@ describe('e2e_p2p_network', () => {
     const peerId = await createLibP2PPeerId();
     const bootstrapNode = new BootstrapNode();
     const config: BootNodeConfig = {
-      udpListenPort: BOOT_NODE_TCP_PORT,
+      udpListenPort: BOOT_NODE_UDP_PORT,
       udpListenIp: '0.0.0.0',
       announceUdpHostname: '/ip4/127.0.0.1',
-      announcePort: BOOT_NODE_TCP_PORT,
+      announceUdpPort: BOOT_NODE_UDP_PORT,
       peerIdPrivateKey: Buffer.from(peerId.privateKey!).toString('hex'),
       minPeerCount: 10,
       maxPeerCount: 100,

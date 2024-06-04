@@ -75,10 +75,10 @@ export class LibP2PService implements P2PService {
     if (this.node.status === 'started') {
       throw new Error('P2P service already started');
     }
-    const { enableNat, tcpListenIp, tcpListenPort, announceTcpHostname, announcePort } = this.config;
+    const { enableNat, tcpListenIp, tcpListenPort, announceTcpHostname, announceTcpPort } = this.config;
     this.logger.info(`Starting P2P node on ${tcpListenIp}:${tcpListenPort}`);
     if (announceTcpHostname) {
-      this.logger.info(`Announcing at ${announceTcpHostname}/tcp/${announcePort ?? tcpListenPort}`);
+      this.logger.info(`Announcing at ${announceTcpHostname}/tcp/${announceTcpPort ?? tcpListenPort}`);
     }
     if (enableNat) {
       this.logger.info(`Enabling NAT in libp2p module`);

@@ -202,9 +202,9 @@ all:
     BUILD +end-to-end
 
 export-aztec:
-    ARG EARTHLY_GIT_HASH
+    ARG TAG
     FROM +aztec
-    SAVE IMAGE aztecprotocol/aztec:$EARTHLY_GIT_HASH
+    SAVE IMAGE aztecprotocol/aztec:$TAG
 
 export-end-to-end:
     ARG EARTHLY_GIT_HASH

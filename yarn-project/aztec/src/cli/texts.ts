@@ -18,7 +18,8 @@ const p2pOptions =
   'announceTcpHostname:P2P_ANNOUNCE_TCP_HOSTNAME - string - P2P Hostname to announce for TCP communications.\n' +
   'announceUdpHostname:P2P_ANNOUNCE_UDP_HOSTNAME - string - P2P Hostname to announce for UDP communications used in peer discovery.\n' +
   'queryForIp:P2P_QUERY_FOR_IP - boolean - Whether to query for the public IP address if a hostname has not been provided. Default: false\n' +
-  'announcePort:P2P_ANNOUNCE_PORT - number - P2P Port to announce.\n' +
+  'announceTcpPort:P2P_ANNOUNCE_TCP_PORT - number - TCP P2P Port to announce.\n' +
+  'announceUdpPort:P2P_ANNOUNCE_UDP_PORT - number - UDP P2P Port to announce.\n' +
   'enableNat:P2P_NAT_ENABLED - boolean - Whether to enable NAT from libp2p (ignored for bootstrap node). Default: false\n' +
   'minPeerCount:P2P_MIN_PEERS - number - The minimum number of peers to connect to. Default: 10\n' +
   'maxPeerCount:P2P_MAX_PEERS - number - The maximum number of peers to connect to. Default: 100\n';
