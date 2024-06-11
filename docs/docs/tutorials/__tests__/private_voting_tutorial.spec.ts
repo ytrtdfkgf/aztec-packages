@@ -82,7 +82,7 @@ test("Deploying, setting, and getting a number", async ({ page }) => {
   test.slow();
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Tutorials" }).click();
+  await page.getByRole("button").filter({ hasText: "Tutorials" }).click();
   await page.getByRole("link", { name: "Private Voting Tutorial" }).click();
 
   await page.waitForFunction(() => !!document.querySelector("code"));
