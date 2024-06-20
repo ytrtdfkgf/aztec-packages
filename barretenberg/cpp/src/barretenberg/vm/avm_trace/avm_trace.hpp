@@ -6,6 +6,8 @@
 #include "barretenberg/vm/avm_trace/avm_binary_trace.hpp"
 #include "barretenberg/vm/avm_trace/avm_common.hpp"
 #include "barretenberg/vm/avm_trace/avm_gas_trace.hpp"
+#include "barretenberg/vm/avm_trace/avm_instr_decomp.hpp"
+#include "barretenberg/vm/avm_trace/avm_instructions.hpp"
 #include "barretenberg/vm/avm_trace/avm_kernel_trace.hpp"
 #include "barretenberg/vm/avm_trace/avm_mem_trace.hpp"
 #include "barretenberg/vm/avm_trace/avm_opcode.hpp"
@@ -39,7 +41,8 @@ class AvmTraceBuilder {
   public:
     AvmTraceBuilder(VmPublicInputs public_inputs = {},
                     ExecutionHints execution_hints = {},
-                    uint32_t side_effect_counter = 0);
+                    uint32_t side_effect_counter = 0,
+                    const std::vector<Instruction>& instructions = {});
 
     std::vector<Row> finalize(uint32_t min_trace_size = 0, bool range_check_required = ENABLE_PROVING);
     void reset();
@@ -240,6 +243,7 @@ class AvmTraceBuilder {
     AvmKeccakTraceBuilder keccak_trace_builder;
     AvmPedersenTraceBuilder pedersen_trace_builder;
     AvmEccTraceBuilder ecc_trace_builder;
+    AvmInstructionDecompositonBuilder instr_decomp_builder;
 
     /**
      * @brief Create a kernel lookup opcode object

@@ -256,6 +256,8 @@ std::vector<Instruction> Deserialization::parse(std::vector<uint8_t> const& byte
         }
 
         std::vector<Operand> operands;
+        std::optional<AvmMemoryTag> tag;
+        std::optional<uint8_t> indirect;
         for (OperandType const& opType : inst_format) {
             // No underflow as while condition guarantees pos <= length (after pos++)
             if (length - pos < OPERAND_TYPE_SIZE.at(opType)) {
@@ -266,7 +268,7 @@ std::vector<Instruction> Deserialization::parse(std::vector<uint8_t> const& byte
 
             switch (opType) {
             case OperandType::INDIRECT: {
-                operands.emplace_back(bytecode.at(pos));
+                indirect = bytecode.at(pos);
                 break;
             }
             case OperandType::TAG: {
@@ -275,7 +277,7 @@ std::vector<Instruction> Deserialization::parse(std::vector<uint8_t> const& byte
                     throw_or_abort("Instruction tag is invalid at position " + std::to_string(pos) +
                                    " value: " + std::to_string(tag_u8) + " for opcode: " + to_string(opcode));
                 }
-                operands.emplace_back(static_cast<AvmMemoryTag>(tag_u8));
+                tag = static_cast<AvmMemoryTag>(tag_u8);
                 break;
             }
             case OperandType::UINT8:
@@ -312,7 +314,7 @@ std::vector<Instruction> Deserialization::parse(std::vector<uint8_t> const& byte
             }
             pos += OPERAND_TYPE_SIZE.at(opType);
         }
-        auto instruction = Instruction(opcode, operands);
+        auto instruction = Instruction(opcode, tag, indirect, operands);
         debug(instruction.to_string());
         instructions.emplace_back(std::move(instruction));
     }

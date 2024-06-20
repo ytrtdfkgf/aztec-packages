@@ -21,7 +21,7 @@
 #include "barretenberg/vm/avm_trace/avm_helper.hpp"
 #include "barretenberg/vm/avm_trace/avm_opcode.hpp"
 #include "barretenberg/vm/avm_trace/avm_trace.hpp"
-#include "barretenberg/vm/avm_trace/fixed_gas.hpp"
+#include "barretenberg/vm/avm_trace/fixed_instr_spec.hpp"
 #include "barretenberg/vm/avm_trace/fixed_powers.hpp"
 
 namespace bb::avm_trace {
@@ -32,9 +32,11 @@ namespace bb::avm_trace {
  */
 AvmTraceBuilder::AvmTraceBuilder(VmPublicInputs public_inputs,
                                  ExecutionHints execution_hints,
-                                 uint32_t side_effect_counter)
+                                 uint32_t side_effect_counter,
+                                 const std::vector<Instruction>& instructions)
     // NOTE: we initialise the environment builder here as it requires public inputs
     : kernel_trace_builder(std::move(public_inputs))
+    , instr_decomp_builder(instructions)
     , side_effect_counter(side_effect_counter)
     , initial_side_effect_counter(side_effect_counter)
     , execution_hints(std::move(execution_hints))
@@ -3697,7 +3699,6 @@ std::vector<Row> AvmTraceBuilder::finalize(uint32_t min_trace_size, bool range_c
     auto pedersen_trace = pedersen_trace_builder.finalize();
     auto bin_trace = bin_trace_builder.finalize();
     auto gas_trace = gas_trace_builder.finalize();
-    const auto& fixed_gas_table = FixedGasTable::get();
     size_t mem_trace_size = mem_trace.size();
     size_t main_trace_size = main_trace.size();
     size_t alu_trace_size = alu_trace.size();
@@ -3709,6 +3710,8 @@ std::vector<Row> AvmTraceBuilder::finalize(uint32_t min_trace_size, bool range_c
     size_t bin_trace_size = bin_trace.size();
     size_t gas_trace_size = gas_trace.size();
 
+    const auto& fixed_instr_spec = FixedInstructionSpecTable::get();
+
     // Data structure to collect all lookup counts pertaining to 16-bit/32-bit range checks in memory trace
     std::unordered_map<uint16_t, uint32_t> mem_rng_check_lo_counts;
     std::unordered_map<uint16_t, uint32_t> mem_rng_check_mid_counts;
@@ -3719,11 +3722,13 @@ std::vector<Row> AvmTraceBuilder::finalize(uint32_t min_trace_size, bool range_c
     // 2**16 long)
     size_t const lookup_table_size = (bin_trace_size > 0 && range_check_required) ? 3 * (1 << 16) : 0;
     size_t const range_check_size = range_check_required ? UINT16_MAX + 1 : 0;
-    std::vector<size_t> trace_sizes = { mem_trace_size,     main_trace_size,       alu_trace_size,
-                                        range_check_size,   conv_trace_size,       lookup_table_size,
-                                        sha256_trace_size,  poseidon2_trace_size,  pedersen_trace_size,
-                                        gas_trace_size + 1, KERNEL_INPUTS_LENGTH,  KERNEL_OUTPUTS_LENGTH,
-                                        min_trace_size,     fixed_gas_table.size() };
+    std::vector<size_t> trace_sizes = {
+        mem_trace_size,     main_trace_size,         alu_trace_size,
+        range_check_size,   conv_trace_size,         lookup_table_size,
+        sha256_trace_size,  poseidon2_trace_size,    pedersen_trace_size,
+        gas_trace_size + 1, KERNEL_INPUTS_LENGTH,    KERNEL_OUTPUTS_LENGTH,
+        min_trace_size,     fixed_instr_spec.size(), instr_decomp_builder.rows().size()
+    };
     auto trace_size = std::max_element(trace_sizes.begin(), trace_sizes.end());
 
     // We only need to pad with zeroes to the size to the largest trace here, pow_2 padding is handled in the
@@ -4037,6 +4042,16 @@ std::vector<Row> AvmTraceBuilder::finalize(uint32_t min_trace_size, bool range_c
         dest.pedersen_clk = FF(src.clk);
         dest.pedersen_input = FF(src.input[0]);
         dest.pedersen_sel_pedersen = FF(1);
+    }
+
+    // Embed instruction spec table.
+    for (size_t i = 0; i < fixed_instr_spec.size(); i++) {
+        merge_into(main_trace.at(i), fixed_instr_spec.at(i));
+    }
+
+    // Embed instruction decomposition trace.
+    for (size_t i = 0; i < instr_decomp_builder.rows().size(); i++) {
+        merge_into(main_trace.at(i), instr_decomp_builder.rows().at(i));
     }
 
     // Add Binary Trace table
@@ -4459,12 +4474,6 @@ std::vector<Row> AvmTraceBuilder::finalize(uint32_t min_trace_size, bool range_c
     // Get tag_err counts from the mem_trace_builder
     if (range_check_required) {
         finalise_mem_trace_lookup_counts();
-    }
-
-    // Add the gas costs table to the main trace
-    // For each opcode we write its l2 gas cost and da gas cost
-    for (size_t i = 0; i < fixed_gas_table.size(); i++) {
-        merge_into(main_trace.at(i), fixed_gas_table.at(i));
     }
 
     // Finalise gas left lookup counts

@@ -12,7 +12,7 @@
 #include "barretenberg/vm/avm_trace/avm_kernel_trace.hpp"
 #include "barretenberg/vm/avm_trace/avm_opcode.hpp"
 #include "barretenberg/vm/avm_trace/aztec_constants.hpp"
-#include "barretenberg/vm/avm_trace/fixed_gas.hpp"
+#include "barretenberg/vm/avm_trace/fixed_instr_spec.hpp"
 
 namespace tests_avm {
 
@@ -31,7 +31,7 @@ class AvmExecutionTests : public ::testing::Test {
         : public_inputs_vec(PUBLIC_CIRCUIT_PUBLIC_INPUTS_LENGTH){};
 
   protected:
-    const FixedGasTable& GAS_COST_TABLE = FixedGasTable::get();
+    const FixedInstructionSpecTable& GAS_COST_TABLE = FixedInstructionSpecTable::get();
 
     // TODO(640): The Standard Honk on Grumpkin test suite fails unless the SRS is initialised for every test.
     void SetUp() override
@@ -1558,8 +1558,8 @@ TEST_F(AvmExecutionTests, l2GasLeft)
     auto row = std::ranges::find_if(trace.begin(), trace.end(), [](Row r) { return r.main_sel_op_l2gasleft == 1; });
 
     uint32_t expected_rem_gas = DEFAULT_INITIAL_L2_GAS -
-                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::SET).gas_l2_gas_fixed_table) -
-                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::L2GASLEFT).gas_l2_gas_fixed_table);
+                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::SET).instr_spec_l2_gas_op_cost) -
+                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::L2GASLEFT).instr_spec_l2_gas_op_cost);
 
     EXPECT_EQ(row->main_ia, expected_rem_gas);
     EXPECT_EQ(row->main_mem_addr_a, 257); // Resolved direct address: 257
@@ -1600,8 +1600,8 @@ TEST_F(AvmExecutionTests, daGasLeft)
     auto row = std::ranges::find_if(trace.begin(), trace.end(), [](Row r) { return r.main_sel_op_dagasleft == 1; });
 
     uint32_t expected_rem_gas = DEFAULT_INITIAL_DA_GAS -
-                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::ADD).gas_da_gas_fixed_table) -
-                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::DAGASLEFT).gas_da_gas_fixed_table);
+                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::ADD).instr_spec_da_gas_op_cost) -
+                                static_cast<uint32_t>(GAS_COST_TABLE.at(OpCode::DAGASLEFT).instr_spec_da_gas_op_cost);
 
     EXPECT_EQ(row->main_ia, expected_rem_gas);
     EXPECT_EQ(row->main_mem_addr_a, 39);
