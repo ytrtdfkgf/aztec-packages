@@ -517,6 +517,58 @@ library TxsDecoder {
   }
 
   /**
+   * @notice Computes the root for a binary unbalanced Merkle-tree given the leafs.
+   * @dev Taken from logs section of protocol, but now not necessary for logs. Useful for txsEffectHash and outHash tree.
+   * @param _leafs - The 32 bytes leafs to build the tree of.
+   * @return The root of the Merkle tree.
+   */
+  function computeWonkyRoot(uint256 _leafOffset, bytes32[] memory _leafs, bytes calldata treeData)
+    internal
+    pure
+    returns (bytes32, uint256)
+  {
+    uint256 leafOffset = _leafOffset;
+    uint256 numBranches = read1(treeData, 0);
+    uint256 numLeavesInBranch = read1(treeData, 1);
+    // Since we have unbalanced trees, the leaves are not necessarily in pairs to be hashed up
+    // numLeavesInBranch == 1 ? we have a single value, no hashing needed
+    // numLeavesInBranch == 2 ? we have a pair of leaves to be hashed before moving up
+    bytes32 thisNode = _leafs[leafOffset];
+    if (numLeavesInBranch == 2) {
+      thisNode = Hash.sha256ToField(bytes.concat(_leafs[leafOffset++], _leafs[leafOffset]));
+    }
+    leafOffset++;
+    // thisNode is the left hand value at depth numBranches
+    // rightNode is its sibling
+    bytes32 rightNode;
+    uint256 treeDataOffset = 2;
+    uint256 len = treeData.length;
+    for (uint256 i = 0; i < numBranches; i++) {
+      (rightNode, leafOffset) = computeWonkyRoot(leafOffset, _leafs, treeData[treeDataOffset:len]);
+      treeDataOffset += treeDataAdvanced(treeData[treeDataOffset:len]);
+      thisNode = Hash.sha256ToField(bytes.concat(thisNode, rightNode));
+    }
+
+    return (thisNode, leafOffset);
+  }
+
+  /**
+   * @notice Wrapper around bytes advanced to avoid some stack too deep
+   * @param treeData - The data
+   * @return The bytes advanced in this recursive loop
+   */
+  function treeDataAdvanced(bytes calldata treeData) internal pure returns (uint256) {
+    // for each call, we advance at least 2 bytes
+    uint256 bytesAdvanced = 2;
+    uint256 loopsRemaining = read1(treeData, 0);
+    while (loopsRemaining > 0) {
+      loopsRemaining = read1(treeData, bytesAdvanced);
+      bytesAdvanced += 2;
+    }
+    return bytesAdvanced;
+  }
+
+  /**
    * @notice Wrapper around the slicing to avoid some stack too deep
    * @param _data - The data to slice
    * @param _start - The start of the slice

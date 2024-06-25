@@ -21,4 +21,12 @@ contract TxsDecoderHelper {
   function computeNumTxEffectsToPad(uint32 _numTxEffects) external pure returns (uint32) {
     return TxsDecoder.computeNumTxEffectsToPad(_numTxEffects);
   }
+
+  function computeWonkyRoot(uint256 _leafOffset, bytes32[] memory _leafs, bytes calldata treeData)
+    external
+    pure
+    returns (bytes32, uint256)
+  {
+    return TxsDecoder.computeWonkyRoot(_leafOffset, _leafs, treeData);
+  }
 }
