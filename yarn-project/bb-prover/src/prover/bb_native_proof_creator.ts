@@ -1,7 +1,6 @@
 import { type AppCircuitProofOutput, type KernelProofOutput, type ProofCreator } from '@aztec/circuit-types';
 import { type CircuitProvingStats, type CircuitWitnessGenerationStats } from '@aztec/circuit-types/stats';
 import {
-  AGGREGATION_OBJECT_LENGTH,
   Fr,
   NESTED_RECURSIVE_PROOF_LENGTH,
   type PrivateCircuitPublicInputs,
@@ -14,7 +13,6 @@ import {
   Proof,
   RECURSIVE_PROOF_LENGTH,
   RecursiveProof,
-  type VerificationKeyAsFields,
   type VerificationKeyData,
 } from '@aztec/circuits.js';
 import { siloNoteHash } from '@aztec/circuits.js/hash';
@@ -146,7 +144,7 @@ export class BBNativeProofCreator implements ProofCreator {
       const proof = proofOutput.proof as RecursiveProof<typeof RECURSIVE_PROOF_LENGTH>;
       const output: AppCircuitProofOutput = {
         proof,
-        verificationKey: proofOutput.verificationKey,
+        verificationKey: proofOutput.verificationKey.keyAsFields,
       };
       return output;
     };
@@ -162,7 +160,7 @@ export class BBNativeProofCreator implements ProofCreator {
   public async verifyProofForProtocolCircuit(circuitType: ClientProtocolArtifact, proof: Proof) {
     const verificationKey = await this.getVerificationKeyDataForCircuit(circuitType);
 
-    this.log.debug(`Verifying with key: ${verificationKey.keyAsFields.hash.toString()}`);
+    this.log.info(`Verifying with key: ${verificationKey.keyAsFields.hash.toString()}`);
 
     const logFunction = (message: string) => {
       this.log.debug(`${circuitType} BB out - ${message}`);
@@ -171,6 +169,7 @@ export class BBNativeProofCreator implements ProofCreator {
     const result = await this.verifyProofFromKey(verificationKey.keyAsBytes, proof, logFunction);
 
     if (result.status === BB_RESULT.FAILURE) {
+      this.log.warn(`Proof verification failed`);
       const errorMessage = `Failed to verify ${circuitType} proof!`;
       throw new Error(errorMessage);
     }
@@ -229,7 +228,7 @@ export class BBNativeProofCreator implements ProofCreator {
     let promise = this.verificationKeys.get(circuitType);
     if (!promise) {
       promise = extractVkData(filePath);
-      this.log.debug(`Updated verification key for circuit: ${circuitType}`);
+      this.log.info(`Updated verification key for circuit: ${circuitType}, from path ${filePath}`);
       this.verificationKeys.set(circuitType, promise);
     }
     return await promise;
@@ -265,7 +264,7 @@ export class BBNativeProofCreator implements ProofCreator {
     const outputWitness = await this.simulator.simulateCircuit(witnessMap, compiledCircuit);
     const output = convertOutputs(outputWitness);
 
-    this.log.debug(`Generated witness for ${circuitType}`, {
+    this.log.info(`Generated witness for ${circuitType}`, {
       eventName: 'circuit-witness-generation',
       circuitName: mapProtocolArtifactNameToCircuitName(circuitType),
       duration: timer.ms(),
@@ -279,7 +278,7 @@ export class BBNativeProofCreator implements ProofCreator {
       Buffer.from(compiledCircuit.bytecode, 'base64'),
       circuitType,
     );
-    this.log.debug(`proof length: ${proofOutput.proof.proof.length}`);
+    this.log.info(`proof length: ${proofOutput.proof.proof.length}`);
     if (proofOutput.proof.proof.length != NESTED_RECURSIVE_PROOF_LENGTH) {
       throw new Error(`Incorrect proof length`);
     }
@@ -301,7 +300,7 @@ export class BBNativeProofCreator implements ProofCreator {
     appCircuitName?: string,
   ): Promise<{
     proof: RecursiveProof<typeof RECURSIVE_PROOF_LENGTH> | RecursiveProof<typeof NESTED_RECURSIVE_PROOF_LENGTH>;
-    verificationKey: VerificationKeyAsFields;
+    verificationKey: VerificationKeyData;
   }> {
     const compressedBincodedWitness = serializeWitness(partialWitness);
 
@@ -337,6 +336,14 @@ export class BBNativeProofCreator implements ProofCreator {
       const vkData = await extractVkData(directory);
       const proof = await this.readProofAsFields<typeof RECURSIVE_PROOF_LENGTH>(directory, circuitType, vkData);
 
+      const result = await this.verifyProofFromKey(vkData.keyAsBytes, proof.binaryProof, this.log.info);
+
+      if (result.status === BB_RESULT.FAILURE) {
+        this.log.warn(`Proof verification failed`);
+        const errorMessage = `Failed to verify ${circuitType} proof!`;
+        throw new Error(errorMessage);
+      }
+
       this.log.debug(`Generated proof`, {
         eventName: 'circuit-proving',
         circuitName: 'app-circuit',
@@ -348,16 +355,24 @@ export class BBNativeProofCreator implements ProofCreator {
         numPublicInputs: vkData.numPublicInputs,
       } as CircuitProvingStats);
 
-      return { proof, verificationKey: vkData.keyAsFields };
+      return { proof, verificationKey: vkData };
     }
 
     const vkData = await this.updateVerificationKeyAfterProof(directory, circuitType);
 
     const proof = await this.readProofAsFields<typeof NESTED_RECURSIVE_PROOF_LENGTH>(directory, circuitType, vkData);
 
+    const result = await this.verifyProofFromKey(vkData.keyAsBytes, proof.binaryProof, this.log.info);
+
+    if (result.status === BB_RESULT.FAILURE) {
+      this.log.warn(`Proof verification failed`);
+      const errorMessage = `Failed to verify ${circuitType} proof!`;
+      throw new Error(errorMessage);
+    }
+
     await this.verifyProofForProtocolCircuit(circuitType, proof.binaryProof);
 
-    this.log.debug(`Generated proof`, {
+    this.log.info(`Generated proof`, {
       circuitName: mapProtocolArtifactNameToCircuitName(circuitType),
       duration: provingResult.duration,
       eventName: 'circuit-proving',
@@ -367,7 +382,7 @@ export class BBNativeProofCreator implements ProofCreator {
       numPublicInputs: vkData.numPublicInputs,
     } as CircuitProvingStats);
 
-    return { proof, verificationKey: vkData.keyAsFields };
+    return { proof, verificationKey: vkData };
   }
 
   /**
@@ -391,7 +406,7 @@ export class BBNativeProofCreator implements ProofCreator {
     // const numPublicInputs =
     //   circuitType === 'App' ? vkData.numPublicInputs : vkData.numPublicInputs - AGGREGATION_OBJECT_LENGTH;
     const fieldsWithoutPublicInputs = fields.slice(numPublicInputs);
-    this.log.debug(
+    this.log.info(
       `Circuit type: ${circuitType}, complete proof length: ${fields.length}, without public inputs: ${fieldsWithoutPublicInputs.length}, num public inputs: ${numPublicInputs}, circuit size: ${vkData.circuitSize}, is recursive: ${vkData.isRecursive}, raw length: ${binaryProof.length}`,
     );
     const proof = new RecursiveProof<PROOF_LENGTH>(

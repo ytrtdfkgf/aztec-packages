@@ -11,6 +11,7 @@ import {
   type PrivateKernelTailCircuitPublicInputs,
   RECURSIVE_PROOF_LENGTH,
   VerificationKeyAsFields,
+  VerificationKeyData,
   makeRecursiveProof,
 } from '@aztec/circuits.js';
 import { siloNoteHash } from '@aztec/circuits.js/hash';
@@ -109,7 +110,7 @@ export class TestProofCreator implements ProofCreator {
     const kernelProofOutput: KernelProofOutput<PublicInputsType> = {
       publicInputs,
       proof: makeRecursiveProof<typeof NESTED_RECURSIVE_PROOF_LENGTH>(NESTED_RECURSIVE_PROOF_LENGTH),
-      verificationKey: VerificationKeyAsFields.makeEmpty(),
+      verificationKey: VerificationKeyData.makeFake(),
     };
     return kernelProofOutput;
   }

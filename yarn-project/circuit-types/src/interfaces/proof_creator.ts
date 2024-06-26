@@ -10,6 +10,7 @@ import {
   type RECURSIVE_PROOF_LENGTH,
   type RecursiveProof,
   type VerificationKeyAsFields,
+  type VerificationKeyData,
 } from '@aztec/circuits.js';
 import { type Fr } from '@aztec/foundation/fields';
 
@@ -29,7 +30,7 @@ export type KernelProofOutput<PublicInputsType> = {
    */
   proof: RecursiveProof<typeof NESTED_RECURSIVE_PROOF_LENGTH>;
 
-  verificationKey: VerificationKeyAsFields;
+  verificationKey: VerificationKeyData;
 };
 
 /**

@@ -18,6 +18,7 @@ import {
   VK_TREE_HEIGHT,
   VerificationKey,
   VerificationKeyAsFields,
+  VerificationKeyData,
   makeRecursiveProof,
 } from '@aztec/circuits.js';
 import { makeTxRequest } from '@aztec/circuits.js/testing';
@@ -97,7 +98,7 @@ describe('Kernel Prover', () => {
     return {
       publicInputs,
       proof: makeRecursiveProof<typeof NESTED_RECURSIVE_PROOF_LENGTH>(NESTED_RECURSIVE_PROOF_LENGTH),
-      verificationKey: VerificationKeyAsFields.makeEmpty(),
+      verificationKey: VerificationKeyData.makeFake(),
     };
   };
 
@@ -112,7 +113,7 @@ describe('Kernel Prover', () => {
     return {
       publicInputs,
       proof: makeRecursiveProof<typeof NESTED_RECURSIVE_PROOF_LENGTH>(NESTED_RECURSIVE_PROOF_LENGTH),
-      verificationKey: VerificationKeyAsFields.makeEmpty(),
+      verificationKey: VerificationKeyData.makeFake(),
     };
   };
 

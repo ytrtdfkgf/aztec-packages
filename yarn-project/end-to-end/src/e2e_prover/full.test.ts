@@ -50,7 +50,12 @@ describe('full_prover', () => {
         publicSendAmount,
         0,
       );
-      const [publicTx, privateTx] = await Promise.all([publicInteraction.prove(), privateInteraction.prove()]);
+      //const [publicTx, privateTx] = await Promise.all([publicInteraction.prove(), privateInteraction.prove()]);
+      logger.info(`Proving private tranfer...`);
+      const privateTx = await privateInteraction.prove({ skipPublicSimulation: true });
+
+      logger.info(`Proving public tranfer...`);
+      const publicTx = await publicInteraction.prove({ skipPublicSimulation: true });
 
       // This will recursively verify all app and kernel circuits involved in the private stage of this transaction!
       logger.info(`Verifying kernel tail to public proof`);

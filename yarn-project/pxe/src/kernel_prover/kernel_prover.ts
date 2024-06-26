@@ -21,7 +21,8 @@ import {
   type RecursiveProof,
   type TxRequest,
   VK_TREE_HEIGHT,
-  VerificationKeyAsFields,
+  type VerificationKeyAsFields,
+  VerificationKeyData,
   getNonEmptyItems,
   makeRecursiveProof,
 } from '@aztec/circuits.js';
@@ -66,17 +67,19 @@ export class KernelProver {
   ): Promise<KernelProofOutput<PrivateKernelTailCircuitPublicInputs>> {
     const executionStack = [executionResult];
     let firstIteration = true;
+    this.log.info(`PROVE: ${executionStack.length}`);
 
     let output: KernelProofOutput<PrivateKernelCircuitPublicInputs> = {
       publicInputs: PrivateKernelCircuitPublicInputs.empty(),
       proof: makeRecursiveProof<typeof NESTED_RECURSIVE_PROOF_LENGTH>(NESTED_RECURSIVE_PROOF_LENGTH),
-      verificationKey: VerificationKeyAsFields.makeEmpty(),
+      verificationKey: VerificationKeyData.makeFake(),
     };
 
     const noteHashLeafIndexMap = collectNoteHashLeafIndexMap(executionResult);
     const noteHashNullifierCounterMap = collectNullifiedNoteHashCounters(executionResult);
 
     while (executionStack.length) {
+      this.log.info(`LOOP`);
       if (!firstIteration && this.needsReset(executionStack, output)) {
         output = await this.runReset(executionStack, output, noteHashLeafIndexMap, noteHashNullifierCounterMap);
       }
@@ -115,22 +118,26 @@ export class KernelProver {
         );
         const proofInput = new PrivateKernelInitCircuitPrivateInputs(txRequest, privateCallData, hints);
         pushTestData('private-kernel-inputs-init', proofInput);
+        this.log.info(`Proving INIT...`);
         output = await this.proofCreator.createProofInit(proofInput);
       } else {
         const hints = buildPrivateKernelInnerHints(
           currentExecution.callStackItem.publicInputs,
           noteHashNullifierCounterMap,
         );
-        const previousVkMembershipWitness = await this.oracle.getVkMembershipWitness(output.verificationKey);
+        const previousVkMembershipWitness = await this.oracle.getVkMembershipWitness(
+          output.verificationKey.keyAsFields,
+        );
         const previousKernelData = new PrivateKernelData(
           output.publicInputs,
           output.proof,
-          output.verificationKey,
+          output.verificationKey.keyAsFields,
           Number(previousVkMembershipWitness.leafIndex),
           assertLength<Fr, typeof VK_TREE_HEIGHT>(previousVkMembershipWitness.siblingPath, VK_TREE_HEIGHT),
         );
         const proofInput = new PrivateKernelInnerCircuitPrivateInputs(previousKernelData, privateCallData, hints);
         pushTestData('private-kernel-inputs-inner', proofInput);
+        this.log.info(`Proving INNER...`);
         output = await this.proofCreator.createProofInner(proofInput);
       }
       firstIteration = false;
@@ -139,11 +146,11 @@ export class KernelProver {
     if (this.somethingToReset(output)) {
       output = await this.runReset(executionStack, output, noteHashLeafIndexMap, noteHashNullifierCounterMap);
     }
-    const previousVkMembershipWitness = await this.oracle.getVkMembershipWitness(output.verificationKey);
+    const previousVkMembershipWitness = await this.oracle.getVkMembershipWitness(output.verificationKey.keyAsFields);
     const previousKernelData = new PrivateKernelData(
       output.publicInputs,
       output.proof,
-      output.verificationKey,
+      output.verificationKey.keyAsFields,
       Number(previousVkMembershipWitness.leafIndex),
       assertLength<Fr, typeof VK_TREE_HEIGHT>(previousVkMembershipWitness.siblingPath, VK_TREE_HEIGHT),
     );
@@ -157,6 +164,7 @@ export class KernelProver {
     const privateInputs = new PrivateKernelTailCircuitPrivateInputs(previousKernelData, hints);
 
     pushTestData('private-kernel-inputs-ordering', privateInputs);
+    this.log.info(`Proving TAIL...`);
     return await this.proofCreator.createProofTail(privateInputs);
   }
 
@@ -200,11 +208,11 @@ export class KernelProver {
     noteHashLeafIndexMap: Map<bigint, bigint>,
     noteHashNullifierCounterMap: Map<number, number>,
   ): Promise<KernelProofOutput<PrivateKernelCircuitPublicInputs>> {
-    const previousVkMembershipWitness = await this.oracle.getVkMembershipWitness(output.verificationKey);
+    const previousVkMembershipWitness = await this.oracle.getVkMembershipWitness(output.verificationKey.keyAsFields);
     const previousKernelData = new PrivateKernelData(
       output.publicInputs,
       output.proof,
-      output.verificationKey,
+      output.verificationKey.keyAsFields,
       Number(previousVkMembershipWitness.leafIndex),
       assertLength<Fr, typeof VK_TREE_HEIGHT>(previousVkMembershipWitness.siblingPath, VK_TREE_HEIGHT),
     );

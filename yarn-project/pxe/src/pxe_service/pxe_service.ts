@@ -577,7 +577,7 @@ export class PXEService implements PXE {
 
     const { contractAddress, functionArtifact } = await this.#getSimulationParameters(txRequest);
 
-    this.log.debug('Executing simulator...');
+    this.log.info('Executing simulator...');
     try {
       const result = await this.simulator.run(txRequest, functionArtifact, contractAddress, msgSender);
       this.log.verbose(`Simulation completed for ${contractAddress.toString()}:${functionArtifact.name}`);
@@ -664,19 +664,26 @@ export class PXEService implements PXE {
     proofCreator: ProofCreator,
     msgSender?: AztecAddress,
   ): Promise<SimulatedTx> {
+    this.log.info(`SIM AND PROVE`);
     // Get values that allow us to reconstruct the block hash
     const executionResult = await this.#simulate(txExecutionRequest, msgSender);
 
     const kernelOracle = new KernelOracle(this.contractDataOracle, this.keyStore, this.node);
     const kernelProver = new KernelProver(kernelOracle, proofCreator);
-    this.log.debug(`Executing kernel prover...`);
-    const { proof, publicInputs } = await kernelProver.prove(txExecutionRequest.toTxRequest(), executionResult);
+    this.log.info(`Executing kernel prover...`);
+    const { proof, publicInputs, verificationKey } = await kernelProver.prove(
+      txExecutionRequest.toTxRequest(),
+      executionResult,
+    );
 
     const noteEncryptedLogs = new EncryptedNoteTxL2Logs([collectSortedNoteEncryptedLogs(executionResult)]);
     const unencryptedLogs = new UnencryptedTxL2Logs([collectSortedUnencryptedLogs(executionResult)]);
     const encryptedLogs = new EncryptedTxL2Logs([collectSortedEncryptedLogs(executionResult)]);
     const enqueuedPublicFunctions = collectEnqueuedPublicFunctionCalls(executionResult);
     const teardownPublicFunction = collectPublicTeardownFunctionCall(executionResult);
+
+    this.log.info(`Final VK: ${verificationKey.keyAsFields.hash}`);
+    this.log.info(`Proof length ${proof.binaryProof.buffer.length}`);
 
     const tx = new Tx(
       publicInputs,
@@ -686,6 +693,7 @@ export class PXEService implements PXE {
       unencryptedLogs,
       enqueuedPublicFunctions,
       teardownPublicFunction,
+      verificationKey,
     );
 
     return new SimulatedTx(tx, accumulateReturnValues(executionResult));

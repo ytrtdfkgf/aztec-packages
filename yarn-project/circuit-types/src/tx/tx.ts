@@ -3,6 +3,7 @@ import {
   PrivateKernelTailCircuitPublicInputs,
   Proof,
   PublicCallRequest,
+  VerificationKeyData,
 } from '@aztec/circuits.js';
 import { arraySerializedSizeOfNonEmpty } from '@aztec/foundation/collection';
 import { BufferReader, serializeToBuffer } from '@aztec/foundation/serialize';
@@ -47,6 +48,8 @@ export class Tx {
      * Public function call to be run by the sequencer as part of teardown.
      */
     public readonly publicTeardownFunctionCall: PublicCallRequest,
+
+    public readonly vk: VerificationKeyData,
   ) {
     const kernelPublicCallStackSize = data.numberOfPublicCallRequests();
     if (kernelPublicCallStackSize !== enqueuedPublicFunctionCalls.length) {
@@ -76,6 +79,7 @@ export class Tx {
       reader.readObject(UnencryptedTxL2Logs),
       reader.readArray(reader.readNumber(), PublicCallRequest),
       reader.readObject(PublicCallRequest),
+      reader.readObject(VerificationKeyData),
     );
   }
 
@@ -93,6 +97,7 @@ export class Tx {
       this.enqueuedPublicFunctionCalls.length,
       this.enqueuedPublicFunctionCalls,
       this.publicTeardownFunctionCall,
+      this.vk,
     ]);
   }
 
@@ -109,6 +114,7 @@ export class Tx {
       proof: this.proof.toBuffer().toString('hex'),
       enqueuedPublicFunctions: this.enqueuedPublicFunctionCalls.map(f => f.toBuffer().toString('hex')) ?? [],
       publicTeardownFunctionCall: this.publicTeardownFunctionCall.toBuffer().toString('hex'),
+      vk: this.vk.toBuffer().toString('hex'),
     };
   }
 
@@ -136,6 +142,8 @@ export class Tx {
       ? obj.enqueuedPublicFunctions.map((x: string) => PublicCallRequest.fromBuffer(Buffer.from(x, 'hex')))
       : [];
     const publicTeardownFunctionCall = PublicCallRequest.fromBuffer(Buffer.from(obj.publicTeardownFunctionCall, 'hex'));
+    console.log(`VK : ${obj.vk}`);
+    const vk = VerificationKeyData.fromBuffer(Buffer.from(obj.vk, 'hex'));
     return new Tx(
       publicInputs,
       Proof.fromBuffer(proof),
@@ -144,6 +152,7 @@ export class Tx {
       unencryptedLogs,
       enqueuedPublicFunctions,
       publicTeardownFunctionCall,
+      vk,
     );
   }
 
@@ -239,6 +248,7 @@ export class Tx {
       return PublicCallRequest.fromBuffer(x.toBuffer());
     });
     const publicTeardownFunctionCall = PublicCallRequest.fromBuffer(tx.publicTeardownFunctionCall.toBuffer());
+    const vk = VerificationKeyData.fromBuffer(tx.vk.toBuffer());
     return new Tx(
       publicInputs,
       proof,
@@ -247,6 +257,7 @@ export class Tx {
       unencryptedLogs,
       enqueuedPublicFunctions,
       publicTeardownFunctionCall,
+      vk,
     );
   }
 }

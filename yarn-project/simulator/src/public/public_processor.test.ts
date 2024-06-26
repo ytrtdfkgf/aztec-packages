@@ -124,6 +124,7 @@ describe('public_processor', () => {
           MAX_TOTAL_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX,
           PublicDataUpdateRequest.empty,
         ),
+        vk: tx.vk,
       };
 
       expect(processed[0]).toEqual(expected);

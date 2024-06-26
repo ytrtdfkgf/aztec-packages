@@ -23,7 +23,7 @@ import {
   type PublicKernelCircuitPublicInputs,
   type PublicKernelTailCircuitPrivateInputs,
   type RecursiveProof,
-  type VerificationKeyData,
+  VerificationKeyData,
   makeEmptyProof,
 } from '@aztec/circuits.js';
 
@@ -66,7 +66,7 @@ export type PublicProvingRequest = AvmProvingRequest | PublicKernelRequest;
  * Represents a tx that has been processed by the sequencer public processor,
  * so its kernel circuit public inputs are filled in.
  */
-export type ProcessedTx = Pick<Tx, 'proof' | 'noteEncryptedLogs' | 'encryptedLogs' | 'unencryptedLogs'> & {
+export type ProcessedTx = Pick<Tx, 'proof' | 'noteEncryptedLogs' | 'encryptedLogs' | 'unencryptedLogs' | 'vk'> & {
   /**
    * Output of the private tail or public tail kernel circuit for this tx.
    */
@@ -167,6 +167,7 @@ export function makeProcessedTx(
     publicProvingRequests,
     gasUsed,
     finalPublicDataUpdateRequests: finalPublicDataUpdateRequests ?? kernelOutput.end.publicDataUpdateRequests,
+    vk: tx.vk,
   };
 }
 
@@ -197,6 +198,7 @@ export function makePaddingProcessedTx(
     finalPublicDataUpdateRequests: [],
     verificationKey: kernelOutput.verificationKey,
     recursiveProof: kernelOutput.proof,
+    vk: kernelOutput.verificationKey,
   };
 }
 
@@ -224,6 +226,7 @@ export function makeEmptyProcessedTx(header: Header, chainId: Fr, version: Fr): 
     publicProvingRequests: [],
     gasUsed: {},
     finalPublicDataUpdateRequests: [],
+    vk: VerificationKeyData.makeFake(),
   };
 }
 

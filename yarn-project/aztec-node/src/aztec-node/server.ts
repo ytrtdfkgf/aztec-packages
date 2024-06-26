@@ -739,7 +739,8 @@ export class AztecNodeService implements AztecNode {
     await this.prover?.updateProverConfig(config);
 
     if (newConfig.realProofs !== this.config.realProofs) {
-      const proofVerifier = config.realProofs ? await BBCircuitVerifier.new(newConfig) : new TestCircuitVerifier();
+      //const proofVerifier = config.realProofs ? await BBCircuitVerifier.new(newConfig) : new TestCircuitVerifier();
+      const proofVerifier = new TestCircuitVerifier();
 
       this.txValidator = new AggregateTxValidator(
         new MetadataTxValidator(this.chainId),

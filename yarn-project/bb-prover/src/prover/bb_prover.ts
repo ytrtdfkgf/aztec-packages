@@ -244,13 +244,13 @@ export class BBNativeRollupProver implements ServerCircuitProver {
     input: BaseRollupInputs,
   ): Promise<PublicInputsAndRecursiveProof<BaseOrMergeRollupPublicInputs>> {
     // We may need to convert the recursive proof into fields format
-    logger.debug(`kernel Data proof: ${input.kernelData.proof}`);
+    //logger.debug(`kernel Data proof: ${input.kernelData.proof}`);
     input.kernelData.proof = await this.ensureValidProof(
       input.kernelData.proof,
       'BaseRollupArtifact',
       input.kernelData.vk,
     );
-    logger.debug(`kernel Data proof after ensureValidProof: ${input.kernelData.proof}`);
+    //logger.debug(`kernel Data proof after ensureValidProof: ${input.kernelData.proof}`);
 
     const { circuitOutput, proof } = await this.createRecursiveProof(
       input,
@@ -574,7 +574,7 @@ export class BBNativeRollupProver implements ServerCircuitProver {
    */
   public async verifyProof(circuitType: ServerProtocolArtifact, proof: Proof) {
     const verificationKey = await this.getVerificationKeyDataForCircuit(circuitType);
-    info(`vkey in: ${verificationKey.keyAsFields.key}`);
+    //info(`vkey in: ${verificationKey.keyAsFields.key}`);
     return await this.verifyWithKey(verificationKey, proof);
   }
 
@@ -652,8 +652,8 @@ export class BBNativeRollupProver implements ServerCircuitProver {
       const proofFullFilename = path.join(bbWorkingDirectory, PROOF_FILENAME);
       const vkFullFilename = path.join(bbWorkingDirectory, VK_FILENAME);
 
-      logger.debug(
-        `Converting proof to fields format for circuit ${circuit}, directory ${bbWorkingDirectory}, num public inputs: ${vk.numPublicInputs}, proof length ${proof.binaryProof.buffer.length}, vk length ${vk.keyAsBytes.length}`,
+      logger.info(
+        `Converting proof to fields format for circuit ${circuit}, directory ${bbWorkingDirectory}, num public inputs: ${vk.numPublicInputs}, proof length ${proof.binaryProof.buffer.length}, vk length ${vk.keyAsBytes.length}, vk hash ${vk.keyAsFields.hash}`,
       );
 
       await fs.writeFile(proofFullFilename, proof.binaryProof.buffer);
@@ -757,7 +757,7 @@ export class BBNativeRollupProver implements ServerCircuitProver {
     ]);
     const json = JSON.parse(proofString);
     const vkData = await this.verificationKeys.get(circuitType);
-    logger.debug(`vkData: 9999900000000000000000000000000000000 ${vkData}`);
+    //logger.debug(`vkData: 9999900000000000000000000000000000000 ${vkData}`);
     if (!vkData) {
       throw new Error(`Invalid verification key for ${circuitType}`);
     }

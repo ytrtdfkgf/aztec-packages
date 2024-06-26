@@ -395,7 +395,8 @@ export class ProvingOrchestrator {
   private async prepareTransaction(tx: ProcessedTx, provingState: ProvingState) {
     // Pass the private kernel tail vk here as the previous one.
     // If there are public functions then this key will be overwritten once the public tail has been proven
-    const previousKernelVerificationKey = provingState.privateKernelVerificationKeys.privateKernelCircuit;
+    //const previousKernelVerificationKey = provingState.privateKernelVerificationKeys.privateKernelCircuit;
+    const previousKernelVerificationKey = tx.vk;
 
     const txInputs = await this.prepareBaseRollupInputs(provingState, tx, previousKernelVerificationKey);
     if (!txInputs) {
@@ -415,7 +416,8 @@ export class ProvingOrchestrator {
       tx,
       inputs,
       treeSnapshots,
-      provingState.privateKernelVerificationKeys.privateKernelToPublicCircuit,
+      tx.vk,
+      //provingState.privateKernelVerificationKeys.privateKernelToPublicCircuit,
     );
     const txIndex = provingState.addNewTx(txProvingState);
     const numPublicKernels = txProvingState.getNumPublicKernels();

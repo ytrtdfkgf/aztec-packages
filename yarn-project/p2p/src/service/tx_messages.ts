@@ -1,5 +1,10 @@
 import { EncryptedNoteTxL2Logs, EncryptedTxL2Logs, Tx, UnencryptedTxL2Logs } from '@aztec/circuit-types';
-import { PrivateKernelTailCircuitPublicInputs, Proof, PublicCallRequest } from '@aztec/circuits.js';
+import {
+  PrivateKernelTailCircuitPublicInputs,
+  Proof,
+  PublicCallRequest,
+  VerificationKeyData,
+} from '@aztec/circuits.js';
 import { numToUInt32BE } from '@aztec/foundation/serialize';
 
 import { type SemVer } from 'semver';
@@ -139,5 +144,6 @@ export function fromTxMessage(buffer: Buffer): Tx {
     unencryptedLogs.obj,
     publicCalls.objects,
     publicTeardownCall.obj!,
+    VerificationKeyData.makeFake(),
   );
 }

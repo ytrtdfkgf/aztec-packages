@@ -10,6 +10,7 @@ import {
   PrivateKernelTailCircuitPublicInputs,
   PublicAccumulatedDataBuilder,
   PublicCallRequest,
+  VerificationKeyData,
   computeContractClassId,
   getContractClassFromArtifact,
   makeEmptyProof,
@@ -142,6 +143,7 @@ export const mockTx = (
     unencryptedLogs,
     publicCallRequests,
     publicTeardownCallRequest,
+    VerificationKeyData.makeFake(),
   );
 
   return tx;
