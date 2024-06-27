@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <lmdb.h>
 #include <vector>
 
@@ -22,6 +23,7 @@ LMDBWriteTransaction::Ptr LMDBStore::createWriteTransaction() const
 }
 LMDBReadTransaction::Ptr LMDBStore::createReadTransaction()
 {
+    std::cout << "Creating read transaction\n";
     _environment.waitForReader();
     return std::make_unique<LMDBReadTransaction>(_environment, _database);
 }

@@ -119,7 +119,6 @@ void AppendOnlyTree<Store, HashingPolicy>::get_meta_data(bool includeUncommitted
             },
             on_completion);
     };
-    std::cout << "putting job on the queue";
     workers_.enqueue(job);
 }
 
