@@ -8,7 +8,6 @@
 #include "barretenberg/numeric/bitop/pow.hpp"
 #include <exception>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <utility>
