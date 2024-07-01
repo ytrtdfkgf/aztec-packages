@@ -129,8 +129,10 @@ template <typename Curve> class ZeroMorphProver_ {
                                                              FF y_challenge,
                                                              size_t N)
     {
+        static_cast<void>(N);
+        uint32_t MAX_CIRCUIT_SIZE = (1 << CONST_PROOF_SIZE_LOG_N);
         // Batched lifted degree quotient polynomial
-        auto result = Polynomial(N);
+        auto result = Polynomial(MAX_CIRCUIT_SIZE);
 
         // Compute \hat{q} = \sum_k y^k * X^{N - d_k - 1} * q_k
         size_t k = 0;
@@ -139,7 +141,7 @@ template <typename Curve> class ZeroMorphProver_ {
             // Rather than explicitly computing the shifts of q_k by N - d_k - 1 (i.e. multiplying q_k by X^{N - d_k -
             // 1}) then accumulating them, we simply accumulate y^k*q_k into \hat{q} at the index offset N - d_k - 1
             auto deg_k = static_cast<size_t>((1 << k) - 1);
-            size_t offset = N - deg_k - 1;
+            size_t offset = MAX_CIRCUIT_SIZE - deg_k - 1;
             for (size_t idx = 0; idx < deg_k + 1; ++idx) {
                 result[offset + idx] += scalar * quotient[idx];
             }
