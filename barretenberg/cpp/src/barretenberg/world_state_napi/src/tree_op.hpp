@@ -2,7 +2,7 @@
 
 #include "barretenberg/common/log.hpp"
 #include "barretenberg/crypto/merkle_tree/indexed_tree/indexed_tree.hpp"
-#include "barretenberg/world_state_napi/src/tree_with_store.hpp"
+#include "msgpack/v3/sbuffer_decl.hpp"
 #include <memory>
 #include <napi.h>
 
@@ -14,7 +14,7 @@ namespace bb::world_state {
 
 using namespace Napi;
 
-using tree_op_callback = std::function<bb::fr()>;
+using tree_op_callback = std::function<void(msgpack::sbuffer&)>;
 
 class TreeOp : public AsyncWorker {
   public:
@@ -22,28 +22,24 @@ class TreeOp : public AsyncWorker {
         : AsyncWorker(env)
         , _callback(callback)
         , _deferred(env)
-        , _result(0)
     {}
 
     TreeOp(Napi::Env env, Promise::Deferred& deferred, tree_op_callback& callback)
         : AsyncWorker(env)
         , _callback(callback)
         , _deferred(deferred)
-        , _result(0)
     {}
 
     TreeOp(Napi::Env env, tree_op_callback callback)
         : AsyncWorker(env)
         , _callback(std::move(callback))
         , _deferred(env)
-        , _result(0)
     {}
 
     TreeOp(Napi::Env env, Promise::Deferred& deferred, tree_op_callback callback)
         : AsyncWorker(env)
         , _callback(std::move(callback))
         , _deferred(deferred)
-        , _result(0)
     {}
 
     TreeOp(const TreeOp&) = delete;
@@ -56,13 +52,13 @@ class TreeOp : public AsyncWorker {
     void Execute() override
     {
         try {
-            _result = _callback();
+            _callback(_result);
         } catch (const std::exception& e) {
             SetError(e.what());
         }
     }
 
-    void OnOK() override { _deferred.Resolve(String::New(Env(), format(_result))); }
+    void OnOK() override { _deferred.Resolve(Napi::Buffer<char>::Copy(Env(), _result.data(), _result.size())); }
     void OnError(const Napi::Error& e) override { _deferred.Reject(e.Value()); }
 
     Promise GetPromise() { return _deferred.Promise(); }
@@ -70,7 +66,7 @@ class TreeOp : public AsyncWorker {
   private:
     tree_op_callback _callback;
     Promise::Deferred _deferred;
-    bb::fr _result;
+    msgpack::sbuffer _result;
 };
 
 } // namespace bb::world_state

@@ -16,8 +16,9 @@ namespace bb::crypto::merkle_tree {
 /**
  * @brief Serves as a key-value node store for merkle trees, uses an unordered_map as a cache
  */
-template <typename PersistedStore, typename LeafValueType> class CachedTreeStore {
+template <typename PersistedStoreType, typename LeafValueType> class CachedTreeStore {
   public:
+    using PersistedStore = PersistedStoreType;
     using LeafType = LeafValueType;
     using IndexedLeafValueType = IndexedLeaf<LeafValueType>;
     using ReadTransaction = typename PersistedStore::ReadTransaction;

@@ -6,7 +6,6 @@ PRESET=clang16
 
 if [[ $1 == "full" ]]; then
   pushd src/barretenberg/world_state_napi
-  mkdir -p build
   yarn
   popd
 
@@ -15,7 +14,8 @@ fi
 
 cmake --build --preset $PRESET --target world_state_napi
 
-cp build/lib/world_state_napi.node src/barretenberg/world_state_napi/build
+mkdir -p ../world-state/build
+cp build/lib/world_state_napi.node ../world-state/build
 
 echo ""
-node src/barretenberg/world_state_napi/
+node ../world-state

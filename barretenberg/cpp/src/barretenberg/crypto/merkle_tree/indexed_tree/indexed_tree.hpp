@@ -27,8 +27,10 @@ namespace bb::crypto::merkle_tree {
  * hashing policy
  *
  */
-template <typename Store, typename HashingPolicy> class IndexedTree : public AppendOnlyTree<Store, HashingPolicy> {
+template <typename StoreType, typename HashingPolicy>
+class IndexedTree : public AppendOnlyTree<StoreType, HashingPolicy> {
   public:
+    using Store = StoreType;
     using LeafValueType = typename Store::LeafType;
     using IndexedLeafValueType = typename Store::IndexedLeafValueType;
     using AddCompletionCallback = std::function<void(const TypedResponse<AddIndexedDataResponse>&)>;

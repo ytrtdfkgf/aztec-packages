@@ -22,8 +22,9 @@ using namespace bb;
  * Accepts template argument of the type of store backing the tree and the hashing policy
  *
  */
-template <typename Store, typename HashingPolicy> class AppendOnlyTree {
+template <typename StoreType, typename HashingPolicy> class AppendOnlyTree {
   public:
+    using Store = StoreType;
     using AppendCompletionCallback = std::function<void(const TypedResponse<AddDataResponse>&)>;
     using MetaDataCallback = std::function<void(const TypedResponse<TreeMetaResponse>&)>;
     using HashPathCallback = std::function<void(const TypedResponse<GetSiblingPathResponse>&)>;
@@ -116,6 +117,7 @@ void AppendOnlyTree<Store, HashingPolicy>::get_meta_data(bool includeUncommitted
             [=, this](TypedResponse<TreeMetaResponse>& response) {
                 ReadTransactionPtr tx = store_.createReadTransaction();
                 store_.get_meta(response.inner.size, response.inner.root, *tx, includeUncommitted);
+                response.inner.depth = depth_;
             },
             on_completion);
     };
