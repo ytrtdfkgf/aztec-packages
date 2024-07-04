@@ -113,14 +113,14 @@ TEST_F(WorldStateTest, GetNullifierLeaf)
         ws.get_leaf_preimage<bb::crypto::merkle_tree::NullifierLeafValue>(MerkleTreeId::NULLIFIER_TREE, 3);
     EXPECT_EQ(definitely_no_leaf.has_value(), false);
 
-    std::vector<bb::crypto::merkle_tree::NullifierLeafValue> leaves{ bb::crypto::merkle_tree::NullifierLeafValue(
-        bb::fr("0x0000000000000000000000000000000000000000000000000000000000000042")) };
+    std::vector<bb::crypto::merkle_tree::NullifierLeafValue> leaves{ bb::crypto::merkle_tree::NullifierLeafValue(30) };
 
     ws.append_leaves(MerkleTreeId::NULLIFIER_TREE, leaves);
+    ws.commit();
     auto maybe_leaf =
-        ws.get_leaf_preimage<bb::crypto::merkle_tree::NullifierLeafValue>(MerkleTreeId::NULLIFIER_TREE, 3);
+        ws.get_leaf_preimage<bb::crypto::merkle_tree::NullifierLeafValue>(MerkleTreeId::NULLIFIER_TREE, 2);
     EXPECT_TRUE(maybe_leaf.has_value());
-    EXPECT_EQ(maybe_leaf.value(), bb::fr("0x0000000000000000000000000000000000000000000000000000000000000042"));
+    EXPECT_EQ(maybe_leaf.value(), bb::fr(30));
 }
 
 TEST_F(WorldStateTest, GetNoteHashLeaf)

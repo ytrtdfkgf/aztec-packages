@@ -97,13 +97,15 @@ class WorldState {
     ~WorldState() = default;
 
     TreeInfo get_tree_info(MerkleTreeId id);
-    crypto::merkle_tree::fr_hash_path get_sibling_path(MerkleTreeId id, index_t leaf_index);
+    crypto::merkle_tree::fr_sibling_path get_sibling_path(MerkleTreeId id, index_t leaf_index);
     StateReference get_state_reference();
 
     template <typename T> void append_leaves(MerkleTreeId id, const std::vector<T>& leaves);
     template <> void append_leaves(MerkleTreeId id, const std::vector<bb::fr>& leaves);
 
     template <typename T> std::optional<T> get_leaf_preimage(MerkleTreeId id, index_t leaf);
+
+    void commit();
 
     // TODO(alexg) get_previous_value_index
   private:

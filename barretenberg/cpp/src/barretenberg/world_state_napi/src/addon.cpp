@@ -63,7 +63,7 @@ Napi::Value WorldStateAddon::process(const Napi::CallbackInfo& info)
         auto data = std::make_shared<std::vector<char>>(length);
         std::copy_n(buffer.Data(), length, data->data());
 
-        auto* op = new AsyncOperation(env, deferred, [=](msgpack::sbuffer& buf) {
+        auto* op = new AsyncOperation(env, deferred, [=, this](msgpack::sbuffer& buf) {
             msgpack::object_handle obj_handle = msgpack::unpack(data->data(), length);
             msgpack::object obj = obj_handle.get();
             _dispatcher.onNewData(obj, buf);
