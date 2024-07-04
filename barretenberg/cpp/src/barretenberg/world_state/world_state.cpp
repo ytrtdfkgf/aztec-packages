@@ -4,6 +4,7 @@
 #include "barretenberg/crypto/merkle_tree/hash_path.hpp"
 #include "barretenberg/crypto/merkle_tree/indexed_tree/indexed_leaf.hpp"
 #include "barretenberg/crypto/merkle_tree/response.hpp"
+#include "barretenberg/crypto/merkle_tree/signal.hpp"
 #include "barretenberg/world_state/tree_with_store.hpp"
 #include <memory>
 #include <stdexcept>
@@ -83,41 +84,6 @@ TreeInfo WorldState::get_tree_info(MerkleTreeId id)
         _trees.at(id));
 }
 
-void WorldState::append_leaves(MerkleTreeId id, const std::vector<bb::fr>& leaves)
-{
-    if (auto* const wrapper = std::get_if<TreeWithStore<FrTree>>(&_trees.at(id))) {
-        Signal signal(1);
-        wrapper->tree->add_values(leaves, [&signal](const TypedResponse<AddDataResponse>&) { signal.signal_level(0); });
-        signal.wait_for_level(0);
-    } else {
-        throw std::runtime_error("Invalid tree type for leaves");
-    }
-}
-
-void WorldState::append_leaves(MerkleTreeId id, const std::vector<NullifierLeafValue>& leaves)
-{
-    if (auto* const wrapper = std::get_if<TreeWithStore<NullifierTree>>(&_trees.at(id))) {
-        Signal signal(1);
-        wrapper->tree->add_or_update_values(
-            leaves, [&signal](const TypedResponse<AddIndexedDataResponse>&) { signal.signal_level(0); });
-        signal.wait_for_level(0);
-    } else {
-        throw std::runtime_error("Invalid tree type for leaves");
-    }
-}
-
-void WorldState::append_leaves(MerkleTreeId id, const std::vector<PublicDataLeafValue>& leaves)
-{
-    if (auto* const wrapper = std::get_if<TreeWithStore<PublicDataTree>>(&_trees.at(id))) {
-        Signal signal(1);
-        wrapper->tree->add_or_update_values(
-            leaves, [&signal](const TypedResponse<AddIndexedDataResponse>&) { signal.signal_level(0); });
-        signal.wait_for_level(0);
-    } else {
-        throw std::runtime_error("Invalid tree type for leaves");
-    }
-}
-
 StateReference WorldState::get_state_reference()
 {
     Signal signal(static_cast<uint32_t>(_trees.size()));
@@ -159,50 +125,17 @@ fr_hash_path WorldState::get_sibling_path(MerkleTreeId id, index_t leaf_index)
         _trees.at(id));
 }
 
-bool WorldState::get_leaf_preimage(MerkleTreeId id, index_t leaf, NullifierLeafValue& value)
+template <> void WorldState::append_leaves(MerkleTreeId id, const std::vector<bb::fr>& leaves)
 {
-    if (auto* const wrapper = std::get_if<TreeWithStore<NullifierTree>>(&_trees.at(id))) {
+    using namespace crypto::merkle_tree;
+    if (auto const* wrapper = std::get_if<TreeWithStore<FrTree>>(&_trees.at(id))) {
+
         Signal signal(1);
-        bool success = false;
-
-        auto callback = [&](const TypedResponse<GetIndexedLeafResponse<NullifierLeafValue>>& response) {
-            success = response.success;
-            value = response.inner.indexed_leaf.value;
-
-            std::cout << "Success: " << success << std::endl;
-            std::cout << "leaf index: " << leaf << std::endl;
-            std::cout << "indexed leaf: " << value << std::endl;
-            std::cout << "nullifier: " << value.value << std::endl;
-            signal.signal_level(0);
-        };
-
-        wrapper->tree->get_leaf(leaf, false, callback);
+        wrapper->tree->add_values(leaves, [&signal](const TypedResponse<AddDataResponse>&) { signal.signal_level(0); });
         signal.wait_for_level(0);
-
-        return success;
+    } else {
+        throw std::runtime_error("Invalid tree type for FrTree");
     }
-
-    throw std::runtime_error("Invalid tree type for leaf preimage");
 }
 
-bool WorldState::get_leaf_preimage(MerkleTreeId id, index_t leaf, PublicDataLeafValue& value)
-{
-    if (auto* const wrapper = std::get_if<TreeWithStore<PublicDataTree>>(&_trees.at(id))) {
-        Signal signal(1);
-        bool success = false;
-
-        auto callback = [&](const TypedResponse<GetIndexedLeafResponse<PublicDataLeafValue>>& response) {
-            success = response.success;
-            value = response.inner.indexed_leaf.value;
-            signal.signal_level(0);
-        };
-
-        wrapper->tree->get_leaf(leaf, false, callback);
-        signal.wait_for_level(0);
-
-        return success;
-    }
-
-    throw std::runtime_error("Invalid tree type for leaf preimage");
-}
 } // namespace bb::world_state

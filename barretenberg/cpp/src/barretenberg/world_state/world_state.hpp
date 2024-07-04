@@ -6,11 +6,16 @@
 #include "barretenberg/crypto/merkle_tree/indexed_tree/indexed_leaf.hpp"
 #include "barretenberg/crypto/merkle_tree/indexed_tree/indexed_tree.hpp"
 #include "barretenberg/crypto/merkle_tree/lmdb_store/lmdb_environment.hpp"
+#include "barretenberg/crypto/merkle_tree/lmdb_store/lmdb_store.hpp"
 #include "barretenberg/crypto/merkle_tree/node_store/cached_tree_store.hpp"
+#include "barretenberg/crypto/merkle_tree/response.hpp"
+#include "barretenberg/crypto/merkle_tree/signal.hpp"
 #include "barretenberg/crypto/merkle_tree/types.hpp"
 #include "barretenberg/serialize/msgpack.hpp"
 #include "barretenberg/world_state/tree_with_store.hpp"
 #include "msgpack/adaptor/define_decl.hpp"
+#include <optional>
+#include <type_traits>
 #include <unordered_map>
 
 namespace bb::world_state {
@@ -92,20 +97,15 @@ class WorldState {
     ~WorldState() = default;
 
     TreeInfo get_tree_info(MerkleTreeId id);
-
-    // had trouble using a template for this function
-    void append_leaves(MerkleTreeId id, const std::vector<bb::fr>& leaves);
-    void append_leaves(MerkleTreeId id, const std::vector<crypto::merkle_tree::NullifierLeafValue>& leaves);
-    void append_leaves(MerkleTreeId id, const std::vector<crypto::merkle_tree::PublicDataLeafValue>& leaves);
-
+    crypto::merkle_tree::fr_hash_path get_sibling_path(MerkleTreeId id, index_t leaf_index);
     StateReference get_state_reference();
 
-    crypto::merkle_tree::fr_hash_path get_sibling_path(MerkleTreeId id, index_t leaf_index);
+    template <typename T> void append_leaves(MerkleTreeId id, const std::vector<T>& leaves);
+    template <> void append_leaves(MerkleTreeId id, const std::vector<bb::fr>& leaves);
+
+    template <typename T> std::optional<T> get_leaf_preimage(MerkleTreeId id, index_t leaf);
+
     // TODO(alexg) get_previous_value_index
-
-    bool get_leaf_preimage(MerkleTreeId id, index_t leaf, crypto::merkle_tree::NullifierLeafValue& value);
-    bool get_leaf_preimage(MerkleTreeId id, index_t leaf, crypto::merkle_tree::PublicDataLeafValue& value);
-
   private:
     std::unique_ptr<crypto::merkle_tree::LMDBEnvironment> _lmdb_env;
     std::unordered_map<MerkleTreeId, TreeVariant> _trees;
@@ -113,6 +113,50 @@ class WorldState {
 
     AppendOnlyTreeSnapshot get_tree_snapshot(MerkleTreeId id);
 };
+
+template <typename T> void WorldState::append_leaves(MerkleTreeId id, const std::vector<T>& leaves)
+{
+    using namespace crypto::merkle_tree;
+    using Store = CachedTreeStore<LMDBStore, T>;
+    using Tree = IndexedTree<Store, HashPolicy>;
+
+    if (auto const* wrapper = std::get_if<TreeWithStore<Tree>>(&_trees.at(id))) {
+        Signal signal(1);
+        wrapper->tree->add_or_update_values(
+            leaves, [&signal](const TypedResponse<AddIndexedDataResponse>&) { signal.signal_level(0); });
+        signal.wait_for_level(0);
+    } else {
+        throw std::runtime_error("Invalid tree type for indexed tree");
+    }
+}
+
+template <typename T> std::optional<T> WorldState::get_leaf_preimage(MerkleTreeId id, index_t leaf)
+{
+    using namespace crypto::merkle_tree;
+    using Store = CachedTreeStore<LMDBStore, T>;
+    using Tree = IndexedTree<Store, HashPolicy>;
+
+    if (auto* const wrapper = std::get_if<TreeWithStore<Tree>>(&_trees.at(id))) {
+        std::optional<T> value;
+        Signal signal(1);
+        auto callback = [&](const TypedResponse<GetIndexedLeafResponse<T>>& response) {
+            if (response.inner.indexed_leaf.has_value()) {
+                value = response.inner.indexed_leaf->value;
+            } else {
+                value = std::nullopt;
+            }
+
+            signal.signal_level(0);
+        };
+
+        wrapper->tree->get_leaf(leaf, false, callback);
+        signal.wait_for_level();
+
+        return value;
+    }
+
+    throw std::runtime_error("Invalid tree type");
+}
 
 } // namespace bb::world_state
 

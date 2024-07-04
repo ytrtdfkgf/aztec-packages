@@ -15,6 +15,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
@@ -430,9 +431,14 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
                     index_t current = 0;
                     bool is_already_present = false;
                     std::tie(is_already_present, current) = store_.find_low_value(value_pair.first, true, *tx);
-                    IndexedLeafValueType current_leaf = store_.get_leaf(current, *tx, true);
+                    std::optional<IndexedLeafValueType> maybe_current_leaf = store_.get_leaf(current, *tx, true);
 
-                    // We only handle new values being added. We don't yet handle values being updated
+                    if (!maybe_current_leaf.has_value()) {
+                        throw std::runtime_error("Failed to find current leaf");
+                    }
+
+                    IndexedLeafValueType current_leaf = maybe_current_leaf.value();
+
                     if (!is_already_present) {
                         // Update the current leaf to point it to the new leaf
                         IndexedLeafValueType new_leaf =

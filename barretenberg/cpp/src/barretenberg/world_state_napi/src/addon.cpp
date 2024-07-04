@@ -101,19 +101,19 @@ bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer&)
     case MerkleTreeId::ARCHIVE: {
         bb::messaging::TypedMessage<AppendLeavesRequest<bb::fr>> r1;
         obj.convert(r1);
-        _ws->append_leaves(r1.value.id, r1.value.leaves);
+        _ws->append_leaves<bb::fr>(r1.value.id, r1.value.leaves);
         break;
     }
     case MerkleTreeId::PUBLIC_DATA_TREE: {
         bb::messaging::TypedMessage<AppendLeavesRequest<crypto::merkle_tree::PublicDataLeafValue>> r2;
         obj.convert(r2);
-        _ws->append_leaves(r2.value.id, r2.value.leaves);
+        _ws->append_leaves<crypto::merkle_tree::PublicDataLeafValue>(r2.value.id, r2.value.leaves);
         break;
     }
     case MerkleTreeId::NULLIFIER_TREE: {
         bb::messaging::TypedMessage<AppendLeavesRequest<crypto::merkle_tree::NullifierLeafValue>> r3;
         obj.convert(r3);
-        _ws->append_leaves(r3.value.id, r3.value.leaves);
+        _ws->append_leaves<crypto::merkle_tree::NullifierLeafValue>(r3.value.id, r3.value.leaves);
         break;
     }
     }

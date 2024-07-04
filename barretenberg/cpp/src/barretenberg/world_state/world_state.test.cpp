@@ -108,16 +108,32 @@ TEST_F(WorldStateTest, GetInitialStateReference)
 TEST_F(WorldStateTest, GetNullifierLeaf)
 {
     WorldState ws(1, _directory, 1024);
-    bb::crypto::merkle_tree::NullifierLeafValue leaf;
-    bool found = ws.get_leaf_preimage(MerkleTreeId::NULLIFIER_TREE, 12342343, leaf);
-    EXPECT_EQ(leaf.is_empty(), true);
-    EXPECT_EQ(found, false);
-    EXPECT_EQ(leaf.value, bb::fr::zero());
 
-    // ws.append_leaves(MerkleTreeId::NULLIFIER_TREE,
-    //                  { bb::crypto::merkle_tree::NullifierLeafValue(
-    //                      bb::fr("0x0000000000000000000000000000000000000000000000000000000000000001")) });
-    // found = ws.get_leaf_preimage(MerkleTreeId::NULLIFIER_TREE, 1, leaf);
-    // EXPECT_EQ(found, true);
-    // EXPECT_EQ(leaf.value, bb::fr("0x0000000000000000000000000000000000000000000000000000000000000001"));
+    auto definitely_no_leaf =
+        ws.get_leaf_preimage<bb::crypto::merkle_tree::NullifierLeafValue>(MerkleTreeId::NULLIFIER_TREE, 3);
+    EXPECT_EQ(definitely_no_leaf.has_value(), false);
+
+    std::vector<bb::crypto::merkle_tree::NullifierLeafValue> leaves{ bb::crypto::merkle_tree::NullifierLeafValue(
+        bb::fr("0x0000000000000000000000000000000000000000000000000000000000000042")) };
+
+    ws.append_leaves(MerkleTreeId::NULLIFIER_TREE, leaves);
+    auto maybe_leaf =
+        ws.get_leaf_preimage<bb::crypto::merkle_tree::NullifierLeafValue>(MerkleTreeId::NULLIFIER_TREE, 3);
+    EXPECT_TRUE(maybe_leaf.has_value());
+    EXPECT_EQ(maybe_leaf.value(), bb::fr("0x0000000000000000000000000000000000000000000000000000000000000042"));
+}
+
+TEST_F(WorldStateTest, GetNoteHashLeaf)
+{
+    WorldState ws(1, _directory, 1024);
+
+    // auto definitely_no_leaf = ws.get_leaf_preimage<bb::fr>(MerkleTreeId::NOTE_HASH_TREE, 0);
+    // EXPECT_EQ(definitely_no_leaf.has_value(), false);
+
+    std::vector<bb::fr> leaves{ bb::fr("0x0000000000000000000000000000000000000000000000000000000000000042") };
+
+    ws.append_leaves(MerkleTreeId::NOTE_HASH_TREE, leaves);
+    // auto maybe_leaf = ws.get_leaf_preimage<bb::fr>(MerkleTreeId::NOTE_HASH_TREE, 0);
+    // EXPECT_TRUE(maybe_leaf.has_value());
+    // EXPECT_EQ(maybe_leaf.value(), bb::fr("0x0000000000000000000000000000000000000000000000000000000000000042"));
 }

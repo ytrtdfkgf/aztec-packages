@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <utility>
 
@@ -47,7 +48,9 @@ template <typename PersistedStoreType, typename LeafValueType> class CachedTreeS
                                             bool includeUncommitted,
                                             ReadTransaction& tx) const;
 
-    IndexedLeafValueType get_leaf(const index_t& index, ReadTransaction& tx, bool includeUncommitted) const;
+    std::optional<IndexedLeafValueType> get_leaf(const index_t& index,
+                                                 ReadTransaction& tx,
+                                                 bool includeUncommitted) const;
 
     void set_at_index(const index_t& index, const IndexedLeafValueType& leaf, bool add_to_index);
 
@@ -99,17 +102,12 @@ std::pair<bool, index_t> CachedTreeStore<PersistedStore, LeafValueType>::find_lo
                                                                                         bool includeUncommitted,
                                                                                         ReadTransaction& tx) const
 {
-    std::cout << "find_low_value" << std::endl;
     uint256_t new_value_as_number = uint256_t(new_value.get_key());
     std::vector<uint8_t> data;
     FrKeyType key(new_value.get_key());
-    std::cout << "key: " << key << std::endl;
     tx.get_value_or_previous(key, data);
-    std::cout << "data.size(): " << data.size() << std::endl;
     auto db_index = from_buffer<index_t>(data, 0);
     uint256_t retrieved_value = key;
-    std::cout << "db_index: " << db_index << std::endl;
-    std::cout << "retrieved_value: " << retrieved_value << std::endl;
     if (!includeUncommitted || retrieved_value == new_value_as_number || indices_.empty()) {
         return std::make_pair(new_value_as_number == retrieved_value, db_index);
     }
@@ -125,7 +123,7 @@ std::pair<bool, index_t> CachedTreeStore<PersistedStore, LeafValueType>::find_lo
         return std::make_pair(false, it->first > retrieved_value ? it->second : db_index);
     }
 
-    if (it->first == uint256_t(new_value_as_number)) {
+    if (it->first == new_value_as_number) {
         // the value is already present and the iterator points to it
         return std::make_pair(true, it->second);
     }
@@ -143,7 +141,7 @@ std::pair<bool, index_t> CachedTreeStore<PersistedStore, LeafValueType>::find_lo
 }
 
 template <typename PersistedStore, typename LeafValueType>
-typename CachedTreeStore<PersistedStore, LeafValueType>::IndexedLeafValueType CachedTreeStore<
+std::optional<typename CachedTreeStore<PersistedStore, LeafValueType>::IndexedLeafValueType> CachedTreeStore<
     PersistedStore,
     LeafValueType>::get_leaf(const index_t& index, ReadTransaction& tx, bool includeUncommitted) const
 {
@@ -153,14 +151,15 @@ typename CachedTreeStore<PersistedStore, LeafValueType>::IndexedLeafValueType Ca
             return it->second;
         }
     }
-    IndexedLeafValueType return_value;
     LeafIndexKeyType key = index;
     std::vector<uint8_t> data;
     bool success = tx.get_value_by_integer(key, data);
     if (success) {
+        IndexedLeafValueType return_value;
         msgpack::unpack((const char*)data.data(), data.size()).get().convert(return_value);
+        return std::make_optional(return_value);
     }
-    return return_value;
+    return std::nullopt;
 }
 
 template <typename PersistedStore, typename LeafValueType>

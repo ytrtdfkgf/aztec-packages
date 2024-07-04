@@ -6,6 +6,7 @@
 #include "barretenberg/ecc/curves/bn254/fr.hpp"
 #include <exception>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace bb::crypto::merkle_tree {
@@ -31,7 +32,7 @@ struct AddIndexedDataResponse {
 };
 
 template <typename LeafValueType> struct GetIndexedLeafResponse {
-    IndexedLeaf<LeafValueType> indexed_leaf;
+    std::optional<IndexedLeaf<LeafValueType>> indexed_leaf;
 };
 
 template <typename ResponseType> struct TypedResponse {
