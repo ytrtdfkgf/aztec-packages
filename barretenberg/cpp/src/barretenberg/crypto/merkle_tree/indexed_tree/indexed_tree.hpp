@@ -135,7 +135,6 @@ template <typename Store, typename HashingPolicy>
 IndexedTree<Store, HashingPolicy>::IndexedTree(Store& store, ThreadPool& workers, index_t initial_size)
     : AppendOnlyTree<Store, HashingPolicy>(store, workers)
 {
-    std::cout << "Creating indexed tree" << std::endl;
     if (initial_size < 2) {
         throw std::runtime_error("Indexed trees must have initial size > 1");
     }
@@ -177,7 +176,6 @@ IndexedTree<Store, HashingPolicy>::IndexedTree(Store& store, ThreadPool& workers
     }
 
     bool success = true;
-    std::cout << "About to init an index tree" << std::endl;
     Signal signal(1);
     AppendCompletionCallback completion = [&](const TypedResponse<AddDataResponse>& result) -> void {
         success = result.success;
@@ -185,12 +183,10 @@ IndexedTree<Store, HashingPolicy>::IndexedTree(Store& store, ThreadPool& workers
     };
     AppendOnlyTree<Store, HashingPolicy>::add_values(appended_hashes, completion);
     signal.wait_for_level(0);
-    std::cout << "Initialised tree with " << initial_size << " leaves" << std::endl;
     if (!success) {
         throw std::runtime_error("Failed to initialise tree");
     }
     store_.commit();
-    std::cout << "comitted";
 }
 
 template <typename Store, typename HashingPolicy>
@@ -225,7 +221,6 @@ void IndexedTree<Store, HashingPolicy>::add_or_update_values(const std::vector<L
         std::make_shared<std::vector<std::pair<LeafValueType, size_t>>>(values.size());
     for (size_t i = 0; i < values.size(); ++i) {
         (*values_to_be_sorted)[i] = std::make_pair(values[i], i);
-        std::cout << "Values to be sorted: " << values[i] << std::endl;
     }
 
     // This is to collect some state from the asynchronous operations we are about to perform
@@ -258,7 +253,6 @@ void IndexedTree<Store, HashingPolicy>::add_or_update_values(const std::vector<L
 
     // Thsi is the final callback triggered once the leaves have been appended to the tree
     AppendCompletionCallback final_completion = [=](const TypedResponse<AddDataResponse>& add_result) {
-        std::cout << "Final completion" << std::endl;
         TypedResponse<AddIndexedDataResponse> response;
         response.success = add_result.success;
         response.message = add_result.message;
@@ -327,7 +321,6 @@ template <typename Store, typename HashingPolicy>
 void IndexedTree<Store, HashingPolicy>::perform_insertions(std::shared_ptr<std::vector<LeafInsertion>> insertions,
                                                            const InsertionCompletionCallback& completion)
 {
-    std::cout << "Performing insertions" << std::endl;
     // We now kick off multiple workers to perform the low leaf updates
     // We create set of signals to coordinate the workers as the move up the tree
     std::shared_ptr<std::vector<fr_sibling_path>> paths =
@@ -389,7 +382,6 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
     const std::shared_ptr<std::vector<std::pair<LeafValueType, size_t>>>& values_to_be_sorted,
     const InsertionGenerationCallback& on_completion)
 {
-    std::cout << "Generating insertions" << std::endl;
     ExecuteAndReport<InsertionGenerationResponse>(
         [=, this](TypedResponse<InsertionGenerationResponse>& response) {
             // The first thing we do is sort the values into descending order but maintain knowledge of their orignal
@@ -422,7 +414,6 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
                     throw std::runtime_error("Tree is full");
                 }
                 for (size_t i = 0; i < values.size(); ++i) {
-                    std::cout << "Hash generation for " << values[i].first << std::endl;
                     std::pair<LeafValueType, size_t>& value_pair = values[i];
                     size_t index_into_appended_leaves = value_pair.second;
                     index_t index_of_new_leaf = static_cast<index_t>(index_into_appended_leaves) + old_size;
@@ -438,13 +429,8 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
                     // This gives us the leaf that need updating
                     index_t current = 0;
                     bool is_already_present = false;
-                    std::cout << "looking for low leaf " << std::endl;
                     std::tie(is_already_present, current) = store_.find_low_value(value_pair.first, true, *tx);
-                    std::cout << "is already present " << is_already_present << std::endl
-                              << "current " << current << std::endl;
                     IndexedLeafValueType current_leaf = store_.get_leaf(current, *tx, true);
-
-                    std::cout << "found low leaf " << current_leaf << std::endl;
 
                     // We only handle new values being added. We don't yet handle values being updated
                     if (!is_already_present) {

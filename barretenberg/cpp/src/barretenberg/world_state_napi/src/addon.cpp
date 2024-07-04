@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <any>
 #include <array>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -31,7 +32,6 @@ WorldStateAddon::WorldStateAddon(const Napi::CallbackInfo& info)
     }
 
     std::string data_dir = info[0].As<Napi::String>();
-
     _ws = std::make_unique<WorldState>(16, data_dir, 1024);
 
     _dispatcher.registerTarget(
@@ -46,6 +46,8 @@ WorldStateAddon::WorldStateAddon(const Napi::CallbackInfo& info)
 Napi::Value WorldStateAddon::process(const Napi::CallbackInfo& info)
 {
     Napi::Env env = info.Env();
+    // keep this in a shared pointer so that AsyncOperation can resolve/reject the promise once the execution is
+    // complete on an separate thread
     auto deferred = std::make_shared<Napi::Promise::Deferred>(env);
 
     if (info.Length() < 1) {
@@ -55,15 +57,19 @@ Napi::Value WorldStateAddon::process(const Napi::CallbackInfo& info)
     } else {
         auto buffer = info[0].As<Napi::Buffer<char>>();
         size_t length = buffer.Length();
+        // we mustn't access the Napi::Env outside of this top-level function
+        // so copy the data to a variable we own
+        // and make it a shared pointer so that it doesn't get destroyed as soon as we exit this code block
         auto data = std::make_shared<std::vector<char>>(length);
         std::copy_n(buffer.Data(), length, data->data());
 
-        auto* op = new AsyncOperation(env, deferred, [data, length, this](msgpack::sbuffer& buf) {
+        auto* op = new AsyncOperation(env, deferred, [=](msgpack::sbuffer& buf) {
             msgpack::object_handle obj_handle = msgpack::unpack(data->data(), length);
             msgpack::object obj = obj_handle.get();
             _dispatcher.onNewData(obj, buf);
         });
 
+        // Napi is now responsible for destroying this object
         op->Queue();
     }
 
@@ -72,14 +78,15 @@ Napi::Value WorldStateAddon::process(const Napi::CallbackInfo& info)
 
 bool WorldStateAddon::get_tree_info(msgpack::object& obj, msgpack::sbuffer& buffer)
 {
-    bb::messaging::TypedMessage<GetTreeInfoRequest> request;
+    bb::messaging::TypedMessage<TreeIdOnlyRequest> request;
     obj.convert(request);
     TreeInfo info = _ws->get_tree_info(request.value.id);
 
-    MsgHeader header(request.header.requestId);
+    MsgHeader header(next_msg_id(), request.header.requestId);
     messaging::TypedMessage<TreeInfo> resp_msg(WorldStateMsgTypes::GET_TREE_INFO_RESPONSE, header, info);
 
     msgpack::pack(buffer, resp_msg);
+
     return true;
 }
 
@@ -94,12 +101,7 @@ bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer&)
     case MerkleTreeId::ARCHIVE: {
         bb::messaging::TypedMessage<AppendLeavesRequest<bb::fr>> r1;
         obj.convert(r1);
-
-        for (auto& leaf : r1.value.leaves) {
-            std::cout << leaf << std::endl;
-        }
-
-        _ws->append_leaves<bb::fr>(r1.value.id, r1.value.leaves);
+        _ws->append_leaves(r1.value.id, r1.value.leaves);
         break;
     }
     case MerkleTreeId::PUBLIC_DATA_TREE: {
@@ -119,14 +121,19 @@ bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer&)
     return true;
 }
 
+uint32_t WorldStateAddon::next_msg_id()
+{
+    // TODO (alexg) sync access to this var
+    // this mightt not be a problem if the msg_id is only ever incremeneted on the main thread?
+    return _msg_id++;
+}
+
 Napi::Function WorldStateAddon::get_class(Napi::Env env)
 {
     return DefineClass(env,
                        "WorldState",
                        {
                            WorldStateAddon::InstanceMethod("process", &WorldStateAddon::process),
-                           //  WorldStateAddon::InstanceMethod("insert_leaf", &WorldStateAddon::insert_leaf),
-                           //  WorldStateAddon::InstanceMethod("commit", &WorldStateAddon::commit),
                        });
 }
 

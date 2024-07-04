@@ -2,6 +2,7 @@
 
 #include "barretenberg/messaging/dispatcher.hpp"
 #include "barretenberg/world_state/world_state.hpp"
+#include <cstdint>
 #include <memory>
 #include <napi.h>
 
@@ -17,9 +18,12 @@ class WorldStateAddon : public Napi::ObjectWrap<WorldStateAddon> {
   private:
     std::unique_ptr<bb::world_state::WorldState> _ws;
     bb::messaging::MessageDispatcher _dispatcher;
+    uint32_t _msg_id = 0;
 
     bool get_tree_info(msgpack::object& obj, msgpack::sbuffer& buffer);
     bool append_leaves(msgpack::object& obj, msgpack::sbuffer& buffer);
+
+    uint32_t next_msg_id();
 };
 
 } // namespace bb::world_state

@@ -16,16 +16,22 @@ const MerkleTreeId = {
   fs.mkdirSync("./data", { recursive: true });
   const ws = new addon.WorldState("./data");
 
-  const tree = MerkleTreeId.NULLIFIER_TREE;
+  const tree = MerkleTreeId.NOTE_HASH_TREE;
 
-  console.log(await getMeta(ws, tree));
+  // {
+  //   value: Buffer.from(
+  //     "05b719e949e7b34382995c9d2df469f74be09daa5810ef14c1260fb2ff4c4298",
+  //     "hex"
+  //   ),
+  // },
+  const meta = await getMeta(ws, tree);
+  console.log(meta);
+  console.log(meta.value.root.toString("hex"));
   await insert(ws, tree, [
-    {
-      value: Buffer.from(
-        "05b719e949e7b34382995c9d2df469f74be09daa5810ef14c1260fb2ff4c4298",
-        "hex"
-      ),
-    },
+    Buffer.from(
+      "05b719e949e7b34382995c9d2df469f74be09daa5810ef14c1260fb2ff4c4298",
+      "hex"
+    ),
   ]);
   console.log("After insert", await getMeta(ws, tree));
 })().then(console.log, (err) => console.log("addon error", String(err)));
