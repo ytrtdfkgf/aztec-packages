@@ -2,22 +2,42 @@
 
 #include "barretenberg/messaging/header.hpp"
 #include "barretenberg/serialize/cbind.hpp"
-#include "msgpack/v3/object_fwd_decl.hpp"
 #include <cstdint>
 #include <functional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
 namespace bb::messaging {
 
+using message_handler = std::function<bool(msgpack::object&, msgpack::sbuffer&)>;
+
 class MessageDispatcher {
   private:
-    std::unordered_map<uint32_t, std::function<bool(msgpack::object&)>> messageHandlers;
+    std::unordered_map<uint32_t, message_handler> messageHandlers;
 
   public:
-    MessageDispatcher();
-    bool onNewData(msgpack::object& obj);
-    void registerTarget(uint32_t msgType, std::function<bool(msgpack::object&)>& handler);
+    MessageDispatcher() = default;
+    bool onNewData(msgpack::object& obj, msgpack::sbuffer& buffer);
+    void registerTarget(uint32_t msgType, const message_handler& handler);
 };
+
+bool MessageDispatcher::onNewData(msgpack::object& obj, msgpack::sbuffer& buffer)
+{
+    bb::messaging::HeaderOnlyMessage header;
+    obj.convert(header);
+
+    auto iter = messageHandlers.find(header.msgType);
+    if (iter == messageHandlers.end()) {
+        throw std::runtime_error("No registered handler for message of type " + std::to_string(header.msgType));
+    }
+
+    return (iter->second)(obj, buffer);
+}
+
+void MessageDispatcher::registerTarget(uint32_t msgType, const message_handler& handler)
+{
+    messageHandlers.insert({ msgType, handler });
+}
 
 } // namespace bb::messaging

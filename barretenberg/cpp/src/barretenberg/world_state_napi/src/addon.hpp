@@ -16,7 +16,10 @@ class WorldStateAddon : public Napi::ObjectWrap<WorldStateAddon> {
 
   private:
     std::unique_ptr<bb::world_state::WorldState> _ws;
-    messaging::MessageDispatcher _dispatcher;
+    bb::messaging::MessageDispatcher _dispatcher;
+
+    bool get_tree_info(msgpack::object& obj, msgpack::sbuffer& buffer);
+    bool append_leaves(msgpack::object& obj, msgpack::sbuffer& buffer);
 };
 
 } // namespace bb::world_state

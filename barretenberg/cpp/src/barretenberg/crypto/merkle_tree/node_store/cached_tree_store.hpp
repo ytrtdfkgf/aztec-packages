@@ -99,12 +99,17 @@ std::pair<bool, index_t> CachedTreeStore<PersistedStore, LeafValueType>::find_lo
                                                                                         bool includeUncommitted,
                                                                                         ReadTransaction& tx) const
 {
+    std::cout << "find_low_value" << std::endl;
     uint256_t new_value_as_number = uint256_t(new_value.get_key());
     std::vector<uint8_t> data;
     FrKeyType key(new_value.get_key());
+    std::cout << "key: " << key << std::endl;
     tx.get_value_or_previous(key, data);
+    std::cout << "data.size(): " << data.size() << std::endl;
     auto db_index = from_buffer<index_t>(data, 0);
     uint256_t retrieved_value = key;
+    std::cout << "db_index: " << db_index << std::endl;
+    std::cout << "retrieved_value: " << retrieved_value << std::endl;
     if (!includeUncommitted || retrieved_value == new_value_as_number || indices_.empty()) {
         return std::make_pair(new_value_as_number == retrieved_value, db_index);
     }

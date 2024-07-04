@@ -61,12 +61,16 @@ struct TreeInfo {
     MSGPACK_FIELDS(id, root, size, depth);
 };
 
+template <class... Ts> struct overloaded : Ts... {
+    using Ts::operator()...;
+};
+
 class WorldState {
   public:
     WorldState(uint threads, const std::string& data_dir, uint map_size_kb);
     ~WorldState() = default;
 
-    TreeInfo get_tree_info(BlockSpecifier s, MerkleTreeId id);
+    TreeInfo get_tree_info(MerkleTreeId id);
 
     template <typename T> void append_leaves(MerkleTreeId id, const std::vector<T>& leaves);
 

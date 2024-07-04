@@ -41,18 +41,6 @@ struct GetTreeInfoRequest {
 
     MSGPACK_FIELDS(name);
 };
-
-struct GetTreeInfoResponse {
-    std::string name;
-    uint32_t depth;
-    bb::fr root;
-    uint64_t size;
-    bool success;
-    std::string message;
-
-    MSGPACK_FIELDS(name, depth, root, size, success, message);
-};
-
 struct InsertLeavesRequest {
     std::string name;
     std::vector<bb::fr> leaves;
