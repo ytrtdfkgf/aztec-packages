@@ -87,6 +87,7 @@ import {
   NoteHash,
   NoteLogHash,
   Nullifier,
+  NullifierLeaf,
   NullifierLeafPreimage,
   NullifierNonExistentReadRequestHintsBuilder,
   NullifierReadRequestHintsBuilder,
@@ -1101,7 +1102,11 @@ export function makePublicDataTreeLeaf(seed = 0): PublicDataTreeLeaf {
  * @returns A public data tree leaf preimage.
  */
 export function makePublicDataTreeLeafPreimage(seed = 0): PublicDataTreeLeafPreimage {
-  return new PublicDataTreeLeafPreimage(new Fr(seed), new Fr(seed + 1), new Fr(seed + 2), BigInt(seed + 3));
+  return new PublicDataTreeLeafPreimage(
+    new PublicDataTreeLeaf(new Fr(seed), new Fr(seed + 1)),
+    new Fr(seed + 2),
+    BigInt(seed + 3),
+  );
 }
 
 /**
@@ -1112,7 +1117,7 @@ export function makePublicDataTreeLeafPreimage(seed = 0): PublicDataTreeLeafPrei
 export function makeStateDiffHints(seed = 1): StateDiffHints {
   const nullifierPredecessorPreimages = makeTuple(
     MAX_NEW_NULLIFIERS_PER_TX,
-    x => new NullifierLeafPreimage(fr(x), fr(x + 0x100), BigInt(x + 0x200)),
+    x => new NullifierLeafPreimage(new NullifierLeaf(fr(x)), fr(x + 0x100), BigInt(x + 0x200)),
     seed + 0x1000,
   );
 

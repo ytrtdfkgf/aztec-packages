@@ -73,11 +73,6 @@ export interface MerkleTreeOperations {
   getStateReference(): Promise<StateReference>;
 
   /**
-   * Builds the initial header.
-   */
-  buildInitialHeader(): Promise<Header>;
-
-  /**
    * Gets sibling path for a leaf.
    * @param treeId - The tree to be queried for a sibling path.
    * @param index - The index of the leaf for which a sibling path should be returned.

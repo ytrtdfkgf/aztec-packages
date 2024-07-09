@@ -1,7 +1,8 @@
+import { pedersenHash } from '@aztec/foundation/crypto';
 import { type Fr } from '@aztec/foundation/fields';
 import { BufferReader, FieldReader, serializeToBuffer } from '@aztec/foundation/serialize';
 
-import { STATE_REFERENCE_LENGTH } from '../constants.gen.js';
+import { GeneratorIndex, STATE_REFERENCE_LENGTH } from '../constants.gen.js';
 import { PartialStateReference } from './partial_state_reference.js';
 import { AppendOnlyTreeSnapshot } from './rollup/append_only_tree_snapshot.js';
 
@@ -23,6 +24,10 @@ export class StateReference {
   toBuffer() {
     // Note: The order here must match the order in the HeaderLib solidity library.
     return serializeToBuffer(this.l1ToL2MessageTree, this.partial);
+  }
+
+  hash() {
+    return pedersenHash(this.toFields(), GeneratorIndex.STATE_REFERENCE_HASH);
   }
 
   toFields(): Fr[] {

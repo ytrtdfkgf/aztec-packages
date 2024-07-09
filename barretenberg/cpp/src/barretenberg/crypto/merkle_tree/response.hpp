@@ -4,6 +4,7 @@
 #include "barretenberg/crypto/merkle_tree/indexed_tree/indexed_leaf.hpp"
 #include "barretenberg/crypto/merkle_tree/types.hpp"
 #include "barretenberg/ecc/curves/bn254/fr.hpp"
+#include "barretenberg/serialize/msgpack.hpp"
 #include <exception>
 #include <functional>
 #include <memory>
@@ -32,6 +33,8 @@ template <typename LeafType> struct LowLeafWitnessData {
     IndexedLeaf<LeafType> leaf;
     index_t index;
     fr_sibling_path path;
+
+    MSGPACK_FIELDS(leaf, index, path);
 };
 
 template <typename LeafValueType> struct AddIndexedDataResponse {

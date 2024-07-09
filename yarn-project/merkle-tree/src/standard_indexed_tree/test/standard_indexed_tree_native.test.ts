@@ -1,12 +1,11 @@
+import { MAX_TOTAL_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX, NullifierLeaf, NullifierLeafPreimage } from '@aztec/circuits.js';
 import { Fr } from '@aztec/foundation/fields';
-
-import { MAX_TOTAL_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX, NullifierLeafPreimage } from '@aztec/circuits.js';
 import { createDebugLogger } from '@aztec/foundation/log';
+
 import { NativeTreesClient } from '../../native/native_client.js';
 import { Pedersen } from '../../pedersen.js';
 import { getWorldStateConfig } from '../../test/get_native_config.js';
 import { INITIAL_LEAF } from '../../tree_base.js';
-import { SiblingPath } from '@aztec/circuit-types';
 
 const logger = createDebugLogger('aztec:standard_native_tree_test');
 
@@ -28,7 +27,11 @@ const logger = createDebugLogger('aztec:standard_native_tree_test');
 const TEST_TREE_DEPTH = 3;
 
 const createNullifierTreeLeafHashInputs = (value: number, nextIndex: number, nextValue: number) => {
-  return new NullifierLeafPreimage(new Fr(value), new Fr(nextValue), BigInt(nextIndex)).toHashInputs();
+  return new NullifierLeafPreimage(
+    new NullifierLeaf(new Fr(value)),
+    new Fr(nextValue),
+    BigInt(nextIndex),
+  ).toHashInputs();
 };
 
 describe('Native Indexed Tree', () => {
@@ -49,18 +52,18 @@ describe('Native Indexed Tree', () => {
   });
 
   it('creates a new indexed tree', async () => {
-    const treeName = "Public Data Tree";
+    const treeName = 'Public Data Tree';
     const response = await nativeClient.sendStartTree(treeName, 32);
     expect(response.success).toBeTruthy();
 
     const response2 = await nativeClient.sendStartTree(treeName, 33);
     expect(response2.success).toBeFalsy();
-    expect(response2.message).toEqual("Tree already exists");
+    expect(response2.message).toEqual('Tree already exists');
     expect(response2.depth).toBe(32);
   });
 
   it('returns the tree information', async () => {
-    const treeName = "Test Tree 1";
+    const treeName = 'Test Tree 1';
     const response = await nativeClient.sendStartTree(treeName, TEST_TREE_DEPTH);
     expect(response.success).toBeTruthy();
 
@@ -94,7 +97,7 @@ describe('Native Indexed Tree', () => {
   });
 
   it('inserts new leaves', async () => {
-    const treeName = "Test Tree 2";
+    const treeName = 'Test Tree 2';
     const treeDepth = 32;
     const initialSize = 2 * MAX_TOTAL_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX;
     const response = await nativeClient.sendStartTree(treeName, treeDepth, initialSize);
@@ -106,7 +109,7 @@ describe('Native Indexed Tree', () => {
     expect(getInfoResponse.size).toBe(initialSize);
 
     const numLeavesToInsert = 12 * 1024;
-    const leaves = Array.from({length: numLeavesToInsert}).map(Fr.random);
+    const leaves = Array.from({ length: numLeavesToInsert }).map(Fr.random);
     const insertLeavesResponse = await nativeClient.insertLeaves(treeName, leaves);
     expect(insertLeavesResponse.success).toBeTruthy();
     expect(insertLeavesResponse.size).toBe(initialSize + leaves.length);

@@ -1021,3 +1021,24 @@ TEST_F(PersistedIndexedTreeTest, returns_low_leaves)
     EXPECT_EQ(predecessor.nextIndex, 0);
     EXPECT_EQ(predecessor.nextValue, 0);
 }
+
+TEST_F(PersistedIndexedTreeTest, duplicates)
+{
+    // Create a depth-8 indexed merkle tree
+    constexpr uint32_t depth = 8;
+
+    ThreadPool workers(1);
+    std::string name = randomString();
+    LMDBStore db(*_environment, name, false, false, IntegerKeyCmp);
+    Store store(name, depth, db);
+    auto tree = TreeType(store, workers, 2);
+
+    add_value(tree, NullifierLeafValue(42));
+    check_size(tree, 3);
+
+    commit_tree(tree);
+
+    add_value(tree, NullifierLeafValue(42));
+    commit_tree(tree);
+    check_size(tree, 3);
+}

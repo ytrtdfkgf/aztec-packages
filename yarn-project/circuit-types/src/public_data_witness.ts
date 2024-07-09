@@ -34,8 +34,8 @@ export class PublicDataWitness {
   public toFields(): Fr[] {
     return [
       new Fr(this.index),
-      new Fr(this.leafPreimage.slot),
-      new Fr(this.leafPreimage.value),
+      new Fr(this.leafPreimage.value.slot),
+      new Fr(this.leafPreimage.value.value),
       new Fr(this.leafPreimage.nextIndex),
       new Fr(this.leafPreimage.nextSlot),
       ...this.siblingPath.toFields(),

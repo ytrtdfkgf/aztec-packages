@@ -1,0 +1,206 @@
+#include "barretenberg/world_state/world_state.hpp"
+#include "barretenberg/crypto/merkle_tree/append_only_tree/append_only_tree.hpp"
+#include "barretenberg/crypto/merkle_tree/fixtures.hpp"
+#include "barretenberg/crypto/merkle_tree/hash_path.hpp"
+#include "barretenberg/crypto/merkle_tree/indexed_tree/indexed_leaf.hpp"
+#include "barretenberg/crypto/merkle_tree/lmdb_store/functions.hpp"
+#include "barretenberg/crypto/merkle_tree/response.hpp"
+#include "barretenberg/crypto/merkle_tree/signal.hpp"
+#include "barretenberg/world_state/history.hpp"
+#include "barretenberg/world_state/tree_with_store.hpp"
+#include <memory>
+#include <stdexcept>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+
+namespace bb::world_state {
+
+const uint WORLD_STATE_MAX_DB_COUNT = 16;
+
+using namespace bb::crypto::merkle_tree;
+
+WorldState::WorldState(uint threads, const std::string& data_dir, uint map_size_kb)
+    : _workers(threads)
+{
+    _lmdb_env = std::make_unique<LMDBEnvironment>(data_dir, map_size_kb, WORLD_STATE_MAX_DB_COUNT, threads);
+
+    {
+        auto name = "nullifier_tree";
+        auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
+        auto store = std::make_unique<NullifierStore>(name, NULLIFIER_TREE_HEIGHT, *lmdb_store);
+        auto tree = std::make_unique<NullifierTree>(*store, _workers, 2);
+        _trees.insert(
+            { MerkleTreeId::NULLIFIER_TREE, TreeWithStore(std::move(tree), std::move(store), std::move(lmdb_store)) });
+    }
+
+    {
+        auto name = "note_hash_tree";
+        auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
+        auto store = std::make_unique<FrStore>(name, NOTE_HASH_TREE_HEIGHT, *lmdb_store);
+        auto tree = std::make_unique<FrTree>(*store, this->_workers);
+        _trees.insert(
+            { MerkleTreeId::NOTE_HASH_TREE, TreeWithStore(std::move(tree), std::move(store), std::move(lmdb_store)) });
+    }
+
+    {
+        auto name = "public_data_tree";
+        auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
+        auto store = std::make_unique<PublicDataStore>(name, PUBLIC_DATA_TREE_HEIGHT, *lmdb_store);
+        auto tree = std::make_unique<PublicDataTree>(*store, this->_workers, 2);
+        _trees.insert({ MerkleTreeId::PUBLIC_DATA_TREE,
+                        TreeWithStore(std::move(tree), std::move(store), std::move(lmdb_store)) });
+    }
+
+    {
+        auto name = "message_tree";
+        auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
+        auto store = std::make_unique<FrStore>(name, L1_TO_L2_MSG_TREE_HEIGHT, *lmdb_store);
+        auto tree = std::make_unique<FrTree>(*store, this->_workers);
+        _trees.insert({ MerkleTreeId::L1_TO_L2_MESSAGE_TREE,
+                        TreeWithStore(std::move(tree), std::move(store), std::move(lmdb_store)) });
+    }
+
+    {
+        auto name = "archive_tree";
+        auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
+        auto store = std::make_unique<FrStore>(name, ARCHIVE_TREE_HEIGHT, *lmdb_store);
+        auto tree = std::make_unique<FrTree>(*store, this->_workers);
+        _trees.insert(
+            { MerkleTreeId::ARCHIVE, TreeWithStore(std::move(tree), std::move(store), std::move(lmdb_store)) });
+    }
+}
+
+TreeInfo WorldState::get_tree_info(WorldStateRevision revision, MerkleTreeId tree_id) const
+{
+    return std::visit(
+        [=](auto&& wrapper) {
+            Signal signal(1);
+            TreeMetaResponse response;
+
+            auto callback = [&](const TypedResponse<TreeMetaResponse>& meta) {
+                response = meta.inner;
+                signal.signal_level(0);
+            };
+
+            wrapper.tree->get_meta_data(include_uncommitted(revision), callback);
+            signal.wait_for_level(0);
+
+            return TreeInfo{ .treeId = tree_id, .root = response.root, .size = response.size, .depth = response.depth };
+        },
+        _trees.at(tree_id));
+}
+
+WorldStateReference WorldState::get_state_reference(WorldStateRevision revision) const
+{
+    Signal signal(static_cast<uint32_t>(_trees.size()));
+    WorldStateReference state_reference;
+    bool uncommitted = include_uncommitted(revision);
+
+    for (auto& [id, tree] : _trees) {
+        std::visit(
+            [&signal, &state_reference, id, uncommitted](auto&& wrapper) {
+                auto callback = [&signal, &state_reference, id](const TypedResponse<TreeMetaResponse>& meta) {
+                    state_reference.state.insert({ id, { .root = meta.inner.root, .size = meta.inner.size } });
+                    signal.signal_decrement();
+                };
+                wrapper.tree->get_meta_data(uncommitted, callback);
+            },
+            tree);
+    }
+
+    signal.wait_for_level(0);
+    return state_reference;
+}
+
+fr_sibling_path WorldState::get_sibling_path(WorldStateRevision revision,
+                                             MerkleTreeId tree_id,
+                                             index_t leaf_index) const
+{
+    bool uncommited = include_uncommitted(revision);
+    return std::visit(
+        [leaf_index, uncommited](auto&& wrapper) {
+            Signal signal(1);
+            fr_sibling_path path;
+
+            auto callback = [&signal, &path](const TypedResponse<GetSiblingPathResponse>& response) {
+                path = response.inner.path;
+                signal.signal_level(0);
+            };
+
+            wrapper.tree->get_sibling_path(leaf_index, callback, uncommited);
+            signal.wait_for_level(0);
+
+            return path;
+        },
+        _trees.at(tree_id));
+}
+
+void WorldState::update_public_data(const PublicDataLeafValue& new_value)
+{
+    if (const auto* wrapper = std::get_if<TreeWithStore<PublicDataTree>>(&_trees.at(MerkleTreeId::PUBLIC_DATA_TREE))) {
+        Signal signal;
+        wrapper->tree->add_or_update_value(new_value, [&signal](const auto&) { signal.signal_level(0); });
+        signal.wait_for_level();
+    } else {
+        throw std::runtime_error("Invalid tree type for PublicDataTree");
+    }
+}
+
+void WorldState::commit()
+{
+    // TODO (alexg) should this lock _all_ the trees until they are all committed?
+    // otherwise another request could come in to modify one of the trees
+    // or reads would give inconsistent results
+    Signal signal(static_cast<uint32_t>(_trees.size()));
+    for (auto& [id, tree] : _trees) {
+        std::visit(
+            [&signal](auto&& wrapper) { wrapper.tree->commit([&](const Response&) { signal.signal_decrement(); }); },
+            tree);
+    }
+
+    signal.wait_for_level(0);
+}
+
+void WorldState::rollback()
+{
+    // TODO (alexg) should this lock _all_ the trees until they are all committed?
+    // otherwise another request could come in to modify one of the trees
+    // or reads would give inconsistent results
+    Signal signal(static_cast<uint32_t>(_trees.size()));
+    for (auto& [id, tree] : _trees) {
+        std::visit(
+            [&signal](auto&& wrapper) {
+                wrapper.tree->rollback([&signal](const Response&) { signal.signal_decrement(); });
+            },
+            tree);
+    }
+    signal.wait_for_level();
+}
+
+void WorldState::sync_block(const BlockData& block)
+{
+    auto current_state = get_state_reference(WorldStateRevision::uncommitted());
+    if (current_state == block.state) {
+        return commit();
+    }
+
+    Signal signal(static_cast<uint32_t>(_trees.size()));
+    auto decr = [&signal](const auto&) { signal.signal_decrement(); };
+
+    using Leaves = std::variant<std::vector<fr>, std::vector<NullifierLeafValue>, std::vector<PublicDataLeafValue>>;
+    std::unordered_map<MerkleTreeId, Leaves> writes{
+        std::make_pair(MerkleTreeId::NULLIFIER_TREE, block.nullifiers),
+    };
+
+    (void)decr;
+    (void)writes;
+}
+
+bool WorldState::include_uncommitted(WorldStateRevision rev)
+{
+    return std::get<WorldStateRevision::CurrentState>(rev.state).uncommitted;
+}
+
+} // namespace bb::world_state

@@ -12,7 +12,7 @@ export class NullifierLeafPreimage implements IndexedTreeLeafPreimage {
     /**
      * Leaf value inside the indexed tree's linked list.
      */
-    public nullifier: Fr,
+    public value: NullifierLeaf,
     /**
      * Next value inside the indexed tree's linked list.
      */
@@ -24,7 +24,7 @@ export class NullifierLeafPreimage implements IndexedTreeLeafPreimage {
   ) {}
 
   getKey(): bigint {
-    return this.nullifier.toBigInt();
+    return this.value.getKey();
   }
 
   getNextKey(): bigint {
@@ -36,7 +36,7 @@ export class NullifierLeafPreimage implements IndexedTreeLeafPreimage {
   }
 
   asLeaf(): NullifierLeaf {
-    return new NullifierLeaf(this.nullifier);
+    return this.value;
   }
 
   toBuffer(): Buffer {
@@ -45,7 +45,7 @@ export class NullifierLeafPreimage implements IndexedTreeLeafPreimage {
 
   toHashInputs(): Buffer[] {
     return [
-      Buffer.from(this.nullifier.toBuffer()),
+      Buffer.from(this.value.toBuffer()),
       Buffer.from(this.nextNullifier.toBuffer()),
       Buffer.from(toBufferBE(this.nextIndex, 32)),
     ];
@@ -56,37 +56,41 @@ export class NullifierLeafPreimage implements IndexedTreeLeafPreimage {
   }
 
   clone(): NullifierLeafPreimage {
-    return new NullifierLeafPreimage(this.nullifier, this.nextNullifier, this.nextIndex);
+    return new NullifierLeafPreimage(new NullifierLeaf(this.value.value), this.nextNullifier, this.nextIndex);
   }
 
   toJSON() {
     return {
-      nullifier: this.nullifier.toString(),
+      nullifier: this.value.value.toString(),
       nextNullifier: this.nextNullifier.toString(),
       nextIndex: '0x' + this.nextIndex.toString(16),
     };
   }
 
   static empty(): NullifierLeafPreimage {
-    return new NullifierLeafPreimage(Fr.ZERO, Fr.ZERO, 0n);
+    return new NullifierLeafPreimage(new NullifierLeaf(Fr.ZERO), Fr.ZERO, 0n);
   }
 
   static fromBuffer(buffer: Buffer | BufferReader): NullifierLeafPreimage {
     const reader = BufferReader.asReader(buffer);
-    return new NullifierLeafPreimage(reader.readObject(Fr), reader.readObject(Fr), toBigIntBE(reader.readBytes(32)));
+    return new NullifierLeafPreimage(
+      reader.readObject(NullifierLeaf),
+      reader.readObject(Fr),
+      toBigIntBE(reader.readBytes(32)),
+    );
   }
 
   static fromLeaf(leaf: NullifierLeaf, nextKey: bigint, nextIndex: bigint): NullifierLeafPreimage {
-    return new NullifierLeafPreimage(leaf.nullifier, new Fr(nextKey), nextIndex);
+    return new NullifierLeafPreimage(leaf, new Fr(nextKey), nextIndex);
   }
 
   static clone(preimage: NullifierLeafPreimage): NullifierLeafPreimage {
-    return new NullifierLeafPreimage(preimage.nullifier, preimage.nextNullifier, preimage.nextIndex);
+    return new NullifierLeafPreimage(preimage.value, preimage.nextNullifier, preimage.nextIndex);
   }
 
   static fromJSON(json: any): NullifierLeafPreimage {
     return new NullifierLeafPreimage(
-      Fr.fromString(json.nullifier),
+      new NullifierLeaf(Fr.fromString(json.nullifier)),
       Fr.fromString(json.nextNullifier),
       BigInt(json.nextIndex),
     );
@@ -97,23 +101,25 @@ export class NullifierLeafPreimage implements IndexedTreeLeafPreimage {
  * A nullifier to be inserted in the nullifier tree.
  */
 export class NullifierLeaf implements IndexedTreeLeaf {
-  constructor(
-    /**
-     * Nullifier value.
-     */
-    public nullifier: Fr,
-  ) {}
+  /**
+   * Nullifier value.
+   */
+  public readonly value: Fr;
+
+  constructor(value: Fr | number | bigint) {
+    this.value = new Fr(value);
+  }
 
   getKey(): bigint {
-    return this.nullifier.toBigInt();
+    return this.value.toBigInt();
   }
 
   toBuffer(): Buffer {
-    return this.nullifier.toBuffer();
+    return this.value.toBuffer();
   }
 
   isEmpty(): boolean {
-    return this.nullifier.isZero();
+    return this.value.isZero();
   }
 
   updateTo(_another: NullifierLeaf): NullifierLeaf {
@@ -124,7 +130,7 @@ export class NullifierLeaf implements IndexedTreeLeaf {
     return new NullifierLeaf(new Fr(key));
   }
 
-  static fromBuffer(buf: Buffer): NullifierLeaf {
+  static fromBuffer(buf: Buffer | BufferReader): NullifierLeaf {
     return new NullifierLeaf(Fr.fromBuffer(buf));
   }
 }

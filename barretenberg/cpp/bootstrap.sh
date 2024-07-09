@@ -49,6 +49,8 @@ fi
 # Remove cmake cache files.
 rm -f {build,build-wasm,build-wasm-threads}/CMakeCache.txt
 
+(cd src/barretenberg/world_state_napi && yarn --frozen-lockfile --prefer-offline)
+
 echo "#################################"
 echo "# Building with preset: $PRESET"
 echo "# When running cmake directly, remember to use: --build --preset $PRESET"
@@ -57,7 +59,7 @@ echo "#################################"
 function build_native {
   cmake --preset $PRESET -DCMAKE_BUILD_TYPE=RelWithAssert
   cmake --build --preset $PRESET --target bb
-  cmake --build --preset $PRESET --target world_state
+  cmake --build --preset $PRESET --target world_state_napi
 }
 
 function build_wasm {

@@ -34,6 +34,8 @@ struct NullifierLeafValue {
     }
     ~NullifierLeafValue() = default;
 
+    static bool is_updateable() { return false; }
+
     bool operator==(NullifierLeafValue const& other) const { return value == other.value; }
 
     friend std::ostream& operator<<(std::ostream& os, const NullifierLeafValue& v)
@@ -85,6 +87,8 @@ struct PublicDataLeafValue {
     }
     ~PublicDataLeafValue() = default;
 
+    static bool is_updateable() { return true; }
+
     bool operator==(PublicDataLeafValue const& other) const { return value == other.value && slot == other.slot; }
 
     friend std::ostream& operator<<(std::ostream& os, const PublicDataLeafValue& v)
@@ -122,6 +126,8 @@ template <typename LeafType> struct IndexedLeaf {
     IndexedLeaf<LeafType>(const IndexedLeaf<LeafType>& other) = default;
     IndexedLeaf<LeafType>(IndexedLeaf<LeafType>&& other) noexcept = default;
     ~IndexedLeaf<LeafType>() = default;
+
+    static bool is_updateable() { return LeafType::is_updateable(); }
 
     bool operator==(IndexedLeaf<LeafType> const& other) const
     {

@@ -41,7 +41,8 @@ export class MerkleTreeOperationsFacade implements MerkleTreeOperations {
    * @returns The initial header.
    */
   buildInitialHeader(): Promise<Header> {
-    return this.trees.buildInitialHeader(this.includeUncommitted);
+    // return this.trees.buildInitialHeader(this.includeUncommitted);
+    throw new Error();
   }
 
   /**

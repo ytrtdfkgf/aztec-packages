@@ -11,12 +11,13 @@
     "tsconfig": "./tsconfig.json"
   },
   "scripts": {
-    "build": "yarn clean && tsc -b",
+    "build": "yarn clean && ./scripts/build.sh",
+    "build:full": "yarn clean && ./scripts/build.sh full",
     "build:dev": "tsc -b --watch",
     "clean": "rm -rf ./dest .tsbuildinfo",
     "formatting": "run -T prettier --check ./src && run -T eslint ./src",
     "formatting:fix": "run -T eslint --fix ./src && run -T prettier -w ./src",
-    "test": "NODE_NO_WARNINGS=1 node --experimental-vm-modules ../node_modules/.bin/jest --passWithNoTests"
+    "test": "./scripts/build.sh cpp && NODE_NO_WARNINGS=1 node --experimental-vm-modules ../node_modules/.bin/jest --passWithNoTests"
   },
   "inherits": [
     "../package.common.json"
@@ -51,10 +52,13 @@
     "@aztec/kv-store": "workspace:^",
     "@aztec/merkle-tree": "workspace:^",
     "@aztec/types": "workspace:^",
+    "bindings": "^1.5.0",
+    "msgpackr": "^1.10.2",
     "tslib": "^2.4.0"
   },
   "devDependencies": {
     "@jest/globals": "^29.5.0",
+    "@types/bindings": "^1.5.5",
     "@types/jest": "^29.5.0",
     "@types/levelup": "^5.1.2",
     "@types/memdown": "^3.0.0",

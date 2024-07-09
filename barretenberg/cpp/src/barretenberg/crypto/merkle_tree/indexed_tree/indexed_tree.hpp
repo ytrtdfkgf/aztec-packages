@@ -405,7 +405,7 @@ void IndexedTree<Store, HashingPolicy>::perform_insertions(std::shared_ptr<std::
             Signal& followerSignal = (*signals)[i + 1];
             try {
                 ReadTransactionPtr tx = store_.createReadTransaction();
-                auto current_witness_data = low_leaf_witness_data->at(i);
+                auto& current_witness_data = low_leaf_witness_data->at(i);
                 current_witness_data.leaf = insertion.original_low_leaf;
                 current_witness_data.index = insertion.low_leaf_index;
                 update_leaf_and_hash_to_root(insertion.low_leaf_index,
@@ -521,7 +521,7 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
 
                         // Update the set of leaves to append
                         (*response.inner.indexed_leaves)[index_into_appended_leaves] = new_leaf;
-                    } else {
+                    } else if (IndexedLeafValueType::is_updateable()) {
                         // Update the current leaf's value, don't change it's link
                         IndexedLeafValueType replacement_leaf =
                             IndexedLeafValueType(value_pair.first, current_leaf.nextIndex, current_leaf.nextValue);
@@ -531,6 +531,8 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
                         store_.set_at_index(index_of_new_leaf, empty_leaf, false);
                         // The set of appended leaves already has an empty leaf in the slot at index
                         // 'index_into_appended_leaves'
+                    } else {
+                        throw std::runtime_error("IndexedLeafValue is not updateable");
                     }
 
                     // capture new low leaf
