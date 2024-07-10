@@ -42,11 +42,11 @@ use im::Vector;
 use iter_extended::{try_vecmap, vecmap};
 
 #[derive(Default)]
-struct SharedContext {
+struct SharedContext<F> {
     /// Final list of Brillig functions which will be part of the final program
     /// This is shared across `Context` structs as we want one list of Brillig
     /// functions across all ACIR artifacts
-    generated_brillig: Vec<GeneratedBrillig>,
+    generated_brillig: Vec<GeneratedBrillig<F>>,
 
     /// Maps SSA function index -> Final generated Brillig artifact index.
     /// There can be Brillig functions specified in SSA which do not act as
@@ -65,7 +65,7 @@ struct SharedContext {
     brillig_stdlib_calls_to_resolve: HashMap<FunctionId, Vec<(OpcodeLocation, u32)>>,
 }
 
-impl SharedContext {
+impl<F: AcirField> SharedContext<F> {
     fn generated_brillig_pointer(
         &self,
         func_id: FunctionId,
@@ -74,7 +74,7 @@ impl SharedContext {
         self.brillig_generated_func_pointers.get(&(func_id, arguments))
     }
 
-    fn generated_brillig(&self, func_pointer: usize) -> &GeneratedBrillig {
+    fn generated_brillig(&self, func_pointer: usize) -> &GeneratedBrillig<F> {
         &self.generated_brillig[func_pointer]
     }
 
@@ -83,7 +83,7 @@ impl SharedContext {
         func_id: FunctionId,
         arguments: Vec<BrilligParameter>,
         generated_pointer: u32,
-        code: GeneratedBrillig,
+        code: GeneratedBrillig<F>,
     ) {
         self.brillig_generated_func_pointers.insert((func_id, arguments), generated_pointer);
         self.generated_brillig.push(code);
@@ -123,7 +123,7 @@ impl SharedContext {
         generated_pointer: u32,
         func_id: FunctionId,
         opcode_location: OpcodeLocation,
-        code: GeneratedBrillig,
+        code: GeneratedBrillig<F>,
     ) {
         self.brillig_stdlib_func_pointer.insert(brillig_stdlib_func, generated_pointer);
         self.add_call_to_resolve(func_id, (opcode_location, generated_pointer));
@@ -151,7 +151,7 @@ struct Context<'a> {
     current_side_effects_enabled_var: AcirVar,
 
     /// Manages and builds the `AcirVar`s to which the converted SSA values refer.
-    acir_context: AcirContext,
+    acir_context: AcirContext<FieldElement>,
 
     /// Track initialized acir dynamic arrays
     ///
@@ -189,7 +189,7 @@ struct Context<'a> {
     data_bus: DataBus,
 
     /// Contains state that is generated and also used across ACIR functions
-    shared_context: &'a mut SharedContext,
+    shared_context: &'a mut SharedContext<FieldElement>,
 }
 
 #[derive(Clone)]
@@ -274,8 +274,11 @@ impl AcirValue {
     }
 }
 
-pub(crate) type Artifacts =
-    (Vec<GeneratedAcir>, Vec<BrilligBytecode<FieldElement>>, BTreeMap<ErrorSelector, ErrorType>);
+pub(crate) type Artifacts = (
+    Vec<GeneratedAcir<FieldElement>>,
+    Vec<BrilligBytecode<FieldElement>>,
+    BTreeMap<ErrorSelector, ErrorType>,
+);
 
 impl Ssa {
     #[tracing::instrument(level = "trace", skip_all)]
@@ -331,7 +334,7 @@ impl Ssa {
 }
 
 impl<'a> Context<'a> {
-    fn new(shared_context: &'a mut SharedContext) -> Context<'a> {
+    fn new(shared_context: &'a mut SharedContext<FieldElement>) -> Context<'a> {
         let mut acir_context = AcirContext::default();
         let current_side_effects_enabled_var = acir_context.add_constant(FieldElement::one());
 
@@ -354,7 +357,7 @@ impl<'a> Context<'a> {
         ssa: &Ssa,
         function: &Function,
         brillig: &Brillig,
-    ) -> Result<Option<GeneratedAcir>, RuntimeError> {
+    ) -> Result<Option<GeneratedAcir<FieldElement>>, RuntimeError> {
         match function.runtime() {
             RuntimeType::Acir(inline_type) => {
                 match inline_type {
@@ -386,7 +389,7 @@ impl<'a> Context<'a> {
         main_func: &Function,
         ssa: &Ssa,
         brillig: &Brillig,
-    ) -> Result<GeneratedAcir, RuntimeError> {
+    ) -> Result<GeneratedAcir<FieldElement>, RuntimeError> {
         let dfg = &main_func.dfg;
         let entry_block = &dfg[main_func.entry_block()];
         let input_witness = self.convert_ssa_block_params(entry_block.parameters(), dfg)?;
@@ -428,6 +431,8 @@ impl<'a> Context<'a> {
         }
 
         warnings.extend(return_warnings);
+
+        // Add the warnings from the alter Ssa passes
         Ok(self.acir_context.finish(input_witness, return_witnesses, warnings))
     }
 
@@ -435,7 +440,7 @@ impl<'a> Context<'a> {
         mut self,
         main_func: &Function,
         brillig: &Brillig,
-    ) -> Result<GeneratedAcir, RuntimeError> {
+    ) -> Result<GeneratedAcir<FieldElement>, RuntimeError> {
         let dfg = &main_func.dfg;
 
         let inputs = try_vecmap(dfg[main_func.entry_block()].parameters(), |param_id| {
@@ -682,7 +687,9 @@ impl<'a> Context<'a> {
                 self.handle_array_operation(instruction_id, dfg)?;
             }
             Instruction::Allocate => {
-                unreachable!("Expected all allocate instructions to be removed before acir_gen")
+                return Err(RuntimeError::UnknownReference {
+                    call_stack: self.acir_context.get_call_stack().clone(),
+                });
             }
             Instruction::Store { .. } => {
                 unreachable!("Expected all store instructions to be removed before acir_gen")
@@ -839,9 +846,10 @@ impl<'a> Context<'a> {
                         self.handle_ssa_call_outputs(result_ids, outputs, dfg)?;
                     }
                     Value::ForeignFunction(_) => {
+                        // TODO: Remove this once elaborator is default frontend. This is now caught by a lint inside the frontend.
                         return Err(RuntimeError::UnconstrainedOracleReturnToConstrained {
                             call_stack: self.acir_context.get_call_stack(),
-                        })
+                        });
                     }
                     _ => unreachable!("expected calling a function but got {function_value:?}"),
                 }
@@ -916,7 +924,7 @@ impl<'a> Context<'a> {
         func: &Function,
         arguments: Vec<BrilligParameter>,
         brillig: &Brillig,
-    ) -> Result<GeneratedBrillig, InternalError> {
+    ) -> Result<GeneratedBrillig<FieldElement>, InternalError> {
         // Create the entry point artifact
         let mut entry_point = BrilligContext::new_entry_point_artifact(
             arguments,
@@ -968,7 +976,15 @@ impl<'a> Context<'a> {
             }
         };
 
-        if self.handle_constant_index(instruction, dfg, index, array, store_value)? {
+        let array_id = dfg.resolve(array);
+        let array_typ = dfg.type_of_value(array_id);
+        // Compiler sanity checks
+        assert!(!array_typ.is_nested_slice(), "ICE: Nested slice type has reached ACIR generation");
+        let (Type::Array(_, _) | Type::Slice(_)) = &array_typ else {
+            unreachable!("ICE: expected array or slice type");
+        };
+
+        if self.handle_constant_index_wrapper(instruction, dfg, array, index, store_value)? {
             return Ok(());
         }
 
@@ -976,8 +992,7 @@ impl<'a> Context<'a> {
         // If we find one, we will use it when computing the index under the enable_side_effect predicate
         // If not, array_get(..) will use a fallback costing one multiplication in the worst case.
         // cf. https://github.com/noir-lang/noir/pull/4971
-        let array_id = dfg.resolve(array);
-        let array_typ = dfg.type_of_value(array_id);
+
         // For simplicity we compute the offset only for simple arrays
         let is_simple_array = dfg.instruction_results(instruction).len() == 1
             && can_omit_element_sizes_array(&array_typ);
@@ -1010,83 +1025,106 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
-    /// Handle constant index: if there is no predicate and we have the array values,
-    /// we can perform the operation directly on the array
-    fn handle_constant_index(
+    fn handle_constant_index_wrapper(
         &mut self,
         instruction: InstructionId,
         dfg: &DataFlowGraph,
+        array: ValueId,
         index: ValueId,
-        array_id: ValueId,
         store_value: Option<ValueId>,
     ) -> Result<bool, RuntimeError> {
-        let index_const = dfg.get_numeric_constant(index);
-        let value_type = dfg.type_of_value(array_id);
+        let array_id = dfg.resolve(array);
+        let array_typ = dfg.type_of_value(array_id);
         // Compiler sanity checks
-        assert!(
-            !value_type.is_nested_slice(),
-            "ICE: Nested slice type has reached ACIR generation"
-        );
-        let (Type::Array(_, _) | Type::Slice(_)) = &value_type else {
+        assert!(!array_typ.is_nested_slice(), "ICE: Nested slice type has reached ACIR generation");
+        let (Type::Array(_, _) | Type::Slice(_)) = &array_typ else {
             unreachable!("ICE: expected array or slice type");
         };
 
         match self.convert_value(array_id, dfg) {
             AcirValue::Var(acir_var, _) => {
-                return Err(RuntimeError::InternalError(InternalError::Unexpected {
+                Err(RuntimeError::InternalError(InternalError::Unexpected {
                     expected: "an array value".to_string(),
                     found: format!("{acir_var:?}"),
                     call_stack: self.acir_context.get_call_stack(),
                 }))
             }
             AcirValue::Array(array) => {
-                if let Some(index_const) = index_const {
-                    let array_size = array.len();
-                    let index = match index_const.try_to_u64() {
-                        Some(index_const) => index_const as usize,
-                        None => {
-                            let call_stack = self.acir_context.get_call_stack();
-                            return Err(RuntimeError::TypeConversion {
-                                from: "array index".to_string(),
-                                into: "u64".to_string(),
-                                call_stack,
-                            });
-                        }
-                    };
-
-                    if self.acir_context.is_constant_one(&self.current_side_effects_enabled_var) {
-                        // Report the error if side effects are enabled.
-                        if index >= array_size {
-                            let call_stack = self.acir_context.get_call_stack();
-                            return Err(RuntimeError::IndexOutOfBounds {
-                                index,
-                                array_size,
-                                call_stack,
-                            });
-                        } else {
-                            let value = match store_value {
-                                Some(store_value) => {
-                                    let store_value = self.convert_value(store_value, dfg);
-                                    AcirValue::Array(array.update(index, store_value))
-                                }
-                                None => array[index].clone(),
-                            };
-
-                            self.define_result(dfg, instruction, value);
-                            return Ok(true);
-                        }
-                    }
-                    // If there is a predicate and the index is not out of range, we can directly perform the read
-                    else if index < array_size && store_value.is_none() {
-                        self.define_result(dfg, instruction, array[index].clone());
-                        return Ok(true);
-                    }
+                // `AcirValue::Array` supports reading/writing to constant indices at compile-time in some cases.
+                if let Some(constant_index) = dfg.get_numeric_constant(index) {
+                    let store_value = store_value.map(|value| self.convert_value(value, dfg));
+                    self.handle_constant_index(instruction, dfg, array, constant_index, store_value)
+                } else {
+                    Ok(false)
                 }
             }
-            AcirValue::DynamicArray(_) => (),
+            AcirValue::DynamicArray(_) => Ok(false),
+        }
+    }
+
+    /// Handle constant index: if there is no predicate and we have the array values,
+    /// we can perform the operation directly on the array
+    fn handle_constant_index(
+        &mut self,
+        instruction: InstructionId,
+        dfg: &DataFlowGraph,
+        array: Vector<AcirValue>,
+        index: FieldElement,
+        store_value: Option<AcirValue>,
+    ) -> Result<bool, RuntimeError> {
+        let array_size: usize = array.len();
+        let index = match index.try_to_u64() {
+            Some(index_const) => index_const as usize,
+            None => {
+                let call_stack = self.acir_context.get_call_stack();
+                return Err(RuntimeError::TypeConversion {
+                    from: "array index".to_string(),
+                    into: "u64".to_string(),
+                    call_stack,
+                });
+            }
         };
 
-        Ok(false)
+        let side_effects_always_enabled =
+            self.acir_context.is_constant_one(&self.current_side_effects_enabled_var);
+        let index_out_of_bounds = index >= array_size;
+
+        // Note that the value of `side_effects_always_enabled` doesn't affect the value which we return here for valid
+        // indices, just whether we return an error for invalid indices at compile time or defer until execution.
+        match (side_effects_always_enabled, index_out_of_bounds) {
+            (true, false) => {
+                let value = match store_value {
+                    Some(store_value) => AcirValue::Array(array.update(index, store_value)),
+                    None => array[index].clone(),
+                };
+
+                self.define_result(dfg, instruction, value);
+                Ok(true)
+            }
+            (false, false) => {
+                if store_value.is_none() {
+                    // If there is a predicate and the index is not out of range, we can optimistically perform the
+                    // read at compile time as if the predicate is true.
+                    //
+                    // This is as if the predicate is false, any side-effects will be disabled so the value returned
+                    // will not affect the rest of execution.
+                    self.define_result(dfg, instruction, array[index].clone());
+                    Ok(true)
+                } else {
+                    // We do not do this for a array writes however.
+                    Ok(false)
+                }
+            }
+
+            // Report the error if side effects are enabled.
+            (true, true) => {
+                let call_stack = self.acir_context.get_call_stack();
+                Err(RuntimeError::IndexOutOfBounds { index, array_size, call_stack })
+            }
+            // Index is out of bounds but predicate may result in this array operation being skipped
+            // so we don't return an error now.
+            (false, true) => Ok(false),
+        }
     }
 
     /// We need to properly setup the inputs for array operations in ACIR.
@@ -1305,6 +1343,9 @@ impl<'a> Context<'a> {
                     }
                 }
                 Ok(AcirValue::Array(values))
+            }
+            Type::Reference(reference_type) => {
+                self.array_get_value(reference_type.as_ref(), block_id, var_index)
             }
             _ => unreachable!("ICE: Expected an array or numeric but got {ssa_type:?}"),
         }
@@ -1891,7 +1932,7 @@ impl<'a> Context<'a> {
         }
 
         let binary_type = AcirType::from(binary_type);
-        let bit_count = binary_type.bit_size();
+        let bit_count = binary_type.bit_size::<FieldElement>();
         let num_type = binary_type.to_numeric_type();
         let result = match binary.operator {
             BinaryOp::Add => self.acir_context.add_var(lhs, rhs),

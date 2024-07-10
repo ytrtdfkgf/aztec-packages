@@ -4,14 +4,16 @@ import {
   EncryptedNoteTxL2Logs,
   EncryptedTxL2Logs,
   type EventMetadata,
+  EventType,
   ExtendedNote,
   type FunctionCall,
   type GetUnencryptedLogsResponse,
+  type IncomingNotesFilter,
   L1EventPayload,
   type L2Block,
   type LogFilter,
   MerkleTreeId,
-  type NoteFilter,
+  type OutgoingNotesFilter,
   type PXE,
   type PXEInfo,
   type ProofCreator,
@@ -34,7 +36,13 @@ import {
   getContractClassFromArtifact,
 } from '@aztec/circuits.js';
 import { computeNoteHashNonce, siloNullifier } from '@aztec/circuits.js/hash';
-import { type ContractArtifact, type DecodedReturn, FunctionSelector, encodeArguments } from '@aztec/foundation/abi';
+import {
+  type ContractArtifact,
+  type DecodedReturn,
+  EventSelector,
+  FunctionSelector,
+  encodeArguments,
+} from '@aztec/foundation/abi';
 import { type Fq, Fr, type Point } from '@aztec/foundation/fields';
 import { SerialQueue } from '@aztec/foundation/fifo';
 import { type DebugLogger, createDebugLogger } from '@aztec/foundation/log';
@@ -285,14 +293,14 @@ export class PXEService implements PXE {
     if (!(await this.getContractInstance(contract))) {
       throw new Error(`Contract ${contract.toString()} is not deployed`);
     }
-    return await this.node.getPublicStorageAt(contract, slot);
+    return await this.node.getPublicStorageAt(contract, slot, 'latest');
   }
 
-  public async getNotes(filter: NoteFilter): Promise<ExtendedNote[]> {
-    const noteDaos = await this.db.getNotes(filter);
+  public async getIncomingNotes(filter: IncomingNotesFilter): Promise<ExtendedNote[]> {
+    const noteDaos = await this.db.getIncomingNotes(filter);
 
-    // TODO(benesjan): Refactor --> This type conversion is ugly but I decided to keep it this way for now because
-    // key derivation will affect all this
+    // TODO(#6531): Refactor --> This type conversion is ugly but I decided to keep it this way for now because
+    // key rotation will affect this
     const extendedNotes = noteDaos.map(async dao => {
       let owner = filter.owner;
       if (owner === undefined) {
@@ -301,6 +309,27 @@ export class PXEService implements PXE {
         );
         if (completeAddresses === undefined) {
           throw new Error(`Cannot find complete address for IvpkM ${dao.ivpkM.toString()}`);
+        }
+        owner = completeAddresses.address;
+      }
+      return new ExtendedNote(dao.note, owner, dao.contractAddress, dao.storageSlot, dao.noteTypeId, dao.txHash);
+    });
+    return Promise.all(extendedNotes);
+  }
+
+  public async getOutgoingNotes(filter: OutgoingNotesFilter): Promise<ExtendedNote[]> {
+    const noteDaos = await this.db.getOutgoingNotes(filter);
+
+    // TODO(#6532): Refactor --> This type conversion is ugly but I decided to keep it this way for now because
+    // key rotation will affect this
+    const extendedNotes = noteDaos.map(async dao => {
+      let owner = filter.owner;
+      if (owner === undefined) {
+        const completeAddresses = (await this.db.getCompleteAddresses()).find(address =>
+          address.publicKeys.masterOutgoingViewingPublicKey.equals(dao.ovpkM),
+        );
+        if (completeAddresses === undefined) {
+          throw new Error(`Cannot find complete address for OvpkM ${dao.ovpkM.toString()}`);
         }
         owner = completeAddresses.address;
       }
@@ -812,7 +841,43 @@ export class PXEService implements PXE {
     return !!(await this.node.getContract(address));
   }
 
-  public async getEvents<T>(from: number, limit: number, eventMetadata: EventMetadata<T>, ivpk: Point): Promise<T[]> {
+  public getEvents<T>(
+    type: EventType.Encrypted,
+    eventMetadata: EventMetadata<T>,
+    from: number,
+    limit: number,
+    vpks: Point[],
+  ): Promise<T[]>;
+  public getEvents<T>(
+    type: EventType.Unencrypted,
+    eventMetadata: EventMetadata<T>,
+    from: number,
+    limit: number,
+  ): Promise<T[]>;
+  public getEvents<T>(
+    type: EventType,
+    eventMetadata: EventMetadata<T>,
+    from: number,
+    limit: number,
+    vpks: Point[] = [],
+  ): Promise<T[]> {
+    if (type.includes(EventType.Encrypted)) {
+      return this.getEncryptedEvents(from, limit, eventMetadata, vpks);
+    }
+
+    return this.getUnencryptedEvents(from, limit, eventMetadata);
+  }
+
+  async getEncryptedEvents<T>(
+    from: number,
+    limit: number,
+    eventMetadata: EventMetadata<T>,
+    vpks: Point[],
+  ): Promise<T[]> {
+    if (vpks.length === 0) {
+      throw new Error('Tried to get encrypted events without supplying any viewing public keys');
+    }
+
     const blocks = await this.node.getBlocks(from, limit);
 
     const txEffects = blocks.flatMap(block => block.body.txEffects);
@@ -820,18 +885,27 @@ export class PXEService implements PXE {
 
     const encryptedLogs = encryptedTxLogs.flatMap(encryptedTxLog => encryptedTxLog.unrollLogs());
 
-    const ivsk = await this.keyStore.getMasterSecretKey(ivpk);
+    const vsks = await Promise.all(vpks.map(vpk => this.keyStore.getMasterSecretKey(vpk)));
 
-    const visibleEvents = encryptedLogs
-      .map(encryptedLog => TaggedLog.decryptAsIncoming(encryptedLog, ivsk, L1EventPayload))
-      .filter(item => item !== undefined) as TaggedLog<L1EventPayload>[];
+    const visibleEvents = encryptedLogs.flatMap(encryptedLog => {
+      for (const sk of vsks) {
+        const decryptedLog =
+          TaggedLog.decryptAsIncoming(encryptedLog, sk, L1EventPayload) ??
+          TaggedLog.decryptAsOutgoing(encryptedLog, sk, L1EventPayload);
+        if (decryptedLog !== undefined) {
+          return [decryptedLog];
+        }
+      }
+
+      return [];
+    });
 
     const decodedEvents = visibleEvents
       .map(visibleEvent => {
         if (visibleEvent.payload === undefined) {
           return undefined;
         }
-        if (!FunctionSelector.fromField(visibleEvent.payload.eventTypeId).equals(eventMetadata.functionSelector)) {
+        if (!visibleEvent.payload.eventTypeId.equals(eventMetadata.eventSelector)) {
           return undefined;
         }
         if (visibleEvent.payload.event.items.length !== eventMetadata.fieldNames.length) {
@@ -849,6 +923,43 @@ export class PXEService implements PXE {
         );
       })
       .filter(visibleEvent => visibleEvent !== undefined) as T[];
+
+    return decodedEvents;
+  }
+
+  async getUnencryptedEvents<T>(from: number, limit: number, eventMetadata: EventMetadata<T>): Promise<T[]> {
+    const { logs: unencryptedLogs } = await this.node.getUnencryptedLogs({
+      fromBlock: from,
+      toBlock: from + limit,
+    });
+
+    const decodedEvents = unencryptedLogs
+      .map(unencryptedLog => {
+        const unencryptedLogBuf = unencryptedLog.log.data;
+        // We are assuming here that event logs are the last 4 bytes of the event. This is not enshrined but is a function of aztec.nr raw log emission.
+        if (
+          !EventSelector.fromBuffer(unencryptedLogBuf.subarray(unencryptedLogBuf.byteLength - 4)).equals(
+            eventMetadata.eventSelector,
+          )
+        ) {
+          return undefined;
+        }
+
+        if (unencryptedLogBuf.byteLength !== eventMetadata.fieldNames.length * 32 + 32) {
+          throw new Error(
+            'Something is weird here, we have matching FunctionSelectors, but the actual payload has mismatched length',
+          );
+        }
+
+        return eventMetadata.fieldNames.reduce(
+          (acc, curr, i) => ({
+            ...acc,
+            [curr]: new Fr(unencryptedLogBuf.subarray(i * 32, i * 32 + 32)),
+          }),
+          {} as T,
+        );
+      })
+      .filter(unencryptedLog => unencryptedLog !== undefined) as T[];
 
     return decodedEvents;
   }

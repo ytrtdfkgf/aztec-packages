@@ -194,10 +194,9 @@ function generateStorageLayoutGetter(input: ContractArtifact) {
   const storageFieldsUnionType = entries.map(([name]) => `'${name}'`).join(' | ');
   const layout = entries
     .map(
-      ([name, { slot, typ }]) =>
+      ([name, { slot }]) =>
         `${name}: {
       slot: new Fr(${slot.toBigInt()}n),
-      typ: "${typ}",
     }`,
     )
     .join(',\n');
@@ -226,7 +225,7 @@ function generateNotesGetter(input: ContractArtifact) {
     .map(
       ([name, { id }]) =>
         `${name}: {
-          id: new Fr(${id.toBigInt()}n),
+          id: new NoteSelector(${id.value}),
         }`,
     )
     .join(',\n');
@@ -256,13 +255,13 @@ function generateEvents(events: any[] | undefined) {
     `;
 
     const fieldNames = event.fields.map((field: any) => `"${field.name}"`);
-    const eventType = `${eventName}: {decode: (payload: L1EventPayload | undefined) => ${eventName} | undefined, functionSelector: FunctionSelector, fieldNames: string[] }`;
+    const eventType = `${eventName}: {decode: (payload: L1EventPayload | undefined) => ${eventName} | undefined, eventSelector: EventSelector, fieldNames: string[] }`;
 
     const eventImpl = `${eventName}: {
-        decode: this.decodeEvent(${event.fields.length}, FunctionSelector.fromSignature('${eventName}(${event.fields
+        decode: this.decodeEvent(${event.fields.length}, EventSelector.fromSignature('${eventName}(${event.fields
       .map(() => 'Field')
       .join(',')})'), [${fieldNames}]),
-      functionSelector: FunctionSelector.fromSignature('${eventName}(${event.fields.map(() => 'Field').join(',')})'),
+      eventSelector: EventSelector.fromSignature('${eventName}(${event.fields.map(() => 'Field').join(',')})'),
       fieldNames: [${fieldNames}],
       }`;
 
@@ -277,21 +276,17 @@ function generateEvents(events: any[] | undefined) {
     eventDefs: eventsMetadata.map(({ eventDef }) => eventDef).join('\n'),
     events: `
     // Partial application is chosen is to avoid the duplication of so much codegen.
-  private static decodeEvent<T>(fieldsLength: number, functionSelector: FunctionSelector, fields: string[]): (payload: L1EventPayload | undefined) => T | undefined {
+  private static decodeEvent<T>(fieldsLength: number, eventSelector: EventSelector, fields: string[]): (payload: L1EventPayload | undefined) => T | undefined {
     return (payload: L1EventPayload | undefined): T | undefined => {
       if (payload === undefined) {
         return undefined;
       }
-      if (
-        !functionSelector.equals(
-          FunctionSelector.fromField(payload.eventTypeId),
-        )
-      ) {
+      if (!eventSelector.equals(payload.eventTypeId)) {
         return undefined;
       }
       if (payload.event.items.length !== fieldsLength) {
         throw new Error(
-          'Something is weird here, we have matching FunctionSelectors, but the actual payload has mismatched length',
+          'Something is weird here, we have matching EventSelectors, but the actual payload has mismatched length',
         );
       }
 
@@ -350,13 +345,14 @@ import {
   DeployMethod,
   EthAddress,
   EthAddressLike,
+  EventSelector,
   FieldLike,
   Fr,
-  FunctionSelector,
   FunctionSelectorLike,
   L1EventPayload,
   loadContractArtifact,
   NoirCompiledContract,
+  NoteSelector,
   Point,
   PublicKey,
   Wallet,
