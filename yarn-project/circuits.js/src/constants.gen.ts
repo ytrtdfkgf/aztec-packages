@@ -196,7 +196,6 @@ export enum GeneratorIndex {
   BLOCK_HASH = 28,
   SIDE_EFFECT = 29,
   FEE_PAYLOAD = 30,
-  STATE_REFERENCE_HASH = 31,
   TX_REQUEST = 33,
   SIGNATURE_PAYLOAD = 34,
   VK = 41,

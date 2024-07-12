@@ -57,12 +57,8 @@ describe('NativeWorldState', () => {
   });
 
   it.each([
-    [MerkleTreeId.NULLIFIER_TREE, 0n, new NullifierLeafPreimage(new NullifierLeaf(new Fr(0n)), new Fr(1), 1n)],
-    [
-      MerkleTreeId.PUBLIC_DATA_TREE,
-      0n,
-      new PublicDataTreeLeafPreimage(new PublicDataTreeLeaf(new Fr(0n), new Fr(0n)), new Fr(1n), 1n),
-    ],
+    [MerkleTreeId.NULLIFIER_TREE, 0n, new NullifierLeafPreimage(new Fr(0n), new Fr(1), 1n)],
+    [MerkleTreeId.PUBLIC_DATA_TREE, 0n, new PublicDataTreeLeafPreimage(new Fr(0n), new Fr(0n), new Fr(1n), 1n)],
   ])('gets leaf preimage', async (id, index, expected) => {
     const leaf = await worldState.getLeafPreimage(id as IndexedTreeId, index, false);
     expect(leaf).toEqual(expected);

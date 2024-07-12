@@ -7,12 +7,7 @@ import {
   MAX_PUBLIC_DATA_READS_PER_TX,
   MAX_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX,
 } from '../constants.gen.js';
-import {
-  PublicDataRead,
-  PublicDataTreeLeaf,
-  PublicDataTreeLeafPreimage,
-  PublicDataUpdateRequest,
-} from '../structs/index.js';
+import { PublicDataRead, PublicDataTreeLeafPreimage, PublicDataUpdateRequest } from '../structs/index.js';
 import { buildPublicDataHints } from './build_public_data_hints.js';
 
 class ExpectedHint {
@@ -40,9 +35,9 @@ describe('buildPublicDataHints', () => {
   const nextSideEffectCounter = () => sideEffectCounter++;
 
   const publicDataLeaves = [
-    new PublicDataTreeLeafPreimage(new PublicDataTreeLeaf(new Fr(22), new Fr(200)), new Fr(33), 0n),
-    new PublicDataTreeLeafPreimage(new PublicDataTreeLeaf(new Fr(11), new Fr(100)), new Fr(22), 0n),
-    new PublicDataTreeLeafPreimage(new PublicDataTreeLeaf(new Fr(0), new Fr(0)), new Fr(11), 0n),
+    new PublicDataTreeLeafPreimage(new Fr(22), new Fr(200), new Fr(33), 0n),
+    new PublicDataTreeLeafPreimage(new Fr(11), new Fr(100), new Fr(22), 0n),
+    new PublicDataTreeLeafPreimage(new Fr(0), new Fr(0), new Fr(11), 0n),
   ];
 
   const makePublicDataRead = (leafSlot: number, value: number) => new PublicDataRead(new Fr(leafSlot), new Fr(value));
@@ -51,7 +46,7 @@ describe('buildPublicDataHints', () => {
 
   const oracle = {
     getMatchOrLowPublicDataMembershipWitness: (leafSlot: bigint) => {
-      const leafPreimage = publicDataLeaves.find(l => l.value.slot.toBigInt() <= leafSlot);
+      const leafPreimage = publicDataLeaves.find(l => l.slot.toBigInt() <= leafSlot);
       return { membershipWitness: {}, leafPreimage } as any;
     },
   };

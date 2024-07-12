@@ -41,7 +41,7 @@ export async function buildPublicDataHints(
 
 export async function buildPublicDataHint(oracle: PublicDataMembershipWitnessOracle, leafSlot: bigint) {
   const { membershipWitness, leafPreimage } = await oracle.getMatchOrLowPublicDataMembershipWitness(leafSlot);
-  const exists = leafPreimage.value.slot.toBigInt() === leafSlot;
-  const value = exists ? leafPreimage.value.value : Fr.ZERO;
+  const exists = leafPreimage.slot.toBigInt() === leafSlot;
+  const value = exists ? leafPreimage.value : Fr.ZERO;
   return new PublicDataHint(new Fr(leafSlot), value, 0, membershipWitness, leafPreimage);
 }

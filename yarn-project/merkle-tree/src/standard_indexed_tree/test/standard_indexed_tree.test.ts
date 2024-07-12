@@ -57,11 +57,7 @@ const createFromName = async (store: AztecKVStore, hasher: Hasher, name: string)
 };
 
 const createNullifierTreeLeafHashInputs = (value: number, nextIndex: number, nextValue: number) => {
-  return new NullifierLeafPreimage(
-    new NullifierLeaf(new Fr(value)),
-    new Fr(nextValue),
-    BigInt(nextIndex),
-  ).toHashInputs();
+  return new NullifierLeafPreimage(new Fr(value), new Fr(nextValue), BigInt(nextIndex)).toHashInputs();
 };
 
 const createPublicDataTreeLeaf = (slot: number, value: number) => {
@@ -70,7 +66,8 @@ const createPublicDataTreeLeaf = (slot: number, value: number) => {
 
 const createPublicDataTreeLeafHashInputs = (slot: number, value: number, nextIndex: number, nextSlot: number) => {
   return new PublicDataTreeLeafPreimage(
-    new PublicDataTreeLeaf(new Fr(slot), new Fr(value)),
+    new Fr(slot),
+    new Fr(value),
     new Fr(nextSlot),
     BigInt(nextIndex),
   ).toHashInputs();
@@ -98,25 +95,25 @@ describe('StandardIndexedTreeSpecific', () => {
     pedersen = new Pedersen();
   });
 
-  it.only('works', async () => {
-    const db = openTmpStore();
-    const tree = await createDb(db, pedersen, 'test', 20, 2);
-    await tree.batchInsert(
-      [new NullifierLeaf(50).toBuffer(), new NullifierLeaf(42).toBuffer(), new NullifierLeaf(80).toBuffer()],
-      2,
-    );
+  // it.only('works', async () => {
+  //   const db = openTmpStore();
+  //   const tree = await createDb(db, pedersen, 'test', 20, 2);
+  //   await tree.batchInsert(
+  //     [new NullifierLeaf(50).toBuffer(), new NullifierLeaf(42).toBuffer(), new NullifierLeaf(80).toBuffer()],
+  //     2,
+  //   );
 
-    const resp = await tree.batchInsert(
-      [new NullifierLeaf(40).toBuffer(), new NullifierLeaf(90).toBuffer(), new NullifierLeaf(47).toBuffer()],
-      2,
-    );
+  //   const resp = await tree.batchInsert(
+  //     [new NullifierLeaf(40).toBuffer(), new NullifierLeaf(90).toBuffer(), new NullifierLeaf(47).toBuffer()],
+  //     2,
+  //   );
 
-    for (const r of resp.lowLeavesWitnessData!) {
-      console.log('low leaf index', r.index, '\nleaf', r.leafPreimage, '\nsibling', r.siblingPath.toFields()[0]);
-    }
+  //   for (const r of resp.lowLeavesWitnessData!) {
+  //     console.log('low leaf index', r.index, '\nleaf', r.leafPreimage, '\nsibling', r.siblingPath.toFields()[0]);
+  //   }
 
-    expect(1).toBe(0);
-  });
+  //   expect(1).toBe(0);
+  // });
 
   it('produces the correct roots and sibling paths', async () => {
     // Create a depth-3 indexed merkle tree

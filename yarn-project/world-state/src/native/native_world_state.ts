@@ -360,7 +360,7 @@ function serializeLeaf(leaf: Fr | NullifierLeaf | PublicDataTreeLeaf): Serialize
   if (leaf instanceof Fr) {
     return leaf.toBuffer();
   } else if (leaf instanceof NullifierLeaf) {
-    return { value: leaf.value.toBuffer() };
+    return { value: leaf.nullifier.toBuffer() };
   } else {
     return { value: leaf.value.toBuffer(), slot: leaf.slot.toBuffer() };
   }
@@ -377,11 +377,19 @@ function deserializeLeafValue(leaf: SerializedLeafValue): Fr | NullifierLeaf | P
 }
 
 function deserializeIndexedLeaf(leaf: SerializedIndexedLeaf): IndexedTreeLeafPreimage {
-  const value = deserializeLeafValue(leaf.value);
-  if (value instanceof PublicDataTreeLeaf) {
-    return new PublicDataTreeLeafPreimage(value, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
-  } else if (value instanceof NullifierLeaf) {
-    return new NullifierLeafPreimage(value, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
+  if ('slot' in leaf.value) {
+    return new PublicDataTreeLeafPreimage(
+      Fr.fromBuffer(leaf.value.slot),
+      Fr.fromBuffer(leaf.value.value),
+      Fr.fromBuffer(leaf.nextValue),
+      BigInt(leaf.nextIndex),
+    );
+  } else if ('value' in leaf.value) {
+    return new NullifierLeafPreimage(
+      Fr.fromBuffer(leaf.value.value),
+      Fr.fromBuffer(leaf.nextValue),
+      BigInt(leaf.nextIndex),
+    );
   } else {
     throw new Error('Invalid leaf type');
   }
