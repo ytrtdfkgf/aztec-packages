@@ -8,6 +8,7 @@ import {
   StateReference,
   type UInt32,
 } from '@aztec/circuits.js';
+import { Tuple } from '@aztec/foundation/serialize';
 
 export type MessageHeaderInit = {
   /** The message ID. Optional, if not set defaults to 0 */
@@ -78,8 +79,6 @@ interface WithLeafIndex {
   leafIndex: bigint;
 }
 
-export type Leaf = Fr | NullifierLeaf | PublicDataTreeLeaf;
-
 export type SerializedLeafValue =
   | Buffer // Fr
   | { value: Buffer } // NullifierLeaf
@@ -92,11 +91,11 @@ export type SerializedIndexedLeaf = {
 };
 
 interface WithLeafValue {
-  leaf: Leaf;
+  leaf: SerializedLeafValue;
 }
 
 interface WithLeaves {
-  leaves: Leaf[];
+  leaves: SerializedLeafValue[];
 }
 
 interface GetTreeInfoRequest extends WithTreeId, WithWorldStateRevision {}
@@ -141,18 +140,23 @@ interface BatchInsertResponse {
   low_leaf_witness_data: ReadonlyArray<{
     leaf: SerializedIndexedLeaf;
     index: bigint | number;
-    path: SiblingPath<number>;
+    path: Tuple<Buffer, number>;
   }>;
   sorted_leaves: ReadonlyArray<[SerializedLeafValue, UInt32]>;
+  subtree_path: Tuple<Buffer, number>;
 }
 
 interface SyncBlockRequest {
-  state: StateReference;
-  hash: Fr;
-  notes: readonly Fr[];
-  messages: readonly Fr[];
-  nullifiers: readonly NullifierLeaf[];
-  publicData: readonly PublicDataTreeLeaf[];
+  blockStateRef: StateReference;
+  blockHash: Fr;
+  paddedNoteHashes: readonly Fr[];
+  paddedL1ToL2Messages: readonly Fr[];
+  paddedNullifiers: readonly NullifierLeaf[];
+  batchesOfPaddedPublicDataWrites: readonly PublicDataTreeLeaf[][];
+}
+
+interface SyncBlockResponse {
+  isBlockOurs: boolean;
 }
 
 export type WorldStateRequest = {
@@ -196,7 +200,7 @@ export type WorldStateResponse = {
   [WorldStateMessageType.COMMIT]: void;
   [WorldStateMessageType.ROLLBACK]: void;
 
-  [WorldStateMessageType.SYNC_BLOCK]: void;
+  [WorldStateMessageType.SYNC_BLOCK]: SyncBlockResponse;
 };
 
 export type WorldStateRevision = -1 | 0 | UInt32;

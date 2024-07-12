@@ -1,5 +1,9 @@
 #pragma once
 
+#include "barretenberg/crypto/merkle_tree/indexed_tree/indexed_leaf.hpp"
+#include "barretenberg/crypto/merkle_tree/types.hpp"
+#include "barretenberg/ecc/curves/bn254/fr.hpp"
+
 namespace bb::world_state {
 
 enum MerkleTreeId {
@@ -26,13 +30,12 @@ struct WorldStateReference {
 };
 
 struct BlockData {
-    WorldStateReference state;
-    bb::fr hash;
-    std::vector<bb::fr> notes;
-    std::vector<bb::fr> messages;
-    std::vector<crypto::merkle_tree::NullifierLeafValue> nullifiers;
-    std::vector<crypto::merkle_tree::PublicDataLeafValue> publicData;
-
-    MSGPACK_FIELDS(state, hash, notes, messages, nullifiers, publicData);
+    WorldStateReference block_state_ref;
+    bb::fr block_hash;
+    std::vector<bb::fr> new_notes;
+    std::vector<bb::fr> new_l1_to_l2_messages;
+    std::vector<crypto::merkle_tree::NullifierLeafValue> new_nullifiers;
+    // take public writes as individual tx batches so that we don't have to collapse writes to the same slot across txs
+    std::vector<std::vector<crypto::merkle_tree::PublicDataLeafValue>> batches_of_public_writes;
 };
 } // namespace bb::world_state

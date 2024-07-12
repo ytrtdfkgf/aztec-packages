@@ -71,8 +71,9 @@ struct TreeInfo {
 template <typename LeafValueType> struct BatchInsertionResult {
     std::vector<crypto::merkle_tree::LowLeafWitnessData<LeafValueType>> low_leaf_witness_data;
     std::vector<std::pair<LeafValueType, size_t>> sorted_leaves;
+    crypto::merkle_tree::fr_sibling_path subtree_path;
 
-    MSGPACK_FIELDS(low_leaf_witness_data, sorted_leaves);
+    MSGPACK_FIELDS(low_leaf_witness_data, sorted_leaves, subtree_path);
 };
 
 const uint NULLIFIER_TREE_HEIGHT = 20;
@@ -208,7 +209,7 @@ class WorldState {
      *
      * @param block The block to synchronize with.
      */
-    void sync_block(const BlockData& block);
+    bool sync_block(const BlockData& block);
 
   private:
     std::unique_ptr<crypto::merkle_tree::LMDBEnvironment> _lmdb_env;
@@ -374,6 +375,8 @@ BatchInsertionResult<T> WorldState::batch_insert_indexed_leaves(MerkleTreeId id,
             std::copy(response.inner.sorted_leaves->begin(),
                       response.inner.sorted_leaves->end(),
                       std::back_inserter(result.sorted_leaves));
+
+            result.subtree_path = response.inner.add_data_result.subtree_path;
 
             signal.signal_level(0);
         });

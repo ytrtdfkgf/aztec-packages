@@ -1,9 +1,20 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { type L2Block, type MerkleTreeHeight, MerkleTreeId, SiblingPath } from '@aztec/circuit-types';
+import {
+  type L2Block,
+  type MerkleTreeHeight,
+  MerkleTreeId,
+  PublicDataWrite,
+  SiblingPath,
+  TxEffect,
+} from '@aztec/circuit-types';
 import {
   AppendOnlyTreeSnapshot,
   Fr,
   type Header,
+  MAX_NEW_NOTE_HASHES_PER_TX,
+  MAX_NEW_NULLIFIERS_PER_TX,
+  MAX_TOTAL_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX,
+  NUMBER_OF_L1_L2_MESSAGES_PER_ROLLUP,
   NullifierLeaf,
   NullifierLeafPreimage,
   PartialStateReference,
@@ -11,6 +22,8 @@ import {
   PublicDataTreeLeafPreimage,
   StateReference,
 } from '@aztec/circuits.js';
+import { padArrayEnd } from '@aztec/foundation/collection';
+import { serializeToBuffer } from '@aztec/foundation/serialize';
 import type { IndexedTreeLeafPreimage } from '@aztec/foundation/trees';
 import type { BatchInsertionResult } from '@aztec/merkle-tree';
 
@@ -27,7 +40,6 @@ import {
   type TreeInfo,
 } from '../world-state-db/merkle_tree_operations.js';
 import {
-  Leaf,
   MessageHeader,
   type NativeInstance,
   SerializedIndexedLeaf,
@@ -85,10 +97,25 @@ export class NativeWorldStateService implements MerkleTreeDb {
     treeId: ID,
     rawLeaves: Buffer[],
   ): Promise<BatchInsertionResult<TreeHeight, SubtreeSiblingPathHeight>> {
-    const leaves = rawLeaves.map((leaf: Buffer) => hydrateLeaf(treeId, leaf));
+    const leaves = rawLeaves.map((leaf: Buffer) => hydrateLeaf(treeId, leaf)).map(serializeLeaf);
     const resp = await this.call(WorldStateMessageType.BATCH_INSERT, { leaves, treeId });
 
-    return resp as any;
+    return {
+      newSubtreeSiblingPath: new SiblingPath<SubtreeSiblingPathHeight>(
+        resp.subtree_path.length as any,
+        resp.subtree_path,
+      ),
+      sortedNewLeaves: resp.sorted_leaves
+        .map(([leaf]) => leaf)
+        .map(deserializeLeafValue)
+        .map(serializeToBuffer),
+      sortedNewLeavesIndexes: resp.sorted_leaves.map(([, index]) => index),
+      lowLeavesWitnessData: resp.low_leaf_witness_data.map(data => ({
+        index: BigInt(data.index),
+        leafPreimage: deserializeIndexedLeaf(data.leaf),
+        siblingPath: new SiblingPath<TreeHeight>(data.path.length as any, data.path),
+      })),
+    };
   }
 
   async commit(): Promise<void> {
@@ -110,7 +137,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
     includeUncommitted: boolean,
   ): Promise<bigint | undefined> {
     const index = await this.call(WorldStateMessageType.FIND_LEAF_INDEX, {
-      leaf: hydrateLeaf(treeId, leaf),
+      leaf: serializeLeaf(hydrateLeaf(treeId, leaf)),
       revision: worldStateRevision(includeUncommitted),
       treeId,
       startIndex,
@@ -223,8 +250,45 @@ export class NativeWorldStateService implements MerkleTreeDb {
     };
   }
 
-  handleL2BlockAndMessages(block: L2Block, l1ToL2Messages: Fr[]): Promise<HandleL2BlockAndMessagesResult> {
-    return Promise.reject(new Error('Method not implemented'));
+  async handleL2BlockAndMessages(l2Block: L2Block, l1ToL2Messages: Fr[]): Promise<HandleL2BlockAndMessagesResult> {
+    // We have to pad both the tx effects and the values within tx effects because that's how the trees are built
+    // by circuits.
+    const paddedTxEffects = padArrayEnd(
+      l2Block.body.txEffects,
+      TxEffect.empty(),
+      l2Block.body.numberOfTxsIncludingPadded,
+    );
+
+    const paddedNoteHashes = paddedTxEffects.flatMap(txEffect =>
+      padArrayEnd(txEffect.noteHashes, Fr.ZERO, MAX_NEW_NOTE_HASHES_PER_TX),
+    );
+    const paddedL1ToL2Messages = padArrayEnd(l1ToL2Messages, Fr.ZERO, NUMBER_OF_L1_L2_MESSAGES_PER_ROLLUP);
+
+    const paddedNullifiers = paddedTxEffects
+      .flatMap(txEffect => padArrayEnd(txEffect.nullifiers, Fr.ZERO, MAX_NEW_NULLIFIERS_PER_TX))
+      .map(nullifier => new NullifierLeaf(nullifier));
+    // We insert the public data tree leaves with one batch per tx to avoid updating the same key twice
+
+    const batchesOfPaddedPublicDataWrites: PublicDataTreeLeaf[][] = [];
+    for (const txEffect of paddedTxEffects) {
+      const batch: PublicDataTreeLeaf[] = Array(MAX_TOTAL_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX).fill(
+        PublicDataTreeLeaf.empty(),
+      );
+      for (const [i, write] of txEffect.publicDataWrites.entries()) {
+        batch[i] = new PublicDataTreeLeaf(write.leafIndex, write.newValue);
+      }
+
+      batchesOfPaddedPublicDataWrites.push(batch);
+    }
+
+    return await this.call(WorldStateMessageType.SYNC_BLOCK, {
+      blockHash: l2Block.hash(),
+      paddedL1ToL2Messages,
+      paddedNoteHashes,
+      paddedNullifiers,
+      batchesOfPaddedPublicDataWrites,
+      blockStateRef: l2Block.header.state,
+    });
   }
 
   async rollback(): Promise<void> {
@@ -292,7 +356,17 @@ function hydrateLeaf<ID extends MerkleTreeId>(treeId: ID, leaf: MerkleTreeLeafTy
   }
 }
 
-function deserializeLeafValue(leaf: SerializedLeafValue): Leaf {
+function serializeLeaf(leaf: Fr | NullifierLeaf | PublicDataTreeLeaf): SerializedLeafValue {
+  if (leaf instanceof Fr) {
+    return leaf.toBuffer();
+  } else if (leaf instanceof NullifierLeaf) {
+    return { value: leaf.value.toBuffer() };
+  } else {
+    return { value: leaf.value.toBuffer(), slot: leaf.slot.toBuffer() };
+  }
+}
+
+function deserializeLeafValue(leaf: SerializedLeafValue): Fr | NullifierLeaf | PublicDataTreeLeaf {
   if (Buffer.isBuffer(leaf)) {
     return Fr.fromBuffer(leaf);
   } else if ('slot' in leaf) {

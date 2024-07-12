@@ -388,10 +388,23 @@ bool WorldStateAddon::rollback(msgpack::object&, msgpack::sbuffer&)
     return true;
 }
 
-bool WorldStateAddon::sync_block(msgpack::object& obj, msgpack::sbuffer&)
+bool WorldStateAddon::sync_block(msgpack::object& obj, msgpack::sbuffer& buf)
 {
     TypedMessage<SyncBlockRequest> request;
     obj.convert(request);
+
+    auto is_block_ours = _ws->sync_block({
+        request.value.blockStateRef,
+        request.value.blockHash,
+        request.value.paddedNoteHashes,
+        request.value.paddedL1ToL2Messages,
+        request.value.paddedNullifiers,
+        request.value.batchesOfPaddedPublicDataWrites,
+    });
+
+    MsgHeader header(request.header.messageId);
+    messaging::TypedMessage<SyncBlockResponse> resp_msg(WorldStateMessageType::SYNC_BLOCK, header, { is_block_ours });
+    msgpack::pack(buf, resp_msg);
 
     return true;
 }

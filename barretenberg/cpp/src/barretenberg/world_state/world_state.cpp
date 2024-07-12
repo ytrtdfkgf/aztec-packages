@@ -179,46 +179,53 @@ void WorldState::rollback()
     signal.wait_for_level();
 }
 
-void WorldState::sync_block(const BlockData& block)
+bool WorldState::sync_block(const BlockData& block)
 {
     auto current_state = get_state_reference(WorldStateRevision::uncommitted());
-    if (current_state == block.state) {
-        return commit();
+    if (current_state == block.block_state_ref) {
+        commit();
+        return true;
     }
 
     rollback();
 
-    Signal signal(static_cast<uint32_t>(_trees.size()));
+    // the public data tree gets updated once per batch and every other gets one update
+    Signal signal(static_cast<uint32_t>(_trees.size() - 1) +
+                  static_cast<uint32_t>(block.batches_of_public_writes.size()));
     auto decr = [&signal](const auto&) { signal.signal_decrement(); };
 
     {
         auto& wrapper = std::get<TreeWithStore<NullifierTree>>(_trees.at(MerkleTreeId::NULLIFIER_TREE));
-        wrapper.tree->add_or_update_values(block.nullifiers, decr);
+        wrapper.tree->add_or_update_values(block.new_nullifiers, decr);
     }
 
     {
         auto& wrapper = std::get<TreeWithStore<FrTree>>(_trees.at(MerkleTreeId::NOTE_HASH_TREE));
-        wrapper.tree->add_values(block.notes, decr);
+        wrapper.tree->add_values(block.new_notes, decr);
     }
 
     {
         auto& wrapper = std::get<TreeWithStore<PublicDataTree>>(_trees.at(MerkleTreeId::PUBLIC_DATA_TREE));
-        wrapper.tree->add_or_update_values(block.publicData, decr);
+        for (const auto& batch : block.batches_of_public_writes) {
+            // TODO (alexg) this needs to be thread safe!!
+            wrapper.tree->add_or_update_values(batch, decr);
+        }
     }
 
     {
         auto& wrapper = std::get<TreeWithStore<FrTree>>(_trees.at(MerkleTreeId::L1_TO_L2_MESSAGE_TREE));
-        wrapper.tree->add_values(block.messages, decr);
+        wrapper.tree->add_values(block.new_l1_to_l2_messages, decr);
     }
 
     {
         auto& wrapper = std::get<TreeWithStore<FrTree>>(_trees.at(MerkleTreeId::ARCHIVE));
-        wrapper.tree->add_value(block.hash, decr);
+        wrapper.tree->add_value(block.block_hash, decr);
     }
 
     signal.wait_for_level();
 
     commit();
+    return false;
 }
 
 std::pair<bool, index_t> WorldState::find_low_leaf(const WorldStateRevision revision,

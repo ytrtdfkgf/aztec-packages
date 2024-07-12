@@ -120,11 +120,21 @@ template <typename T> struct BatchInsertRequest {
 struct SyncBlockRequest {
     WorldStateReference blockStateRef;
     bb::fr blockHash;
-    std::vector<bb::fr> newNoteHashes, newL1ToL2Messages;
-    std::vector<crypto::merkle_tree::NullifierLeafValue> newNullifiers;
-    std::vector<crypto::merkle_tree::PublicDataLeafValue> newPublicDataWrites;
+    std::vector<bb::fr> paddedNoteHashes, paddedL1ToL2Messages;
+    std::vector<crypto::merkle_tree::NullifierLeafValue> paddedNullifiers;
+    std::vector<std::vector<crypto::merkle_tree::PublicDataLeafValue>> batchesOfPaddedPublicDataWrites;
 
-    MSGPACK_FIELDS(blockStateRef, blockHash, newNoteHashes, newL1ToL2Messages, newNullifiers, newPublicDataWrites);
+    MSGPACK_FIELDS(blockStateRef,
+                   blockHash,
+                   paddedNoteHashes,
+                   paddedL1ToL2Messages,
+                   paddedNullifiers,
+                   batchesOfPaddedPublicDataWrites);
+};
+
+struct SyncBlockResponse {
+    bool isBlockOurs;
+    MSGPACK_FIELDS(isBlockOurs);
 };
 
 } // namespace bb::world_state
