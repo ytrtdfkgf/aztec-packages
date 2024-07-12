@@ -48,24 +48,47 @@ WorldStateAddon::WorldStateAddon(const Napi::CallbackInfo& info)
         [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return get_state_reference(obj, buffer); });
 
     _dispatcher.registerTarget(
-        WorldStateMessageType::GET_SIBLING_PATH,
-        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return get_sibling_path(obj, buffer); });
+        WorldStateMessageType::GET_LEAF_VALUE,
+        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return get_leaf_value(obj, buffer); });
 
     _dispatcher.registerTarget(
         WorldStateMessageType::GET_LEAF_PREIMAGE,
         [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return get_leaf_preimage(obj, buffer); });
 
     _dispatcher.registerTarget(
-        WorldStateMessageType::GET_LEAF_VALUE,
-        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return get_leaf_value(obj, buffer); });
+        WorldStateMessageType::GET_SIBLING_PATH,
+        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return get_sibling_path(obj, buffer); });
 
     _dispatcher.registerTarget(
         WorldStateMessageType::FIND_LEAF_INDEX,
         [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return find_leaf_index(obj, buffer); });
 
     _dispatcher.registerTarget(
+        WorldStateMessageType::FIND_LOW_LEAF,
+        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return find_low_leaf(obj, buffer); });
+
+    _dispatcher.registerTarget(
         WorldStateMessageType::APPEND_LEAVES,
         [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return append_leaves(obj, buffer); });
+
+    _dispatcher.registerTarget(
+        WorldStateMessageType::BATCH_INSERT,
+        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return batch_insert(obj, buffer); });
+
+    _dispatcher.registerTarget(
+        WorldStateMessageType::UPDATE_ARCHIVE,
+        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return update_archive(obj, buffer); });
+
+    _dispatcher.registerTarget(WorldStateMessageType::COMMIT,
+                               [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return commit(obj, buffer); });
+
+    _dispatcher.registerTarget(WorldStateMessageType::ROLLBACK, [this](msgpack::object& obj, msgpack::sbuffer& buffer) {
+        return rollback(obj, buffer);
+    });
+
+    _dispatcher.registerTarget(
+        WorldStateMessageType::SYNC_BLOCK,
+        [this](msgpack::object& obj, msgpack::sbuffer& buffer) { return sync_block(obj, buffer); });
 }
 
 Napi::Value WorldStateAddon::call(const Napi::CallbackInfo& info)
@@ -129,96 +152,6 @@ bool WorldStateAddon::get_state_reference(msgpack::object& obj, msgpack::sbuffer
     return true;
 }
 
-bool WorldStateAddon::get_sibling_path(msgpack::object& obj, msgpack::sbuffer& buffer) const
-{
-    TypedMessage<GetSiblingPathRequest> request;
-    obj.convert(request);
-
-    fr_sibling_path path = _ws->get_sibling_path(
-        revision_from_input(request.value.revision), request.value.treeId, request.value.leafIndex);
-
-    MsgHeader header(request.header.messageId);
-    messaging::TypedMessage<fr_sibling_path> resp_msg(WorldStateMessageType::GET_SIBLING_PATH, header, path);
-
-    msgpack::pack(buffer, resp_msg);
-
-    return true;
-}
-
-bool WorldStateAddon::get_leaf_preimage(msgpack::object& obj, msgpack::sbuffer& buffer) const
-{
-    TypedMessage<GetLeafPreimageRequest> request;
-    obj.convert(request);
-
-    MsgHeader header(request.header.messageId);
-
-    switch (request.value.treeId) {
-    case MerkleTreeId::NULLIFIER_TREE: {
-        auto leaf = _ws->get_indexed_leaf<NullifierLeafValue>(
-            revision_from_input(request.value.revision), request.value.treeId, request.value.leafIndex);
-        messaging::TypedMessage<std::optional<IndexedLeaf<NullifierLeafValue>>> resp_msg(
-            WorldStateMessageType::GET_LEAF_PREIMAGE, header, leaf);
-        msgpack::pack(buffer, resp_msg);
-        break;
-    }
-
-    case MerkleTreeId::PUBLIC_DATA_TREE: {
-        auto leaf = _ws->get_indexed_leaf<PublicDataLeafValue>(
-            revision_from_input(request.value.revision), request.value.treeId, request.value.leafIndex);
-
-        messaging::TypedMessage<std::optional<IndexedLeaf<PublicDataLeafValue>>> resp_msg(
-            WorldStateMessageType::GET_LEAF_PREIMAGE, header, leaf);
-        msgpack::pack(buffer, resp_msg);
-        break;
-    }
-
-    default:
-        throw std::runtime_error("Unsupported tree type");
-    }
-
-    return true;
-}
-
-bool WorldStateAddon::find_leaf_index(msgpack::object& obj, msgpack::sbuffer& buffer) const
-{
-    TypedMessage<TreeIdAndRevisionRequest> request;
-    obj.convert(request);
-
-    std::optional<index_t> index;
-    switch (request.value.treeId) {
-    case MerkleTreeId::NOTE_HASH_TREE:
-    case MerkleTreeId::L1_TO_L2_MESSAGE_TREE:
-    case MerkleTreeId::ARCHIVE: {
-        TypedMessage<GetLeafIndexRequest<bb::fr>> r1;
-        obj.convert(r1);
-        index = _ws->find_leaf_index<bb::fr>(
-            revision_from_input(request.value.revision), request.value.treeId, r1.value.leaf);
-        break;
-    }
-
-    case MerkleTreeId::PUBLIC_DATA_TREE: {
-        TypedMessage<GetLeafIndexRequest<crypto::merkle_tree::PublicDataLeafValue>> r2;
-        obj.convert(r2);
-        index = _ws->find_leaf_index<PublicDataLeafValue>(
-            revision_from_input(request.value.revision), request.value.treeId, r2.value.leaf);
-        break;
-    }
-    case MerkleTreeId::NULLIFIER_TREE: {
-        TypedMessage<GetLeafIndexRequest<crypto::merkle_tree::NullifierLeafValue>> r3;
-        obj.convert(r3);
-        index = _ws->find_leaf_index<NullifierLeafValue>(
-            revision_from_input(request.value.revision), request.value.treeId, r3.value.leaf);
-        break;
-    }
-    }
-
-    MsgHeader header(request.header.messageId);
-    messaging::TypedMessage<std::optional<index_t>> resp_msg(WorldStateMessageType::FIND_LEAF_INDEX, header, index);
-    msgpack::pack(buffer, resp_msg);
-
-    return true;
-}
-
 bool WorldStateAddon::get_leaf_value(msgpack::object& obj, msgpack::sbuffer& buffer) const
 {
     TypedMessage<GetLeafValueRequest> request;
@@ -264,6 +197,112 @@ bool WorldStateAddon::get_leaf_value(msgpack::object& obj, msgpack::sbuffer& buf
     return true;
 }
 
+bool WorldStateAddon::get_leaf_preimage(msgpack::object& obj, msgpack::sbuffer& buffer) const
+{
+    TypedMessage<GetLeafPreimageRequest> request;
+    obj.convert(request);
+
+    MsgHeader header(request.header.messageId);
+
+    switch (request.value.treeId) {
+    case MerkleTreeId::NULLIFIER_TREE: {
+        auto leaf = _ws->get_indexed_leaf<NullifierLeafValue>(
+            revision_from_input(request.value.revision), request.value.treeId, request.value.leafIndex);
+        messaging::TypedMessage<std::optional<IndexedLeaf<NullifierLeafValue>>> resp_msg(
+            WorldStateMessageType::GET_LEAF_PREIMAGE, header, leaf);
+        msgpack::pack(buffer, resp_msg);
+        break;
+    }
+
+    case MerkleTreeId::PUBLIC_DATA_TREE: {
+        auto leaf = _ws->get_indexed_leaf<PublicDataLeafValue>(
+            revision_from_input(request.value.revision), request.value.treeId, request.value.leafIndex);
+
+        messaging::TypedMessage<std::optional<IndexedLeaf<PublicDataLeafValue>>> resp_msg(
+            WorldStateMessageType::GET_LEAF_PREIMAGE, header, leaf);
+        msgpack::pack(buffer, resp_msg);
+        break;
+    }
+
+    default:
+        throw std::runtime_error("Unsupported tree type");
+    }
+
+    return true;
+}
+
+bool WorldStateAddon::get_sibling_path(msgpack::object& obj, msgpack::sbuffer& buffer) const
+{
+    TypedMessage<GetSiblingPathRequest> request;
+    obj.convert(request);
+
+    fr_sibling_path path = _ws->get_sibling_path(
+        revision_from_input(request.value.revision), request.value.treeId, request.value.leafIndex);
+
+    MsgHeader header(request.header.messageId);
+    messaging::TypedMessage<fr_sibling_path> resp_msg(WorldStateMessageType::GET_SIBLING_PATH, header, path);
+
+    msgpack::pack(buffer, resp_msg);
+
+    return true;
+}
+
+bool WorldStateAddon::find_leaf_index(msgpack::object& obj, msgpack::sbuffer& buffer) const
+{
+    TypedMessage<TreeIdAndRevisionRequest> request;
+    obj.convert(request);
+
+    std::optional<index_t> index;
+    switch (request.value.treeId) {
+    case MerkleTreeId::NOTE_HASH_TREE:
+    case MerkleTreeId::L1_TO_L2_MESSAGE_TREE:
+    case MerkleTreeId::ARCHIVE: {
+        TypedMessage<FindLeafIndexRequest<bb::fr>> r1;
+        obj.convert(r1);
+        index = _ws->find_leaf_index<bb::fr>(
+            revision_from_input(request.value.revision), request.value.treeId, r1.value.leaf);
+        break;
+    }
+
+    case MerkleTreeId::PUBLIC_DATA_TREE: {
+        TypedMessage<FindLeafIndexRequest<crypto::merkle_tree::PublicDataLeafValue>> r2;
+        obj.convert(r2);
+        index = _ws->find_leaf_index<PublicDataLeafValue>(
+            revision_from_input(request.value.revision), request.value.treeId, r2.value.leaf);
+        break;
+    }
+    case MerkleTreeId::NULLIFIER_TREE: {
+        TypedMessage<FindLeafIndexRequest<crypto::merkle_tree::NullifierLeafValue>> r3;
+        obj.convert(r3);
+        index = _ws->find_leaf_index<NullifierLeafValue>(
+            revision_from_input(request.value.revision), request.value.treeId, r3.value.leaf);
+        break;
+    }
+    }
+
+    MsgHeader header(request.header.messageId);
+    messaging::TypedMessage<std::optional<index_t>> resp_msg(WorldStateMessageType::FIND_LEAF_INDEX, header, index);
+    msgpack::pack(buffer, resp_msg);
+
+    return true;
+}
+
+bool WorldStateAddon::find_low_leaf(msgpack::object& obj, msgpack::sbuffer& buffer) const
+{
+    TypedMessage<FindLowLeafRequest> request;
+    obj.convert(request);
+
+    std::pair<bool, index_t> low_leaf_info =
+        _ws->find_low_leaf(revision_from_input(request.value.revision), request.value.treeId, request.value.key);
+
+    MsgHeader header(request.header.messageId);
+    TypedMessage<FindLowLeafResponse> response(
+        WorldStateMessageType::FIND_LOW_LEAF, header, { low_leaf_info.first, low_leaf_info.second });
+    msgpack::pack(buffer, response);
+
+    return true;
+}
+
 bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer&)
 {
     TypedMessage<TreeIdOnlyRequest> request;
@@ -295,15 +334,7 @@ bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer&)
     return true;
 }
 
-bool WorldStateAddon::update_public_data(msgpack::object& obj, msgpack::sbuffer&)
-{
-    TypedMessage<UpdatePublicDataRequest> request;
-    obj.convert(request);
-    _ws->update_public_data(request.value.leaf);
-    return true;
-}
-
-bool WorldStateAddon::batch_insert_indexed_leaves(msgpack::object& obj, msgpack::sbuffer& buffer)
+bool WorldStateAddon::batch_insert(msgpack::object& obj, msgpack::sbuffer& buffer)
 {
     TypedMessage<TreeIdOnlyRequest> request;
     obj.convert(request);
@@ -339,12 +370,28 @@ bool WorldStateAddon::batch_insert_indexed_leaves(msgpack::object& obj, msgpack:
     return true;
 }
 
+bool WorldStateAddon::update_archive(msgpack::object& obj, msgpack::sbuffer&)
+{
+    (void)obj;
+    return true;
+}
+
+bool WorldStateAddon::commit(msgpack::object&, msgpack::sbuffer&)
+{
+    _ws->commit();
+    return true;
+}
+
+bool WorldStateAddon::rollback(msgpack::object&, msgpack::sbuffer&)
+{
+    _ws->rollback();
+    return true;
+}
+
 bool WorldStateAddon::sync_block(msgpack::object& obj, msgpack::sbuffer&)
 {
     TypedMessage<SyncBlockRequest> request;
     obj.convert(request);
-
-    auto current_state = _ws->get_state_reference(WorldStateRevision::uncommitted());
 
     return true;
 }

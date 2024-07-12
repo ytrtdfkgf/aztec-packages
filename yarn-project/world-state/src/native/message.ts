@@ -1,10 +1,11 @@
-import { type MerkleTreeId } from '@aztec/circuit-types';
+import { type MerkleTreeId, SiblingPath } from '@aztec/circuit-types';
 import {
   AppendOnlyTreeSnapshot,
   Fr,
   INITIAL_L2_BLOCK_NUM,
   type NullifierLeaf,
   type PublicDataTreeLeaf,
+  StateReference,
   type UInt32,
 } from '@aztec/circuits.js';
 
@@ -47,15 +48,17 @@ export enum WorldStateMessageType {
   GET_TREE_INFO = 100,
   GET_STATE_REFERENCE,
 
-  FIND_LEAF_INDEX,
   GET_LEAF_VALUE,
   GET_LEAF_PREIMAGE,
   GET_SIBLING_PATH,
 
-  UPDATE_ARCHIVE,
-  UPDATE_PUBLIC_DATA,
+  FIND_LEAF_INDEX,
+  FIND_LOW_LEAF,
+
   APPEND_LEAVES,
   BATCH_INSERT,
+
+  UPDATE_ARCHIVE,
 
   COMMIT,
   ROLLBACK,
@@ -75,7 +78,18 @@ interface WithLeafIndex {
   leafIndex: bigint;
 }
 
-type Leaf = Fr | NullifierLeaf | PublicDataTreeLeaf;
+export type Leaf = Fr | NullifierLeaf | PublicDataTreeLeaf;
+
+export type SerializedLeafValue =
+  | Buffer // Fr
+  | { value: Buffer } // NullifierLeaf
+  | { value: Buffer; slot: Buffer }; // PublicDataTreeLeaf
+
+export type SerializedIndexedLeaf = {
+  value: Exclude<SerializedLeafValue, Buffer>;
+  nextIndex: bigint;
+  nextValue: Buffer; // Fr
+};
 
 interface WithLeafValue {
   leaf: Leaf;
@@ -102,50 +116,60 @@ interface GetStateReferenceResponse {
 }
 
 interface GetLeafRequest extends WithTreeId, WithWorldStateRevision, WithLeafIndex {}
-type GetLeafResponse = Buffer | { value: Buffer } | { value: Buffer; slot: Buffer };
+type GetLeafResponse = SerializedLeafValue;
 
 interface GetLeafPreImageRequest extends WithTreeId, WithLeafIndex, WithWorldStateRevision {}
-type GetLeafPreImageResponse = {
-  value: { value: Buffer } | { value: Buffer; slot: Buffer };
-  nextIndex: bigint;
-  nextValue: Buffer;
-};
+type GetLeafPreImageResponse = SerializedIndexedLeaf;
 
 interface FindLeafIndexRequest extends WithTreeId, WithLeafValue, WithWorldStateRevision {
   startIndex: bigint;
 }
 type FindLeafIndexResponse = bigint | null;
 
-interface UpdatePublicDataRequest {
-  leaf: PublicDataTreeLeaf;
+interface FindLowLeafRequest extends WithTreeId, WithWorldStateRevision {
+  key: Fr;
 }
-
-interface UpdateArchive {
-  blockHash: Fr;
-  stateHash: Fr;
+interface FindLowLeafResponse {
+  index: bigint;
+  alreadyPresent: boolean;
 }
 
 interface AppendLeavesRequest extends WithTreeId, WithLeaves {}
 
 interface BatchInsertRequest extends WithTreeId, WithLeaves {}
-interface BatchInsertResponse {}
+interface BatchInsertResponse {
+  low_leaf_witness_data: ReadonlyArray<{
+    leaf: SerializedIndexedLeaf;
+    index: bigint;
+    path: SiblingPath<number>;
+  }>;
+  sorted_leaves: ReadonlyArray<[SerializedLeafValue, UInt32]>;
+}
 
-interface SyncBlockRequest {}
-interface SyncBlockResponse {}
+interface SyncBlockRequest {
+  state: StateReference;
+  hash: Fr;
+  notes: readonly Fr[];
+  messages: readonly Fr[];
+  nullifiers: readonly NullifierLeaf[];
+  publicData: readonly PublicDataTreeLeaf[];
+}
 
 export type WorldStateRequest = {
   [WorldStateMessageType.GET_TREE_INFO]: GetTreeInfoRequest;
   [WorldStateMessageType.GET_STATE_REFERENCE]: GetStateReferenceRequest;
-  [WorldStateMessageType.GET_SIBLING_PATH]: GetSiblingPathRequest;
 
   [WorldStateMessageType.GET_LEAF_VALUE]: GetLeafRequest;
-  [WorldStateMessageType.FIND_LEAF_INDEX]: FindLeafIndexRequest;
   [WorldStateMessageType.GET_LEAF_PREIMAGE]: GetLeafPreImageRequest;
+  [WorldStateMessageType.GET_SIBLING_PATH]: GetSiblingPathRequest;
 
-  [WorldStateMessageType.UPDATE_ARCHIVE]: UpdateArchive;
-  [WorldStateMessageType.UPDATE_PUBLIC_DATA]: UpdatePublicDataRequest;
+  [WorldStateMessageType.FIND_LEAF_INDEX]: FindLeafIndexRequest;
+  [WorldStateMessageType.FIND_LOW_LEAF]: FindLowLeafRequest;
+
   [WorldStateMessageType.APPEND_LEAVES]: AppendLeavesRequest;
   [WorldStateMessageType.BATCH_INSERT]: BatchInsertRequest;
+
+  [WorldStateMessageType.UPDATE_ARCHIVE]: void;
 
   [WorldStateMessageType.COMMIT]: void;
   [WorldStateMessageType.ROLLBACK]: void;
@@ -156,21 +180,23 @@ export type WorldStateRequest = {
 export type WorldStateResponse = {
   [WorldStateMessageType.GET_TREE_INFO]: GetTreeInfoResponse;
   [WorldStateMessageType.GET_STATE_REFERENCE]: GetStateReferenceResponse;
-  [WorldStateMessageType.GET_SIBLING_PATH]: GetSiblingPathResponse;
 
   [WorldStateMessageType.GET_LEAF_VALUE]: GetLeafResponse;
-  [WorldStateMessageType.FIND_LEAF_INDEX]: FindLeafIndexResponse;
   [WorldStateMessageType.GET_LEAF_PREIMAGE]: GetLeafPreImageResponse;
+  [WorldStateMessageType.GET_SIBLING_PATH]: GetSiblingPathResponse;
 
-  [WorldStateMessageType.UPDATE_ARCHIVE]: void;
-  [WorldStateMessageType.UPDATE_PUBLIC_DATA]: void;
+  [WorldStateMessageType.FIND_LEAF_INDEX]: FindLeafIndexResponse;
+  [WorldStateMessageType.FIND_LOW_LEAF]: FindLowLeafResponse;
+
   [WorldStateMessageType.APPEND_LEAVES]: void;
   [WorldStateMessageType.BATCH_INSERT]: BatchInsertResponse;
+
+  [WorldStateMessageType.UPDATE_ARCHIVE]: void;
 
   [WorldStateMessageType.COMMIT]: void;
   [WorldStateMessageType.ROLLBACK]: void;
 
-  [WorldStateMessageType.SYNC_BLOCK]: SyncBlockResponse;
+  [WorldStateMessageType.SYNC_BLOCK]: void;
 };
 
 export type WorldStateRevision = -1 | 0 | UInt32;

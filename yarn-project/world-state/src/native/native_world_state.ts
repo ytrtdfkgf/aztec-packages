@@ -26,8 +26,11 @@ import {
   type TreeInfo,
 } from '../world-state-db/merkle_tree_operations.js';
 import {
+  Leaf,
   MessageHeader,
   type NativeInstance,
+  SerializedIndexedLeaf,
+  SerializedLeafValue,
   TypedMessage,
   WorldStateMessageType,
   type WorldStateRequest,
@@ -53,10 +56,12 @@ export class NativeWorldStateService implements MerkleTreeDb {
     // always encode JS objects as MessagePack maps
     // this makes it compatible with other MessagePack decoders
     useRecords: false,
+    int64AsType: 'bigint',
   });
 
   private decoder = new Decoder({
     useRecords: false,
+    int64AsType: 'bigint',
   });
 
   protected constructor(private instance: NativeInstance) {}
@@ -75,15 +80,12 @@ export class NativeWorldStateService implements MerkleTreeDb {
     });
   }
 
-  batchInsert<TreeHeight extends number, SubtreeSiblingPathHeight extends number, ID extends IndexedTreeId>(
+  async batchInsert<TreeHeight extends number, SubtreeSiblingPathHeight extends number, ID extends IndexedTreeId>(
     treeId: ID,
-    leaves: Buffer[],
-    subtreeHeight: number,
+    rawLeaves: Buffer[],
   ): Promise<BatchInsertionResult<TreeHeight, SubtreeSiblingPathHeight>> {
-    const resp = await this.call(WorldStateMessageType.BATCH_INSERT, {
-      leaves: leaves.map(leaf => leaf as any),
-      treeId,
-    });
+    const leaves = rawLeaves.map(Deserializer[treeId]);
+    const resp = await this.call(WorldStateMessageType.BATCH_INSERT, { leaves, treeId });
 
     return resp as any;
   }
@@ -131,19 +133,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
       treeId,
     });
 
-    if ('slot' in resp.value) {
-      return new PublicDataTreeLeafPreimage(
-        new PublicDataTreeLeaf(Fr.fromBuffer(resp.value.slot), Fr.fromBuffer(resp.value.value)),
-        Fr.fromBuffer(resp.nextValue),
-        BigInt(resp.nextIndex),
-      );
-    } else {
-      return new NullifierLeafPreimage(
-        new NullifierLeaf(Fr.fromBuffer(resp.value.value)),
-        Fr.fromBuffer(resp.nextValue),
-        BigInt(resp.nextIndex),
-      );
-    }
+    return deserializeIndexedLeaf(resp);
   }
 
   async getLeafValue(
@@ -157,23 +147,25 @@ export class NativeWorldStateService implements MerkleTreeDb {
       treeId,
     });
 
-    if (!resp) {
-      return undefined;
-    } else if (Buffer.isBuffer(resp)) {
-      return resp;
-    } else if ('slot' in resp) {
-      return new PublicDataTreeLeaf(Fr.fromBuffer(resp.slot), Fr.fromBuffer(resp.value)) as any;
+    const leaf = deserializeLeafValue(resp);
+    if (leaf instanceof Fr) {
+      return leaf;
     } else {
-      return new NullifierLeaf(Fr.fromBuffer(resp.value)) as any;
+      return leaf.toBuffer();
     }
   }
 
-  getPreviousValueIndex(
+  async getPreviousValueIndex(
     treeId: IndexedTreeId,
     value: bigint,
-    args: boolean,
+    includeUncommitted: boolean,
   ): Promise<{ index: bigint; alreadyPresent: boolean } | undefined> {
-    return Promise.reject(new Error('Method not implemented'));
+    const resp = await this.call(WorldStateMessageType.FIND_LOW_LEAF, {
+      key: new Fr(value),
+      revision: worldStateRevision(includeUncommitted),
+      treeId,
+    });
+    return resp;
   }
 
   async getSiblingPath(
@@ -227,10 +219,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
   }
 
   async updateArchive(header: Header, args: boolean): Promise<void> {
-    await this.call(WorldStateMessageType.UPDATE_ARCHIVE, {
-      blockHash: header.hash(),
-      stateHash: header.state.hash(),
-    });
+    throw new Error('not implemented');
   }
 
   async updateLeaf<ID extends IndexedTreeId>(
@@ -238,13 +227,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
     leaf: NullifierLeafPreimage | Buffer,
     index: bigint,
   ): Promise<void> {
-    if (treeId !== MerkleTreeId.PUBLIC_DATA_TREE) {
-      throw new Error('Unsupported tree ID: ' + treeId);
-    }
-
-    await this.call(WorldStateMessageType.UPDATE_PUBLIC_DATA, {
-      leaf: leaf as any,
-    });
+    throw new Error('Method not implemented');
   }
 
   private async call<T extends WorldStateMessageType>(
@@ -281,5 +264,32 @@ export class NativeWorldStateService implements MerkleTreeDb {
     }
 
     return response.value;
+  }
+}
+
+const Deserializer = {
+  [MerkleTreeId.NULLIFIER_TREE]: (buf: Buffer) => NullifierLeaf.fromBuffer(buf),
+  [MerkleTreeId.NOTE_HASH_TREE]: (buf: Buffer) => Fr.fromBuffer(buf),
+  [MerkleTreeId.PUBLIC_DATA_TREE]: (buf: Buffer) => PublicDataTreeLeaf.fromBuffer(buf),
+  [MerkleTreeId.L1_TO_L2_MESSAGE_TREE]: (buf: Buffer) => Fr.fromBuffer(buf),
+  [MerkleTreeId.ARCHIVE]: (buf: Buffer) => Fr.fromBuffer(buf),
+} as const;
+
+function deserializeLeafValue(leaf: SerializedLeafValue): Leaf {
+  if (Buffer.isBuffer(leaf)) {
+    return Fr.fromBuffer(leaf);
+  } else if ('slot' in leaf) {
+    return new PublicDataTreeLeaf(Fr.fromBuffer(leaf.slot), Fr.fromBuffer(leaf.value));
+  } else {
+    return new NullifierLeaf(Fr.fromBuffer(leaf.value));
+  }
+}
+
+function deserializeIndexedLeaf(leaf: SerializedIndexedLeaf): IndexedTreeLeafPreimage {
+  const value = deserializeLeafValue(leaf.value);
+  if ('slot' in leaf) {
+    return new PublicDataTreeLeafPreimage(value as any, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
+  } else {
+    return new NullifierLeafPreimage(value as any, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
   }
 }

@@ -15,20 +15,22 @@ enum WorldStateMessageType {
     GET_TREE_INFO = FIRST_APP_MSG_TYPE,
     GET_STATE_REFERENCE,
 
-    FIND_LEAF_INDEX,
     GET_LEAF_VALUE,
     GET_LEAF_PREIMAGE,
     GET_SIBLING_PATH,
 
-    UPDATE_ARCHIVE,
-    UPDATE_PUBLIC_DATA,
+    FIND_LEAF_INDEX,
+    FIND_LOW_LEAF,
+
     APPEND_LEAVES,
     BATCH_INSERT,
 
-    SYNC_BLOCK,
+    UPDATE_ARCHIVE,
 
     COMMIT,
-    ROLLBACK
+    ROLLBACK,
+
+    SYNC_BLOCK
 };
 
 struct TreeIdOnlyRequest {
@@ -57,14 +59,6 @@ struct GetStateReference {
     MSGPACK_FIELDS(revision);
 };
 
-struct GetSiblingPathRequest {
-    MerkleTreeId treeId;
-    int revision;
-    index_t leafIndex;
-
-    MSGPACK_FIELDS(treeId, revision, leafIndex);
-};
-
 struct GetLeafValueRequest {
     MerkleTreeId treeId;
     int revision;
@@ -81,7 +75,15 @@ struct GetLeafPreimageRequest {
     MSGPACK_FIELDS(treeId, revision, leafIndex);
 };
 
-template <typename T> struct GetLeafIndexRequest {
+struct GetSiblingPathRequest {
+    MerkleTreeId treeId;
+    int revision;
+    index_t leafIndex;
+
+    MSGPACK_FIELDS(treeId, revision, leafIndex);
+};
+
+template <typename T> struct FindLeafIndexRequest {
     MerkleTreeId treeId;
     int revision;
     T leaf;
@@ -89,15 +91,24 @@ template <typename T> struct GetLeafIndexRequest {
     MSGPACK_FIELDS(treeId, revision, leaf);
 };
 
+struct FindLowLeafRequest {
+    MerkleTreeId treeId;
+    int revision;
+    fr key;
+
+    MSGPACK_FIELDS(treeId, revision, key);
+};
+
+struct FindLowLeafResponse {
+    bool alreadyPresent;
+    index_t index;
+    MSGPACK_FIELDS(alreadyPresent, index);
+};
+
 template <typename T> struct AppendLeavesRequest {
     MerkleTreeId treeId;
     std::vector<T> leaves;
     MSGPACK_FIELDS(treeId, leaves);
-};
-
-struct UpdatePublicDataRequest {
-    crypto::merkle_tree::PublicDataLeafValue leaf;
-    MSGPACK_FIELDS(leaf);
 };
 
 template <typename T> struct BatchInsertRequest {

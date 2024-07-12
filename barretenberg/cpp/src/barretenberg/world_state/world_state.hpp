@@ -71,7 +71,6 @@ struct TreeInfo {
 template <typename LeafValueType> struct BatchInsertionResult {
     std::vector<crypto::merkle_tree::LowLeafWitnessData<LeafValueType>> low_leaf_witness_data;
     std::vector<std::pair<LeafValueType, size_t>> sorted_leaves;
-    // std::vector<crypto::merkle_tree::fr_sibling_path> sibling_paths;
 
     MSGPACK_FIELDS(low_leaf_witness_data, sorted_leaves);
 };
@@ -145,16 +144,12 @@ class WorldState {
      * @brief Finds the leaf that would have its nextIdx/nextValue fields modified if the target leaf were to be
      * inserted into the tree. If the vlaue already exists in the tree, the leaf with the same value is returned.
      *
-     * @tparam T The type of the leaf. Either NullifierLeafValue, PublicDataLeafValue
      * @param revision The revision to query
      * @param tree_id The ID of the tree
-     * @param leaf The leaf to find the predecessor of
-     * @return crypto::merkle_tree::IndexedLeaf<T>
+     * @param leaf_key The leaf to find the predecessor of
+     * @return PredecessorInfo
      */
-    template <typename T>
-    crypto::merkle_tree::IndexedLeaf<T> find_indexed_leaf_predecessor(WorldStateRevision revision,
-                                                                      MerkleTreeId tree_id,
-                                                                      const T& leaf) const;
+    std::pair<bool, index_t> find_low_leaf(WorldStateRevision revision, MerkleTreeId tree_id, fr leaf_key) const;
 
     /**
      * @brief Finds the index of a leaf in a tree
@@ -198,9 +193,21 @@ class WorldState {
      */
     void update_public_data(const crypto::merkle_tree::PublicDataLeafValue& new_value);
 
+    /**
+     * @brief Commits the current state of the world state.
+     */
     void commit();
+
+    /**
+     * @brief Rolls back any uncommitted changes made to the world state.
+     */
     void rollback();
 
+    /**
+     * @brief Synchronizes the world state with a new block.
+     *
+     * @param block The block to synchronize with.
+     */
     void sync_block(const BlockData& block);
 
   private:
@@ -274,33 +281,6 @@ std::optional<T> WorldState::get_leaf(const WorldStateRevision revision, MerkleT
 
     signal.wait_for_level();
     return leaf;
-}
-
-template <typename T>
-crypto::merkle_tree::IndexedLeaf<T> WorldState::find_indexed_leaf_predecessor(const WorldStateRevision revision,
-                                                                              MerkleTreeId tree_id,
-                                                                              const T& leaf) const
-{
-    using namespace crypto::merkle_tree;
-    using Store = CachedTreeStore<LMDBStore, T>;
-    using Tree = IndexedTree<Store, HashPolicy>;
-
-    Signal signal;
-    IndexedLeaf<T> indexed_leaf;
-    auto& wrapper = std::get<TreeWithStore<Tree>>(_trees.at(tree_id));
-    wrapper.tree->find_low_leaf(leaf,
-                                include_uncommitted(revision),
-                                [&signal, &indexed_leaf](const TypedResponse<GetIndexedLeafResponse<T>>& response) {
-                                    if (!response.inner.indexed_leaf.has_value()) {
-                                        throw std::runtime_error("Leaf not found");
-                                    }
-
-                                    indexed_leaf = response.inner.indexed_leaf.value();
-                                    signal.signal_level();
-                                });
-
-    signal.wait_for_level();
-    return indexed_leaf;
 }
 
 template <typename T>

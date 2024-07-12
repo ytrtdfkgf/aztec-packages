@@ -186,16 +186,62 @@ void WorldState::sync_block(const BlockData& block)
         return commit();
     }
 
+    rollback();
+
     Signal signal(static_cast<uint32_t>(_trees.size()));
     auto decr = [&signal](const auto&) { signal.signal_decrement(); };
 
-    using Leaves = std::variant<std::vector<fr>, std::vector<NullifierLeafValue>, std::vector<PublicDataLeafValue>>;
-    std::unordered_map<MerkleTreeId, Leaves> writes{
-        std::make_pair(MerkleTreeId::NULLIFIER_TREE, block.nullifiers),
+    {
+        auto& wrapper = std::get<TreeWithStore<NullifierTree>>(_trees.at(MerkleTreeId::NULLIFIER_TREE));
+        wrapper.tree->add_or_update_values(block.nullifiers, decr);
+    }
+
+    {
+        auto& wrapper = std::get<TreeWithStore<FrTree>>(_trees.at(MerkleTreeId::NOTE_HASH_TREE));
+        wrapper.tree->add_values(block.notes, decr);
+    }
+
+    {
+        auto& wrapper = std::get<TreeWithStore<PublicDataTree>>(_trees.at(MerkleTreeId::PUBLIC_DATA_TREE));
+        wrapper.tree->add_or_update_values(block.publicData, decr);
+    }
+
+    {
+        auto& wrapper = std::get<TreeWithStore<FrTree>>(_trees.at(MerkleTreeId::L1_TO_L2_MESSAGE_TREE));
+        wrapper.tree->add_values(block.messages, decr);
+    }
+
+    {
+        auto& wrapper = std::get<TreeWithStore<FrTree>>(_trees.at(MerkleTreeId::ARCHIVE));
+        wrapper.tree->add_value(block.hash, decr);
+    }
+
+    signal.wait_for_level();
+
+    commit();
+}
+
+std::pair<bool, index_t> WorldState::find_low_leaf(const WorldStateRevision revision,
+                                                   MerkleTreeId tree_id,
+                                                   fr leaf_key) const
+{
+    Signal signal;
+    std::pair<bool, index_t> low_leaf_info;
+    auto callback = [&signal, &low_leaf_info](const TypedResponse<std::pair<bool, index_t>>& response) {
+        low_leaf_info = response.inner;
+        signal.signal_level();
     };
 
-    (void)decr;
-    (void)writes;
+    if (const auto* wrapper = std::get_if<TreeWithStore<NullifierTree>>(&_trees.at(tree_id))) {
+        wrapper->tree->find_low_leaf(leaf_key, include_uncommitted(revision), callback);
+    } else if (const auto* wrapper = std::get_if<TreeWithStore<PublicDataTree>>(&_trees.at(tree_id))) {
+        wrapper->tree->find_low_leaf(leaf_key, include_uncommitted(revision), callback);
+    } else {
+        throw std::runtime_error("Invalid tree type for find_low_leaf");
+    }
+
+    signal.wait_for_level();
+    return low_leaf_info;
 }
 
 bool WorldState::include_uncommitted(WorldStateRevision rev)

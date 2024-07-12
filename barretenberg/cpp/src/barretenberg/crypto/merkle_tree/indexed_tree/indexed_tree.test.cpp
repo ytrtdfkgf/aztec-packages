@@ -124,20 +124,19 @@ IndexedLeaf<LeafValueType> get_leaf(IndexedTree<CachedTreeStore<LMDBStore, LeafV
 }
 
 template <typename LeafValueType>
-IndexedLeaf<LeafValueType> get_low_leaf(
-    IndexedTree<CachedTreeStore<LMDBStore, LeafValueType>, Poseidon2HashPolicy>& tree,
-    const LeafValueType& leaf,
-    bool includeUncommitted = true)
+std::pair<bool, index_t> get_low_leaf(IndexedTree<CachedTreeStore<LMDBStore, LeafValueType>, Poseidon2HashPolicy>& tree,
+                                      const LeafValueType& leaf,
+                                      bool includeUncommitted = true)
 {
-    std::optional<IndexedLeaf<LeafValueType>> l;
+    std::pair<bool, index_t> low_leaf_info;
     Signal signal;
-    auto completion = [&](const TypedResponse<GetIndexedLeafResponse<LeafValueType>>& leaf) -> void {
-        l = leaf.inner.indexed_leaf;
+    auto completion = [&](const auto& leaf) -> void {
+        low_leaf_info = leaf.inner;
         signal.signal_level();
     };
-    tree.find_low_leaf(leaf, includeUncommitted, completion);
+    tree.find_low_leaf(leaf.get_key(), includeUncommitted, completion);
     signal.wait_for_level();
-    return l.value();
+    return low_leaf_info;
 }
 
 template <typename LeafValueType>
@@ -1009,17 +1008,15 @@ TEST_F(PersistedIndexedTreeTest, returns_low_leaves)
 
     auto predecessor = get_low_leaf(tree, NullifierLeafValue(42));
 
-    EXPECT_EQ(predecessor.value, NullifierLeafValue(1));
-    EXPECT_EQ(predecessor.nextIndex, 0);
-    EXPECT_EQ(predecessor.nextValue, 0);
+    EXPECT_EQ(predecessor.first, false);
+    EXPECT_EQ(predecessor.second, 1);
 
     add_value(tree, NullifierLeafValue(42));
 
     predecessor = get_low_leaf(tree, NullifierLeafValue(42));
     // returns the current leaf since it exists already. Inserting 42 again would modify the existing leaf
-    EXPECT_EQ(predecessor.value, NullifierLeafValue(42));
-    EXPECT_EQ(predecessor.nextIndex, 0);
-    EXPECT_EQ(predecessor.nextValue, 0);
+    EXPECT_EQ(predecessor.first, true);
+    EXPECT_EQ(predecessor.second, 2);
 }
 
 TEST_F(PersistedIndexedTreeTest, duplicates)

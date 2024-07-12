@@ -35,6 +35,7 @@ template <typename Store, typename HashingPolicy> class IndexedTree : public App
     using IndexedLeafValueType = typename Store::IndexedLeafValueType;
     using AddCompletionCallback = std::function<void(const TypedResponse<AddIndexedDataResponse<LeafValueType>>&)>;
     using LeafCallback = std::function<void(const TypedResponse<GetIndexedLeafResponse<LeafValueType>>&)>;
+    using FindLowLeafCallback = std::function<void(const TypedResponse<std::pair<bool, index_t>>&)>;
 
     IndexedTree(Store& store, ThreadPool& workers, index_t initial_size);
     IndexedTree(IndexedTree const& other) = delete;
@@ -69,7 +70,7 @@ template <typename Store, typename HashingPolicy> class IndexedTree : public App
                               bool includeUncommitted,
                               const AppendOnlyTree<Store, HashingPolicy>::FindLeafCallback& on_completion) const;
 
-    void find_low_leaf(const LeafValueType& leaf, bool includeUncommitted, const LeafCallback& on_completion) const;
+    void find_low_leaf(const fr& leaf, bool includeUncommitted, const FindLowLeafCallback& on_completion) const;
 
     using AppendOnlyTree<Store, HashingPolicy>::get_sibling_path;
 
@@ -250,14 +251,17 @@ void IndexedTree<Store, HashingPolicy>::find_leaf_index_from(
 }
 
 template <typename Store, typename HashingPolicy>
-void IndexedTree<Store, HashingPolicy>::find_low_leaf(const LeafValueType& leaf,
+void IndexedTree<Store, HashingPolicy>::find_low_leaf(const fr& leaf_key,
                                                       bool includeUncommitted,
-                                                      const LeafCallback& on_completion) const
+                                                      const FindLowLeafCallback& on_completion) const
 {
-    auto job = [=, &leaf, this]() {
-        typename Store::ReadTransactionPtr tx = store_.createReadTransaction();
-        auto result = store_.find_low_value(leaf, includeUncommitted, *tx);
-        get_leaf(result.second, includeUncommitted, on_completion);
+    auto job = [=, this]() {
+        ExecuteAndReport<std::pair<bool, index_t>>(
+            [=, this](TypedResponse<std::pair<bool, index_t>>& response) {
+                typename Store::ReadTransactionPtr tx = store_.createReadTransaction();
+                response.inner = store_.find_low_value(leaf_key, includeUncommitted, *tx);
+            },
+            on_completion);
     };
 
     workers_.enqueue(job);
@@ -500,7 +504,8 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
                     // This gives us the leaf that need updating
                     index_t current = 0;
                     bool is_already_present = false;
-                    std::tie(is_already_present, current) = store_.find_low_value(value_pair.first, true, *tx);
+                    std::tie(is_already_present, current) =
+                        store_.find_low_value(value_pair.first.get_key(), true, *tx);
                     // .value() throws if the low leaf does not exist
                     IndexedLeafValueType current_leaf = store_.get_leaf(current, *tx, true).value();
 

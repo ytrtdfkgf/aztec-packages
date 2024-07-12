@@ -23,14 +23,22 @@ class WorldStateAddon : public Napi::ObjectWrap<WorldStateAddon> {
 
     bool get_tree_info(msgpack::object& obj, msgpack::sbuffer& buffer) const;
     bool get_state_reference(msgpack::object& obj, msgpack::sbuffer& buffer) const;
-    bool get_sibling_path(msgpack::object& obj, msgpack::sbuffer& buffer) const;
-    bool find_leaf_index(msgpack::object& obj, msgpack::sbuffer& buffer) const;
+
     bool get_leaf_value(msgpack::object& obj, msgpack::sbuffer& buffer) const;
     bool get_leaf_preimage(msgpack::object& obj, msgpack::sbuffer& buffer) const;
+    bool get_sibling_path(msgpack::object& obj, msgpack::sbuffer& buffer) const;
+
+    bool find_leaf_index(msgpack::object& obj, msgpack::sbuffer& buffer) const;
+    bool find_low_leaf(msgpack::object& obj, msgpack::sbuffer& buffer) const;
 
     bool append_leaves(msgpack::object& obj, msgpack::sbuffer& buffer);
-    bool update_public_data(msgpack::object& obj, msgpack::sbuffer& buffer);
-    bool batch_insert_indexed_leaves(msgpack::object& obj, msgpack::sbuffer& buffer);
+    bool batch_insert(msgpack::object& obj, msgpack::sbuffer& buffer);
+
+    bool update_archive(msgpack::object& obj, msgpack::sbuffer& buffer);
+
+    bool commit(msgpack::object& obj, msgpack::sbuffer& buffer);
+    bool rollback(msgpack::object& obj, msgpack::sbuffer& buffer);
+
     bool sync_block(msgpack::object& obj, msgpack::sbuffer& buffer);
 
     static WorldStateRevision revision_from_input(int input);

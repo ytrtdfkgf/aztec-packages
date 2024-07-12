@@ -18,28 +18,12 @@ const MerkleTreeId = {
 
   const tree = MerkleTreeId.NULLIFIER_TREE;
 
-  const leaf = {
-    value: Buffer.from(
-      "05b719e949e7b34382995c9d2df469f74be09daa5810ef14c1260fb2ff4c4298",
-      "hex"
-    ),
-  };
-
-  // {
-  //   value: Buffer.from(
-  //     "05b719e949e7b34382995c9d2df469f74be09daa5810ef14c1260fb2ff4c4298",
-  //     "hex"
-  //   ),
-  // },
   const meta = await getMeta(ws, tree);
   console.log(meta);
-  console.log(meta.value.root.toString("hex"));
-  await insert(ws, tree, [leaf]);
-  console.log("After insert", await getMeta(ws, tree, false));
 })().then(console.log, (err) => console.log("addon error", String(err)));
 
 function insert(ws, id, leaves) {
-  return ws.process(
+  return ws.call(
     msgpack.encode({
       header: {
         messageId: 1,
@@ -54,9 +38,9 @@ function insert(ws, id, leaves) {
   );
 }
 
-async function getMeta(ws, id, uncommitted) {
+async function getMeta(ws, treeId, uncommitted) {
   return msgpack.decode(
-    await ws.process(
+    await ws.call(
       msgpack.encode({
         header: {
           messageId: 1,
@@ -64,7 +48,7 @@ async function getMeta(ws, id, uncommitted) {
         },
         msgType: 100,
         value: {
-          id,
+          treeId,
           revision: uncommitted ? 0 : -1,
         },
       })
