@@ -87,7 +87,7 @@ export type SerializedLeafValue =
 
 export type SerializedIndexedLeaf = {
   value: Exclude<SerializedLeafValue, Buffer>;
-  nextIndex: bigint;
+  nextIndex: bigint | number;
   nextValue: Buffer; // Fr
 };
 
@@ -103,7 +103,7 @@ interface GetTreeInfoRequest extends WithTreeId, WithWorldStateRevision {}
 interface GetTreeInfoResponse {
   treeId: MerkleTreeId;
   depth: UInt32;
-  size: bigint;
+  size: bigint | number;
   root: Buffer;
 }
 
@@ -116,10 +116,10 @@ interface GetStateReferenceResponse {
 }
 
 interface GetLeafRequest extends WithTreeId, WithWorldStateRevision, WithLeafIndex {}
-type GetLeafResponse = SerializedLeafValue;
+type GetLeafResponse = SerializedLeafValue | undefined;
 
 interface GetLeafPreImageRequest extends WithTreeId, WithLeafIndex, WithWorldStateRevision {}
-type GetLeafPreImageResponse = SerializedIndexedLeaf;
+type GetLeafPreImageResponse = SerializedIndexedLeaf | undefined;
 
 interface FindLeafIndexRequest extends WithTreeId, WithLeafValue, WithWorldStateRevision {
   startIndex: bigint;
@@ -130,7 +130,7 @@ interface FindLowLeafRequest extends WithTreeId, WithWorldStateRevision {
   key: Fr;
 }
 interface FindLowLeafResponse {
-  index: bigint;
+  index: bigint | number;
   alreadyPresent: boolean;
 }
 
@@ -140,7 +140,7 @@ interface BatchInsertRequest extends WithTreeId, WithLeaves {}
 interface BatchInsertResponse {
   low_leaf_witness_data: ReadonlyArray<{
     leaf: SerializedIndexedLeaf;
-    index: bigint;
+    index: bigint | number;
     path: SiblingPath<number>;
   }>;
   sorted_leaves: ReadonlyArray<[SerializedLeafValue, UInt32]>;

@@ -26,7 +26,7 @@ describe('NativeWorldState', () => {
 
   it('gets tree info', async () => {
     const info = await worldState.getTreeInfo(MerkleTreeId.NULLIFIER_TREE, false);
-    expect(info.size).toBe(2); // prefilled with two leaves
+    expect(info.size).toBe(2n); // prefilled with two leaves
   });
 
   it('gets sibling path', async () => {
@@ -35,10 +35,10 @@ describe('NativeWorldState', () => {
   });
 
   it.each([
-    [MerkleTreeId.NULLIFIER_TREE, new NullifierLeaf(1n), 1n],
+    [MerkleTreeId.NULLIFIER_TREE, new NullifierLeaf(new Fr(1n)).toBuffer(), 1n],
     [MerkleTreeId.NOTE_HASH_TREE, new Fr(1n), undefined],
   ])('gets leaf index', async (treeId, leaf, expected) => {
-    const index = await worldState.findLeafIndex(treeId, leaf as any, false);
+    const index = await worldState.findLeafIndex(treeId, leaf, false);
     expect(index).toEqual(expected);
   });
 
@@ -48,8 +48,8 @@ describe('NativeWorldState', () => {
   });
 
   it.each([
-    [MerkleTreeId.NULLIFIER_TREE, 0n, new NullifierLeaf(0n)],
-    [MerkleTreeId.PUBLIC_DATA_TREE, 0n, new PublicDataTreeLeaf(new Fr(0n), new Fr(0n))],
+    [MerkleTreeId.NULLIFIER_TREE, 0n, Fr.ZERO.toBuffer()],
+    [MerkleTreeId.PUBLIC_DATA_TREE, 0n, new PublicDataTreeLeaf(new Fr(0n), new Fr(0n)).toBuffer()],
     [MerkleTreeId.NOTE_HASH_TREE, 0n, undefined],
   ])('gets leaf value', async (id, index, expectedLeaf) => {
     const leaf = await worldState.getLeafValue(id, index, false);
@@ -66,5 +66,15 @@ describe('NativeWorldState', () => {
   ])('gets leaf preimage', async (id, index, expected) => {
     const leaf = await worldState.getLeafPreimage(id as IndexedTreeId, index, false);
     expect(leaf).toEqual(expected);
+  });
+
+  it.each([
+    [MerkleTreeId.NULLIFIER_TREE, 42n, 1n, false],
+    [MerkleTreeId.NULLIFIER_TREE, 1n, 1n, true],
+    [MerkleTreeId.PUBLIC_DATA_TREE, 42n, 1n, false],
+    [MerkleTreeId.PUBLIC_DATA_TREE, 1n, 1n, true],
+  ])('finds low leaf', async (treeId, key, index, alreadyPresent) => {
+    const lowLeaf = await worldState.getPreviousValueIndex(treeId as any, key, false);
+    expect(lowLeaf).toEqual({ index, alreadyPresent });
   });
 });

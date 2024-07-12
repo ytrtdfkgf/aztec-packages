@@ -106,7 +106,7 @@ export class NullifierLeaf implements IndexedTreeLeaf {
    */
   public readonly value: Fr;
 
-  constructor(value: Fr | number | bigint) {
+  constructor(value: Fr) {
     this.value = new Fr(value);
   }
 

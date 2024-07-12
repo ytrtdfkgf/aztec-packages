@@ -23,6 +23,7 @@ import {
   type HandleL2BlockAndMessagesResult,
   type IndexedTreeId,
   type MerkleTreeLeafType,
+  MerkleTreeLeafValue,
   type TreeInfo,
 } from '../world-state-db/merkle_tree_operations.js';
 import {
@@ -84,7 +85,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
     treeId: ID,
     rawLeaves: Buffer[],
   ): Promise<BatchInsertionResult<TreeHeight, SubtreeSiblingPathHeight>> {
-    const leaves = rawLeaves.map(Deserializer[treeId]);
+    const leaves = rawLeaves.map((leaf: Buffer) => hydrateLeaf(treeId, leaf));
     const resp = await this.call(WorldStateMessageType.BATCH_INSERT, { leaves, treeId });
 
     return resp as any;
@@ -109,7 +110,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
     includeUncommitted: boolean,
   ): Promise<bigint | undefined> {
     const index = await this.call(WorldStateMessageType.FIND_LEAF_INDEX, {
-      leaf: leaf as any,
+      leaf: hydrateLeaf(treeId, leaf),
       revision: worldStateRevision(includeUncommitted),
       treeId,
       startIndex,
@@ -133,7 +134,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
       treeId,
     });
 
-    return deserializeIndexedLeaf(resp);
+    return resp ? deserializeIndexedLeaf(resp) : undefined;
   }
 
   async getLeafValue(
@@ -146,6 +147,10 @@ export class NativeWorldStateService implements MerkleTreeDb {
       revision: worldStateRevision(includeUncommitted),
       treeId,
     });
+
+    if (!resp) {
+      return undefined;
+    }
 
     const leaf = deserializeLeafValue(resp);
     if (leaf instanceof Fr) {
@@ -165,7 +170,10 @@ export class NativeWorldStateService implements MerkleTreeDb {
       revision: worldStateRevision(includeUncommitted),
       treeId,
     });
-    return resp;
+    return {
+      alreadyPresent: resp.alreadyPresent,
+      index: BigInt(resp.index),
+    };
   }
 
   async getSiblingPath(
@@ -207,7 +215,12 @@ export class NativeWorldStateService implements MerkleTreeDb {
       revision: worldStateRevision(includeUncommitted),
     });
 
-    return resp;
+    return {
+      depth: resp.depth,
+      root: resp.root,
+      size: BigInt(resp.size),
+      treeId,
+    };
   }
 
   handleL2BlockAndMessages(block: L2Block, l1ToL2Messages: Fr[]): Promise<HandleL2BlockAndMessagesResult> {
@@ -267,13 +280,17 @@ export class NativeWorldStateService implements MerkleTreeDb {
   }
 }
 
-const Deserializer = {
-  [MerkleTreeId.NULLIFIER_TREE]: (buf: Buffer) => NullifierLeaf.fromBuffer(buf),
-  [MerkleTreeId.NOTE_HASH_TREE]: (buf: Buffer) => Fr.fromBuffer(buf),
-  [MerkleTreeId.PUBLIC_DATA_TREE]: (buf: Buffer) => PublicDataTreeLeaf.fromBuffer(buf),
-  [MerkleTreeId.L1_TO_L2_MESSAGE_TREE]: (buf: Buffer) => Fr.fromBuffer(buf),
-  [MerkleTreeId.ARCHIVE]: (buf: Buffer) => Fr.fromBuffer(buf),
-} as const;
+function hydrateLeaf<ID extends MerkleTreeId>(treeId: ID, leaf: MerkleTreeLeafType<ID>) {
+  if (leaf instanceof Fr) {
+    return leaf as Fr;
+  } else if (treeId === MerkleTreeId.NULLIFIER_TREE) {
+    return NullifierLeaf.fromBuffer(leaf);
+  } else if (treeId === MerkleTreeId.PUBLIC_DATA_TREE) {
+    return PublicDataTreeLeaf.fromBuffer(leaf);
+  } else {
+    throw new Error('Invalid leaf type');
+  }
+}
 
 function deserializeLeafValue(leaf: SerializedLeafValue): Leaf {
   if (Buffer.isBuffer(leaf)) {
@@ -287,9 +304,11 @@ function deserializeLeafValue(leaf: SerializedLeafValue): Leaf {
 
 function deserializeIndexedLeaf(leaf: SerializedIndexedLeaf): IndexedTreeLeafPreimage {
   const value = deserializeLeafValue(leaf.value);
-  if ('slot' in leaf) {
-    return new PublicDataTreeLeafPreimage(value as any, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
+  if (value instanceof PublicDataTreeLeaf) {
+    return new PublicDataTreeLeafPreimage(value, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
+  } else if (value instanceof NullifierLeaf) {
+    return new NullifierLeafPreimage(value, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
   } else {
-    return new NullifierLeafPreimage(value as any, Fr.fromBuffer(leaf.nextValue), BigInt(leaf.nextIndex));
+    throw new Error('Invalid leaf type');
   }
 }
