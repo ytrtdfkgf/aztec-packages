@@ -8,6 +8,24 @@ using Fr = bb::fr;
 using Fq = bb::fq;
 using Transcript = NativeTranscript;
 
+#ifdef DATAFLOW_SANITIZER
+/**
+ * @brief Test DFSAN
+ *
+ */
+TEST(DataFlowSanitizer, BasicCase)
+{
+    int i = 100;
+    int j = 200;
+    dfsan_label i_label = 1;
+    dfsan_label j_label = 2;
+    dfsan_set_label(i_label, &i, sizeof(i));
+    dfsan_set_label(j_label, &j, sizeof(j));
+
+    info("HERE: ", static_cast<uint32_t>(dfsan_get_label(i + j)));
+}
+
+#endif
 /**
  * @brief Test sending, receiving, and exporting proofs
  *

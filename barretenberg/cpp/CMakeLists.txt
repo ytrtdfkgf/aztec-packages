@@ -26,6 +26,7 @@ COMMENT "Generate documentation with Doxygen")
 endif(DOXYGEN_FOUND)
 
 option(DISABLE_ASM "Disable custom assembly" OFF)
+option(DATAFLOW_SANITIZER "Use dataflow sanitizer features" OFF)
 option(DISABLE_ADX "Disable ADX assembly variant" OFF)
 option(DISABLE_AZTEC_VM "Don't build Aztec VM (acceptable if iterating on core proving)" OFF)
 option(MULTITHREADING "Enable multi-threading" ON)
@@ -37,6 +38,10 @@ option(ENABLE_ASAN "Address sanitizer for debugging tricky memory corruption" OF
 option(ENABLE_HEAVY_TESTS "Enable heavy tests when collecting coverage" OFF)
 # Note: Must do 'sudo apt-get install libdw-dev' or equivalent
 option(CHECK_CIRCUIT_STACKTRACES "Enable (slow) stack traces for check circuit" OFF)
+
+if(DATAFLOW_SANITIZER)
+    add_definitions(-DDATAFLOW_SANITIZER=1)
+endif()
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     message(STATUS "Compiling for ARM.")

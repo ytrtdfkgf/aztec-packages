@@ -89,7 +89,9 @@ std::array<typename Flavor::GroupElement, 2> TranslatorRecursiveVerifier_<Flavor
 
     // Get permutation challenges
     FF gamma = transcript->template get_challenge<FF>("gamma");
-
+#ifdef DATAFLOW_SANITIZER
+    info("Translator gamma challenge label: ", static_cast<uint32_t>(dfsan_get_label(*(long*)&gamma)));
+#endif
     relation_parameters.beta = 0;
     relation_parameters.gamma = gamma;
     relation_parameters.public_input_delta = 0;

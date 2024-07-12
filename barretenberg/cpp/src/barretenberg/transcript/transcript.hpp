@@ -8,6 +8,10 @@
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
 #include "barretenberg/ecc/fields/field_conversion.hpp"
 #include "barretenberg/honk/proof_system/types/proof.hpp"
+// #define DATAFLOW_SANITIZER
+#ifdef DATAFLOW_SANITIZER
+#include <sanitizer/dfsan_interface.h>
+#endif
 #include <concepts>
 
 namespace bb {
@@ -16,6 +20,9 @@ template <typename T, typename... U>
 concept Loggable =
     (std::same_as<T, bb::fr> || std::same_as<T, grumpkin::fr> || std::same_as<T, bb::g1::affine_element> ||
      std::same_as<T, grumpkin::g1::affine_element> || std::same_as<T, uint32_t>);
+
+template <typename T>
+concept Native = (std::same_as<T, bb::fr> || std::same_as<T, grumpkin::fr>);
 
 // class TranscriptManifest;
 class TranscriptManifest {
@@ -102,6 +109,10 @@ template <typename TranscriptParams> class BaseTranscript {
 
     static constexpr size_t HASH_OUTPUT_SIZE = 32;
 
+#ifdef DATAFLOW_SANITIZER
+    uint32_t df_label_index = 0;
+    bool last_interaction_was_a_challenge = false;
+#endif
     std::ptrdiff_t proof_start = 0;
     size_t num_frs_written = 0; // the number of bb::frs written to proof_data by the prover or the verifier
     size_t num_frs_read = 0;    // the number of bb::frs read from proof_data by the verifier
@@ -273,7 +284,19 @@ template <typename TranscriptParams> class BaseTranscript {
             //             HASH_OUTPUT_SIZE / 2,
             //             field_element_buffer.begin() + HASH_OUTPUT_SIZE / 2);
             */
+
             challenges[i] = TranscriptParams::template convert_challenge<ChallengeType>(get_next_challenge_buffer());
+#ifdef DATAFLOW_SANITIZER
+            if constexpr (!Native<Fr>) {
+                if (!last_interaction_was_a_challenge) {
+                    df_label_index++;
+                    ASSERT(df_label_index <= 255);
+                }
+                auto current_label = static_cast<dfsan_label>(df_label_index);
+                dfsan_set_label(current_label, &challenges[i], sizeof(ChallengeType));
+                last_interaction_was_a_challenge = true;
+            }
+#endif
         }
 
         // Prepare for next round.
@@ -329,7 +352,13 @@ template <typename TranscriptParams> class BaseTranscript {
         BaseTranscript::consume_prover_element_frs(label, element_frs);
 
         auto element = TranscriptParams::template convert_from_bn254_frs<T>(element_frs);
-
+#ifdef DATAFLOW_SANITIZER
+        if constexpr (!Native<Fr>) {
+            auto current_label = static_cast<dfsan_label>(df_label_index);
+            dfsan_set_label(current_label, &element, sizeof(element));
+            last_interaction_was_a_challenge = false;
+        }
+#endif
 #ifdef LOG_INTERACTIONS
         if constexpr (Loggable<T>) {
             info("received: ", label, ": ", element);
@@ -369,6 +398,17 @@ template <typename TranscriptParams> class BaseTranscript {
     template <typename ChallengeType> ChallengeType get_challenge(const std::string& label)
     {
         ChallengeType result = get_challenges<ChallengeType>(label)[0];
+#ifdef DATAFLOW_SANITIZER
+        if constexpr (!Native<Fr>) {
+            if (!last_interaction_was_a_challenge) {
+                df_label_index++;
+                ASSERT(df_label_index <= 255);
+            }
+            auto current_label = static_cast<dfsan_label>(df_label_index);
+            dfsan_set_label(current_label, &result, sizeof(result));
+            last_interaction_was_a_challenge = true;
+        }
+#endif
 #if defined LOG_CHALLENGES || defined LOG_INTERACTIONS
         info("challenge: ", label, ": ", result);
 #endif
