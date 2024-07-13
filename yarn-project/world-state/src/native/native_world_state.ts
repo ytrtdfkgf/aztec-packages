@@ -1,16 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import {
-  type L2Block,
-  type MerkleTreeHeight,
-  MerkleTreeId,
-  PublicDataWrite,
-  SiblingPath,
-  TxEffect,
-} from '@aztec/circuit-types';
+import { type L2Block, MerkleTreeId, SiblingPath, TxEffect } from '@aztec/circuit-types';
 import {
   AppendOnlyTreeSnapshot,
+  ContentCommitment,
   Fr,
-  type Header,
+  GlobalVariables,
+  Header,
   MAX_NEW_NOTE_HASHES_PER_TX,
   MAX_NEW_NULLIFIERS_PER_TX,
   MAX_TOTAL_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX,
@@ -36,7 +31,6 @@ import {
   type HandleL2BlockAndMessagesResult,
   type IndexedTreeId,
   type MerkleTreeLeafType,
-  MerkleTreeLeafValue,
   type TreeInfo,
 } from '../world-state-db/merkle_tree_operations.js';
 import {
@@ -79,11 +73,32 @@ export class NativeWorldStateService implements MerkleTreeDb {
 
   protected constructor(private instance: NativeInstance) {}
 
-  static create(libraryName: string, className: string, dataDir: string): Promise<NativeWorldStateService> {
+  static async create(libraryName: string, className: string, dataDir: string): Promise<NativeWorldStateService> {
     const library = bindings(libraryName);
     const instance = new library[className](dataDir);
+    const worldState = new NativeWorldStateService(instance);
+    await worldState.init();
+    return worldState;
+  }
 
-    return Promise.resolve(new NativeWorldStateService(instance));
+  private async init() {
+    const archive = await this.getTreeInfo(MerkleTreeId.ARCHIVE, false);
+    if (archive.size === 0n) {
+      const header = await this.buildInitialHeader(true);
+      await this.appendLeaves(MerkleTreeId.ARCHIVE, [header.hash()]);
+      await this.commit();
+    }
+  }
+
+  async buildInitialHeader(ic: boolean = false): Promise<Header> {
+    const state = await this.getStateReference(ic);
+    return new Header(
+      AppendOnlyTreeSnapshot.zero(),
+      ContentCommitment.empty(),
+      state,
+      GlobalVariables.empty(),
+      Fr.ZERO,
+    );
   }
 
   async appendLeaves<ID extends MerkleTreeId>(treeId: ID, leaves: MerkleTreeLeafType<ID>[]): Promise<void> {
@@ -315,6 +330,11 @@ export class NativeWorldStateService implements MerkleTreeDb {
 
     const encodedRequest = this.encoder.encode(message);
     const encodedResponse = await this.instance.call(encodedRequest);
+
+    console.log({
+      message,
+      encodedResponse,
+    });
 
     if (typeof encodedResponse === 'undefined') {
       throw new Error('Empty response from native library');

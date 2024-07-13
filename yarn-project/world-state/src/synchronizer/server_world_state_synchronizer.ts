@@ -11,6 +11,7 @@ import { SHA256Trunc, StandardTree } from '@aztec/merkle-tree';
 
 import {
   type HandleL2BlockAndMessagesResult,
+  MerkleTreeDb,
   type MerkleTreeOperations,
   type MerkleTrees,
 } from '../world-state-db/index.js';
@@ -42,7 +43,7 @@ export class ServerWorldStateSynchronizer implements WorldStateSynchronizer {
 
   constructor(
     store: AztecKVStore,
-    private merkleTreeDb: MerkleTrees,
+    private merkleTreeDb: MerkleTreeDb,
     private l2BlockSource: L2BlockSource & L1ToL2MessageSource,
     config: WorldStateConfig,
     private log = createDebugLogger('aztec:world_state'),
@@ -115,8 +116,8 @@ export class ServerWorldStateSynchronizer implements WorldStateSynchronizer {
     await this.l2BlockDownloader.stop();
     this.log.debug('Cancelling job queue...');
     await this.jobQueue.cancel();
-    this.log.debug('Stopping Merkle trees');
-    await this.merkleTreeDb.stop();
+    // this.log.debug('Stopping Merkle trees');
+    // await this.merkleTreeDb.stop();
     this.log.debug('Awaiting promise');
     await this.runningPromise;
     this.setCurrentState(WorldStateRunningState.STOPPED);

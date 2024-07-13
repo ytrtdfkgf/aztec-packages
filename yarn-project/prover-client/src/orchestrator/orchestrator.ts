@@ -113,11 +113,10 @@ export class ProvingOrchestrator {
     globalVariables: GlobalVariables,
     l1ToL2Messages: Fr[],
     verificationKeys: VerificationKeys,
-    header: Header,
   ): Promise<ProvingTicket> {
     // Create initial header if not done so yet
     if (!this.initialHeader) {
-      this.initialHeader = header;
+      this.initialHeader = await this.db.buildInitialHeader();
     }
 
     // Check that the length of the array of txs is a power of two

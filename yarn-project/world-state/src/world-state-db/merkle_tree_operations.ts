@@ -198,6 +198,8 @@ export interface MerkleTreeOperations {
    * Rolls back pending changes.
    */
   rollback(): Promise<void>;
+
+  buildInitialHeader(): Promise<Header>;
 }
 
 /** Return type for handleL2BlockAndMessages */
