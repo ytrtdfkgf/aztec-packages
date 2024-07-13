@@ -31,7 +31,7 @@ import {
   WASMSimulator,
   type WorldStatePublicDB,
 } from '@aztec/simulator';
-import { type MerkleTreeOperations, MerkleTrees } from '@aztec/world-state';
+import { type MerkleTreeOperations, MerkleTrees, NativeWorldStateService } from '@aztec/world-state';
 
 import * as fs from 'fs/promises';
 import { type MockProxy, mock } from 'jest-mock-extended';
@@ -94,7 +94,11 @@ export class TestContext {
     const publicContractsDB = mock<ContractsDataSourcePublicDB>();
     const publicWorldStateDB = mock<WorldStatePublicDB>();
     const publicKernel = new RealPublicKernelCircuitSimulator(new WASMSimulator());
-    const actualDb = await MerkleTrees.new(openTmpStore()).then(t => t.asLatest());
+    // const actualDb = await MerkleTrees.new(openTmpStore()).then(t => t.asLatest());
+    await fs.rm('/tmp/native', { recursive: true, force: true });
+    await fs.mkdir('/tmp/native', { recursive: true });
+    const ws = await NativeWorldStateService.create('world_state_napi', 'WorldState', '/tmp/native');
+    const actualDb = ws.asLatest();
     const processor = new PublicProcessor(
       actualDb,
       publicExecutor,
@@ -124,11 +128,8 @@ export class TestContext {
     }
 
     const queue = new MemoryProvingQueue();
-    const orchestrator = new ProvingOrchestrator(actualDb, queue);
     const agent = new ProverAgent(localProver, proverCount);
-
-    queue.start();
-    agent.start(queue);
+    const orchestrator = new ProvingOrchestrator(actualDb, localProver);
 
     return new this(
       publicExecutor,

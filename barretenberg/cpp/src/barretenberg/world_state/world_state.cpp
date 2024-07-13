@@ -27,16 +27,16 @@ WorldState::WorldState(uint threads, const std::string& data_dir, uint map_size_
     _lmdb_env = std::make_unique<LMDBEnvironment>(data_dir, map_size_kb, WORLD_STATE_MAX_DB_COUNT, threads);
 
     {
-        auto name = "nullifier_tree";
+        const auto* name = "nullifier_tree";
         auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
         auto store = std::make_unique<NullifierStore>(name, NULLIFIER_TREE_HEIGHT, *lmdb_store);
-        auto tree = std::make_unique<NullifierTree>(*store, _workers, 2);
+        auto tree = std::make_unique<NullifierTree>(*store, _workers, 128);
         _trees.insert(
             { MerkleTreeId::NULLIFIER_TREE, TreeWithStore(std::move(tree), std::move(store), std::move(lmdb_store)) });
     }
 
     {
-        auto name = "note_hash_tree";
+        const auto* name = "note_hash_tree";
         auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
         auto store = std::make_unique<FrStore>(name, NOTE_HASH_TREE_HEIGHT, *lmdb_store);
         auto tree = std::make_unique<FrTree>(*store, this->_workers);
@@ -45,16 +45,16 @@ WorldState::WorldState(uint threads, const std::string& data_dir, uint map_size_
     }
 
     {
-        auto name = "public_data_tree";
+        const auto* name = "public_data_tree";
         auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
         auto store = std::make_unique<PublicDataStore>(name, PUBLIC_DATA_TREE_HEIGHT, *lmdb_store);
-        auto tree = std::make_unique<PublicDataTree>(*store, this->_workers, 2);
+        auto tree = std::make_unique<PublicDataTree>(*store, this->_workers, 128);
         _trees.insert({ MerkleTreeId::PUBLIC_DATA_TREE,
                         TreeWithStore(std::move(tree), std::move(store), std::move(lmdb_store)) });
     }
 
     {
-        auto name = "message_tree";
+        const auto* name = "message_tree";
         auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
         auto store = std::make_unique<FrStore>(name, L1_TO_L2_MSG_TREE_HEIGHT, *lmdb_store);
         auto tree = std::make_unique<FrTree>(*store, this->_workers);
@@ -63,7 +63,7 @@ WorldState::WorldState(uint threads, const std::string& data_dir, uint map_size_
     }
 
     {
-        auto name = "archive_tree";
+        const auto* name = "archive_tree";
         auto lmdb_store = std::make_unique<LMDBStore>(*_lmdb_env, name, false, false, IntegerKeyCmp);
         auto store = std::make_unique<FrStore>(name, ARCHIVE_TREE_HEIGHT, *lmdb_store);
         auto tree = std::make_unique<FrTree>(*store, this->_workers);

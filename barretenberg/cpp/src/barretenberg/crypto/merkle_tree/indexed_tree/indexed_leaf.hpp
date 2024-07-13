@@ -1,6 +1,7 @@
 #pragma once
 
 #include "barretenberg/crypto/merkle_tree/types.hpp"
+#include "barretenberg/ecc/curves/bn254/fr.hpp"
 #include "barretenberg/serialize/msgpack.hpp"
 #include "barretenberg/stdlib/primitives/field/field.hpp"
 
@@ -47,6 +48,8 @@ struct NullifierLeafValue {
     fr get_key() const { return value; }
 
     bool is_empty() const { return value == fr::zero(); }
+
+    std::vector<fr> get_hash_inputs() const { return std::vector<fr>({ value }); }
 
     operator uint256_t() const { return get_key(); }
 
@@ -100,6 +103,8 @@ struct PublicDataLeafValue {
     fr get_key() const { return slot; }
 
     bool is_empty() const { return value == fr::zero() && slot == fr::zero(); }
+
+    std::vector<fr> get_hash_inputs() const { return std::vector<fr>({ slot, value }); }
 
     operator uint256_t() const { return get_key(); }
 
@@ -160,7 +165,15 @@ template <typename LeafType> struct IndexedLeaf {
         return os;
     }
 
-    std::vector<fr> get_hash_inputs() const { return std::vector<fr>({ value.value, nextIndex, nextValue }); }
+    std::vector<fr> get_hash_inputs() const
+    {
+        std::vector<fr> data{ nextIndex, nextValue };
+        std::vector<fr> leafData = value.get_hash_inputs();
+        // prepend leaf data to the hash inputs
+        data.insert(data.begin(), leafData.begin(), leafData.end());
+
+        return data;
+    }
 
     static IndexedLeaf<LeafType> empty() { return { LeafType::empty(), 0, 0 }; }
 

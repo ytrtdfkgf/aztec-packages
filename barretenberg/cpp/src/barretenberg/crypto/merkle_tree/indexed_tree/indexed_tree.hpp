@@ -37,7 +37,7 @@ template <typename Store, typename HashingPolicy> class IndexedTree : public App
     using LeafCallback = std::function<void(const TypedResponse<GetIndexedLeafResponse<LeafValueType>>&)>;
     using FindLowLeafCallback = std::function<void(const TypedResponse<std::pair<bool, index_t>>&)>;
 
-    IndexedTree(Store& store, ThreadPool& workers, index_t initial_size);
+    IndexedTree(Store& store, ThreadPool& workers, index_t initial_size = 1);
     IndexedTree(IndexedTree const& other) = delete;
     IndexedTree(IndexedTree&& other) = delete;
     ~IndexedTree() = default;
@@ -148,7 +148,7 @@ template <typename Store, typename HashingPolicy>
 IndexedTree<Store, HashingPolicy>::IndexedTree(Store& store, ThreadPool& workers, index_t initial_size)
     : AppendOnlyTree<Store, HashingPolicy>(store, workers)
 {
-    if (initial_size < 2) {
+    if (initial_size < 1) {
         throw std::runtime_error("Indexed trees must have initial size > 1");
     }
     zero_hashes_.resize(depth_ + 1);

@@ -18,6 +18,7 @@ import {
   StateReference,
 } from '@aztec/circuits.js';
 import { padArrayEnd } from '@aztec/foundation/collection';
+import { SerialQueue } from '@aztec/foundation/fifo';
 import { serializeToBuffer } from '@aztec/foundation/serialize';
 import type { IndexedTreeLeafPreimage } from '@aztec/foundation/trees';
 import type { BatchInsertionResult } from '@aztec/merkle-tree';
@@ -31,8 +32,10 @@ import {
   type HandleL2BlockAndMessagesResult,
   type IndexedTreeId,
   type MerkleTreeLeafType,
+  MerkleTreeOperations,
   type TreeInfo,
 } from '../world-state-db/merkle_tree_operations.js';
+import { MerkleTreeOperationsFacade } from '../world-state-db/merkle_tree_operations_facade.js';
 import {
   MessageHeader,
   type NativeInstance,
@@ -71,6 +74,8 @@ export class NativeWorldStateService implements MerkleTreeDb {
     int64AsType: 'bigint',
   });
 
+  private queue = new SerialQueue();
+
   protected constructor(private instance: NativeInstance) {}
 
   static async create(libraryName: string, className: string, dataDir: string): Promise<NativeWorldStateService> {
@@ -82,12 +87,18 @@ export class NativeWorldStateService implements MerkleTreeDb {
   }
 
   private async init() {
+    this.queue.start();
+
     const archive = await this.getTreeInfo(MerkleTreeId.ARCHIVE, false);
     if (archive.size === 0n) {
       const header = await this.buildInitialHeader(true);
       await this.appendLeaves(MerkleTreeId.ARCHIVE, [header.hash()]);
       await this.commit();
     }
+  }
+
+  public asLatest(): MerkleTreeOperations {
+    return new MerkleTreeOperationsFacade(this, true);
   }
 
   async buildInitialHeader(ic: boolean = false): Promise<Header> {
@@ -326,36 +337,38 @@ export class NativeWorldStateService implements MerkleTreeDb {
     messageType: T,
     body: WorldStateRequest[T],
   ): Promise<WorldStateResponse[T]> {
-    const message = new TypedMessage(messageType, new MessageHeader({ messageId: this.nextMessageId++ }), body);
+    return this.queue.put(async () => {
+      const message = new TypedMessage(messageType, new MessageHeader({ messageId: this.nextMessageId++ }), body);
 
-    const encodedRequest = this.encoder.encode(message);
-    const encodedResponse = await this.instance.call(encodedRequest);
+      const encodedRequest = this.encoder.encode(message);
+      const encodedResponse = await this.instance.call(encodedRequest);
 
-    if (typeof encodedResponse === 'undefined') {
-      throw new Error('Empty response from native library');
-    }
+      if (typeof encodedResponse === 'undefined') {
+        throw new Error('Empty response from native library');
+      }
 
-    const buf = Buffer.isBuffer(encodedResponse)
-      ? encodedResponse
-      : isAnyArrayBuffer(encodedResponse)
-      ? Buffer.from(encodedResponse)
-      : undefined;
+      const buf = Buffer.isBuffer(encodedResponse)
+        ? encodedResponse
+        : isAnyArrayBuffer(encodedResponse)
+        ? Buffer.from(encodedResponse)
+        : undefined;
 
-    if (!buf) {
-      throw new Error(
-        'Invalid response from native library: expected Buffer or ArrayBuffer, got ' + typeof encodedResponse,
-      );
-    }
+      if (!buf) {
+        throw new Error(
+          'Invalid response from native library: expected Buffer or ArrayBuffer, got ' + typeof encodedResponse,
+        );
+      }
 
-    const response = TypedMessage.fromMessagePack<T, WorldStateResponse[T]>(this.decoder.unpack(buf));
+      const response = TypedMessage.fromMessagePack<T, WorldStateResponse[T]>(this.decoder.unpack(buf));
 
-    if (response.header.requestId !== message.header.messageId) {
-      throw new Error(
-        'Response ID does not match request: ' + response.header.requestId + ' != ' + message.header.messageId,
-      );
-    }
+      if (response.header.requestId !== message.header.messageId) {
+        throw new Error(
+          'Response ID does not match request: ' + response.header.requestId + ' != ' + message.header.messageId,
+        );
+      }
 
-    return response.value;
+      return response.value;
+    });
   }
 }
 

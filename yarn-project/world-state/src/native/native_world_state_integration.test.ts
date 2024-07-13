@@ -7,21 +7,66 @@ import {
   PublicDataTreeLeaf,
   PublicDataTreeLeafPreimage,
 } from '@aztec/circuits.js';
+import { AztecLmdbStore } from '@aztec/kv-store/lmdb';
 
-import { mkdtemp } from 'fs/promises';
+import { mkdir, mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { type IndexedTreeId } from '../world-state-db/merkle_tree_operations.js';
+import { MerkleTrees } from '../world-state-db/merkle_trees.js';
 import { NativeWorldStateService } from './native_world_state.js';
 
 describe('NativeWorldState', () => {
-  let dataDir: string;
+  let testDir: string;
   let worldState: NativeWorldStateService;
 
   beforeAll(async () => {
-    dataDir = await mkdtemp(join(tmpdir(), 'native_world_state_test-'));
-    worldState = await NativeWorldStateService.create('world_state_napi', 'WorldState', dataDir);
+    testDir = await mkdtemp(join(tmpdir(), 'native_world_state_test-'));
+    const native = join(testDir, 'napi');
+    await mkdir(native);
+    worldState = await NativeWorldStateService.create('world_state_napi', 'WorldState', native);
+  });
+
+  afterAll(async () => {
+    await rm(testDir, { recursive: true });
+  });
+
+  describe('compare', () => {
+    let current: MerkleTrees;
+    beforeAll(async () => {
+      const js = join(testDir, 'js');
+      await mkdir(js);
+      current = await MerkleTrees.new(AztecLmdbStore.open(js));
+    });
+
+    async function assert(treeId: MerkleTreeId) {
+      const nativeInfo = await worldState.getTreeInfo(treeId, false);
+      const jsInfo = await current.getTreeInfo(treeId, false);
+      expect(nativeInfo.treeId).toBe(jsInfo.treeId);
+      expect(nativeInfo.depth).toBe(jsInfo.depth);
+      expect(nativeInfo.size).toBe(jsInfo.size);
+      expect(Fr.fromBuffer(nativeInfo.root)).toEqual(Fr.fromBuffer(jsInfo.root));
+    }
+
+    it.each(
+      Object.values(MerkleTreeId)
+        .filter((x): x is MerkleTreeId => typeof x === 'number')
+        .map(x => [MerkleTreeId[x], x]),
+    )('initial state matches %s', async (_, treeId) => {
+      assert(treeId);
+    });
+
+    it.each([[MerkleTreeId.NULLIFIER_TREE, [Fr.random().toBuffer()], 'batchInsert' as const]])(
+      'insertions work',
+      async (treeId, leaves, fn) => {
+        await Promise.all([
+          worldState[fn](treeId as any, leaves),
+          current[fn](treeId as any, leaves, Math.log2(leaves.length) | 0),
+        ]);
+        assert(treeId);
+      },
+    );
   });
 
   it('gets tree info', async () => {
