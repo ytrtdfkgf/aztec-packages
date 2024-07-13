@@ -4,6 +4,7 @@
 #include "barretenberg/ecc/curves/bn254/fr.hpp"
 #include "barretenberg/messaging/header.hpp"
 #include "barretenberg/world_state/history.hpp"
+#include "barretenberg/world_state/struct.hpp"
 #include "barretenberg/world_state/world_state.hpp"
 #include "barretenberg/world_state_napi/async_op.hpp"
 #include "barretenberg/world_state_napi/message.hpp"
@@ -128,10 +129,11 @@ bool WorldStateAddon::get_tree_info(msgpack::object& obj, msgpack::sbuffer& buff
 {
     TypedMessage<GetTreeInfoRequest> request;
     obj.convert(request);
-    TreeInfo info = _ws->get_tree_info(revision_from_input(request.value.revision), request.value.treeId);
+    auto info = _ws->get_tree_info(revision_from_input(request.value.revision), request.value.treeId);
 
     MsgHeader header(request.header.messageId);
-    messaging::TypedMessage<TreeInfo> resp_msg(WorldStateMessageType::GET_TREE_INFO, header, info);
+    messaging::TypedMessage<GetTreeInfoResponse> resp_msg(
+        WorldStateMessageType::GET_TREE_INFO, header, { request.value.treeId, info.root, info.size, info.depth });
 
     msgpack::pack(buffer, resp_msg);
 
@@ -140,12 +142,13 @@ bool WorldStateAddon::get_tree_info(msgpack::object& obj, msgpack::sbuffer& buff
 
 bool WorldStateAddon::get_state_reference(msgpack::object& obj, msgpack::sbuffer& buffer) const
 {
-    TypedMessage<GetStateReference> request;
+    TypedMessage<GetStateReferenceRequest> request;
     obj.convert(request);
     auto state = _ws->get_state_reference(revision_from_input(request.value.revision));
 
     MsgHeader header(request.header.messageId);
-    messaging::TypedMessage<WorldStateReference> resp_msg(WorldStateMessageType::GET_STATE_REFERENCE, header, state);
+    messaging::TypedMessage<GetStateReferenceResponse> resp_msg(
+        WorldStateMessageType::GET_STATE_REFERENCE, header, { state });
 
     msgpack::pack(buffer, resp_msg);
 
@@ -303,7 +306,7 @@ bool WorldStateAddon::find_low_leaf(msgpack::object& obj, msgpack::sbuffer& buff
     return true;
 }
 
-bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer&)
+bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer& buf)
 {
     TypedMessage<TreeIdOnlyRequest> request;
     obj.convert(request);
@@ -330,6 +333,10 @@ bool WorldStateAddon::append_leaves(msgpack::object& obj, msgpack::sbuffer&)
         break;
     }
     }
+
+    MsgHeader header(request.header.messageId);
+    messaging::TypedMessage<EmptyResponse> resp_msg(WorldStateMessageType::APPEND_LEAVES, header, {});
+    msgpack::pack(buf, resp_msg);
 
     return true;
 }
@@ -370,21 +377,51 @@ bool WorldStateAddon::batch_insert(msgpack::object& obj, msgpack::sbuffer& buffe
     return true;
 }
 
-bool WorldStateAddon::update_archive(msgpack::object& obj, msgpack::sbuffer&)
+bool WorldStateAddon::update_archive(msgpack::object& obj, msgpack::sbuffer& buf)
 {
-    (void)obj;
+    TypedMessage<UpdateArchiveRequest> request;
+    obj.convert(request);
+
+    // TODO (alexg) move this to world state
+    auto state_ref = _ws->get_state_reference(WorldStateRevision::uncommitted());
+    if (state_ref == request.value.blockStateRef) {
+        _ws->append_leaves<bb::fr>(MerkleTreeId::ARCHIVE, { request.value.blockHash });
+    } else {
+        throw std::runtime_error("Block state reference does not match current state");
+    }
+
+    MsgHeader header(request.header.messageId);
+    messaging::TypedMessage<EmptyResponse> resp_msg(WorldStateMessageType::APPEND_LEAVES, header, {});
+    msgpack::pack(buf, resp_msg);
+
     return true;
 }
 
-bool WorldStateAddon::commit(msgpack::object&, msgpack::sbuffer&)
+bool WorldStateAddon::commit(msgpack::object& obj, msgpack::sbuffer& buf)
 {
+    HeaderOnlyMessage request;
+    obj.convert(request);
+
     _ws->commit();
+
+    MsgHeader header(request.header.messageId);
+    messaging::TypedMessage<EmptyResponse> resp_msg(WorldStateMessageType::APPEND_LEAVES, header, {});
+    msgpack::pack(buf, resp_msg);
+
     return true;
 }
 
-bool WorldStateAddon::rollback(msgpack::object&, msgpack::sbuffer&)
+bool WorldStateAddon::rollback(msgpack::object& obj, msgpack::sbuffer& buf)
 {
+    HeaderOnlyMessage request;
+    obj.convert(request);
+
     _ws->rollback();
+
+    MsgHeader header(request.header.messageId);
+    messaging::TypedMessage<EmptyResponse> resp_msg(WorldStateMessageType::APPEND_LEAVES, header, {});
+    msgpack::pack(buf, resp_msg);
+
     return true;
 }
 
@@ -413,13 +450,17 @@ WorldStateRevision WorldStateAddon::revision_from_input(int input)
 {
     if (input == -1) {
         return WorldStateRevision::uncommitted();
-    } else if (input == 0) {
-        return WorldStateRevision::committed();
-    } else if (input > 0) {
-        return WorldStateRevision::at_block((uint32_t)input);
-    } else {
-        throw std::runtime_error("Revision must be -1, 0, or a positive integer");
     }
+
+    if (input == 0) {
+        return WorldStateRevision::committed();
+    }
+
+    if (input > 0) {
+        return WorldStateRevision::at_block(static_cast<uint32_t>(input));
+    }
+
+    throw std::runtime_error("Revision must be -1, 0, or a positive integer");
 }
 
 Napi::Function WorldStateAddon::get_class(Napi::Env env)
@@ -438,4 +479,5 @@ Napi::Object Init(Napi::Env env, Napi::Object exports)
     return exports;
 }
 
+// NOLINTNEXTLINE
 NODE_API_MODULE(addon, Init)

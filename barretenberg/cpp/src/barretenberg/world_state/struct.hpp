@@ -14,20 +14,8 @@ enum MerkleTreeId {
     ARCHIVE = 4,
 };
 
-struct TreeStateReference {
-    bb::fr root;
-    bb::crypto::merkle_tree::index_t size;
-    MSGPACK_FIELDS(root, size);
-
-    bool operator==(const TreeStateReference& other) const { return root == other.root && size == other.size; }
-};
-
-struct WorldStateReference {
-    std::unordered_map<MerkleTreeId, TreeStateReference> state;
-    MSGPACK_FIELDS(state);
-
-    bool operator==(const WorldStateReference& other) const { return state == other.state; }
-};
+using TreeStateReference = std::pair<bb::fr, bb::crypto::merkle_tree::index_t>;
+using WorldStateReference = std::unordered_map<MerkleTreeId, TreeStateReference>;
 
 struct BlockData {
     WorldStateReference block_state_ref;

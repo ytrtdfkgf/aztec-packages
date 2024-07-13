@@ -9,6 +9,7 @@
 #include "barretenberg/crypto/merkle_tree/lmdb_store/lmdb_environment.hpp"
 #include "barretenberg/crypto/merkle_tree/lmdb_store/lmdb_store.hpp"
 #include "barretenberg/crypto/merkle_tree/node_store/cached_tree_store.hpp"
+#include "barretenberg/crypto/merkle_tree/node_store/tree_meta.hpp"
 #include "barretenberg/crypto/merkle_tree/response.hpp"
 #include "barretenberg/crypto/merkle_tree/signal.hpp"
 #include "barretenberg/crypto/merkle_tree/types.hpp"
@@ -45,29 +46,6 @@ using PublicDataTree = crypto::merkle_tree::IndexedTree<PublicDataStore, HashPol
 
 using Tree = std::variant<TreeWithStore<FrTree>, TreeWithStore<NullifierTree>, TreeWithStore<PublicDataTree>>;
 
-// values match constants exported by @aztec/circuit.js
-struct TreeInfo {
-    /**
-     * The tree ID.
-     */
-    MerkleTreeId treeId;
-    /**
-     * The tree root.
-     */
-    fr root;
-    /**
-     * The number of leaves in the tree.
-     */
-    index_t size;
-
-    /**
-     * The depth of the tree.
-     */
-    uint32_t depth;
-
-    MSGPACK_FIELDS(treeId, root, size, depth);
-};
-
 template <typename LeafValueType> struct BatchInsertionResult {
     std::vector<crypto::merkle_tree::LowLeafWitnessData<LeafValueType>> low_leaf_witness_data;
     std::vector<std::pair<LeafValueType, size_t>> sorted_leaves;
@@ -93,7 +71,7 @@ class WorldState {
      * @param tree_id The ID of the tree
      * @return TreeInfo
      */
-    TreeInfo get_tree_info(WorldStateRevision revision, MerkleTreeId tree_id) const;
+    crypto::merkle_tree::TreeMetaResponse get_tree_info(WorldStateRevision revision, MerkleTreeId tree_id) const;
 
     /**
      * @brief Gets the state reference for all the trees in the world state

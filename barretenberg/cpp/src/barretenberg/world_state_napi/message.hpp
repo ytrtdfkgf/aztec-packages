@@ -3,6 +3,7 @@
 #include "barretenberg/ecc/curves/bn254/fr.hpp"
 #include "barretenberg/messaging/header.hpp"
 #include "barretenberg/serialize/msgpack.hpp"
+#include "barretenberg/world_state/struct.hpp"
 #include "barretenberg/world_state/world_state.hpp"
 #include <cstdint>
 #include <string>
@@ -47,23 +48,39 @@ struct TreeIdAndRevisionRequest {
     MSGPACK_FIELDS(treeId, revision);
 };
 
+struct EmptyResponse {
+    bool ok{ true };
+    MSGPACK_FIELDS(ok);
+};
+
 struct GetTreeInfoRequest {
     MerkleTreeId treeId;
     int revision;
-
     MSGPACK_FIELDS(treeId, revision);
 };
 
-struct GetStateReference {
+struct GetTreeInfoResponse {
+    MerkleTreeId treeId;
+    fr root;
+    index_t size;
+    uint32_t depth;
+    MSGPACK_FIELDS(treeId, root, size, depth);
+};
+
+struct GetStateReferenceRequest {
     int revision;
     MSGPACK_FIELDS(revision);
+};
+
+struct GetStateReferenceResponse {
+    WorldStateReference state;
+    MSGPACK_FIELDS(state);
 };
 
 struct GetLeafValueRequest {
     MerkleTreeId treeId;
     int revision;
     index_t leafIndex;
-
     MSGPACK_FIELDS(treeId, revision, leafIndex);
 };
 
@@ -71,7 +88,6 @@ struct GetLeafPreimageRequest {
     MerkleTreeId treeId;
     int revision;
     index_t leafIndex;
-
     MSGPACK_FIELDS(treeId, revision, leafIndex);
 };
 
@@ -79,7 +95,6 @@ struct GetSiblingPathRequest {
     MerkleTreeId treeId;
     int revision;
     index_t leafIndex;
-
     MSGPACK_FIELDS(treeId, revision, leafIndex);
 };
 
@@ -87,7 +102,6 @@ template <typename T> struct FindLeafIndexRequest {
     MerkleTreeId treeId;
     int revision;
     T leaf;
-
     MSGPACK_FIELDS(treeId, revision, leaf);
 };
 
@@ -95,7 +109,6 @@ struct FindLowLeafRequest {
     MerkleTreeId treeId;
     int revision;
     fr key;
-
     MSGPACK_FIELDS(treeId, revision, key);
 };
 
@@ -115,6 +128,12 @@ template <typename T> struct BatchInsertRequest {
     MerkleTreeId treeId;
     std::vector<T> leaves;
     MSGPACK_FIELDS(treeId, leaves);
+};
+
+struct UpdateArchiveRequest {
+    WorldStateReference blockStateRef;
+    bb::fr blockHash;
+    MSGPACK_FIELDS(blockStateRef, blockHash);
 };
 
 struct SyncBlockRequest {

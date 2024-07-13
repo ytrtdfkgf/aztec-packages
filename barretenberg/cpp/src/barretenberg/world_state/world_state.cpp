@@ -72,7 +72,7 @@ WorldState::WorldState(uint threads, const std::string& data_dir, uint map_size_
     }
 }
 
-TreeInfo WorldState::get_tree_info(WorldStateRevision revision, MerkleTreeId tree_id) const
+TreeMetaResponse WorldState::get_tree_info(WorldStateRevision revision, MerkleTreeId tree_id) const
 {
     return std::visit(
         [=](auto&& wrapper) {
@@ -87,7 +87,7 @@ TreeInfo WorldState::get_tree_info(WorldStateRevision revision, MerkleTreeId tre
             wrapper.tree->get_meta_data(include_uncommitted(revision), callback);
             signal.wait_for_level(0);
 
-            return TreeInfo{ .treeId = tree_id, .root = response.root, .size = response.size, .depth = response.depth };
+            return response;
         },
         _trees.at(tree_id));
 }
@@ -98,11 +98,11 @@ WorldStateReference WorldState::get_state_reference(WorldStateRevision revision)
     WorldStateReference state_reference;
     bool uncommitted = include_uncommitted(revision);
 
-    for (auto& [id, tree] : _trees) {
+    for (const auto& [id, tree] : _trees) {
         std::visit(
             [&signal, &state_reference, id, uncommitted](auto&& wrapper) {
                 auto callback = [&signal, &state_reference, id](const TypedResponse<TreeMetaResponse>& meta) {
-                    state_reference.state.insert({ id, { .root = meta.inner.root, .size = meta.inner.size } });
+                    state_reference.insert({ id, { meta.inner.root, meta.inner.size } });
                     signal.signal_decrement();
                 };
                 wrapper.tree->get_meta_data(uncommitted, callback);

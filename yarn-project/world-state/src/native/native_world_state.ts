@@ -331,11 +331,6 @@ export class NativeWorldStateService implements MerkleTreeDb {
     const encodedRequest = this.encoder.encode(message);
     const encodedResponse = await this.instance.call(encodedRequest);
 
-    console.log({
-      message,
-      encodedResponse,
-    });
-
     if (typeof encodedResponse === 'undefined') {
       throw new Error('Empty response from native library');
     }
@@ -364,15 +359,15 @@ export class NativeWorldStateService implements MerkleTreeDb {
   }
 }
 
-function hydrateLeaf<ID extends MerkleTreeId>(treeId: ID, leaf: MerkleTreeLeafType<ID>) {
+function hydrateLeaf<ID extends MerkleTreeId>(treeId: ID, leaf: Fr | Buffer) {
   if (leaf instanceof Fr) {
-    return leaf as Fr;
+    return leaf;
   } else if (treeId === MerkleTreeId.NULLIFIER_TREE) {
     return NullifierLeaf.fromBuffer(leaf);
   } else if (treeId === MerkleTreeId.PUBLIC_DATA_TREE) {
     return PublicDataTreeLeaf.fromBuffer(leaf);
   } else {
-    throw new Error('Invalid leaf type');
+    return Fr.fromBuffer(leaf);
   }
 }
 

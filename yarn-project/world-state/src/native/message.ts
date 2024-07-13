@@ -218,11 +218,8 @@ export function worldStateRevision(includeUncommittedOrBlock: false | true | num
   }
 }
 
-type TreeStateReference = {
-  root: Buffer;
-  size: number;
-};
+type TreeStateReference = [Buffer, number | BigInt];
 
-export function treeStateReferenceToSnapshot(ref: TreeStateReference): AppendOnlyTreeSnapshot {
-  return new AppendOnlyTreeSnapshot(Fr.fromBuffer(ref.root), ref.size);
+export function treeStateReferenceToSnapshot([root, size]: TreeStateReference): AppendOnlyTreeSnapshot {
+  return new AppendOnlyTreeSnapshot(Fr.fromBuffer(root), Number(size));
 }
