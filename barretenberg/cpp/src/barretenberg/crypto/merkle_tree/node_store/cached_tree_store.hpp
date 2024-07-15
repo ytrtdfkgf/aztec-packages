@@ -88,6 +88,8 @@ template <typename PersistedStore, typename LeafValueType> class CachedTreeStore
 
     void rollback();
 
+    std::string get_name() const { return name; }
+
     ReadTransactionPtr createReadTransaction() const { return dataStore.createReadTransaction(); }
 
   private:

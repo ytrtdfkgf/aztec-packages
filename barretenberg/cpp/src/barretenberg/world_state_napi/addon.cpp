@@ -457,7 +457,7 @@ WorldStateRevision WorldStateAddon::revision_from_input(int input)
     }
 
     if (input > 0) {
-        return WorldStateRevision::at_block(static_cast<uint32_t>(input));
+        return WorldStateRevision::finalised_block(static_cast<uint32_t>(input));
     }
 
     throw std::runtime_error("Revision must be -1, 0, or a positive integer");

@@ -300,9 +300,9 @@ template <typename T> void WorldState::append_leaves(MerkleTreeId id, const std:
 
     Signal signal;
 
-    bool ok;
-    auto callback = [&signal, &ok](const auto& resp) {
-        ok = resp.success;
+    bool success = false;
+    auto callback = [&signal, &success](const auto& resp) {
+        success = resp.success;
         signal.signal_level(0);
     };
 
@@ -318,7 +318,7 @@ template <typename T> void WorldState::append_leaves(MerkleTreeId id, const std:
 
     signal.wait_for_level(0);
 
-    if (!ok) {
+    if (!success) {
         throw std::runtime_error("Failed to append leaves");
     }
 }
@@ -333,7 +333,7 @@ BatchInsertionResult<T> WorldState::batch_insert_indexed_leaves(MerkleTreeId id,
     Signal signal;
     BatchInsertionResult<T> result;
     const auto& wrapper = std::get<TreeWithStore<Tree>>(_trees.at(id));
-    bool success;
+    bool success = false;
     std::string error_msg;
 
     wrapper.tree->add_or_update_values(

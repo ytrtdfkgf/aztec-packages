@@ -188,18 +188,25 @@ IndexedTree<Store, HashingPolicy>::IndexedTree(Store& store, ThreadPool& workers
         store_.set_at_index(i, initial_leaf, true);
     }
 
-    bool success = true;
+    TypedResponse<AddDataResponse> result;
     Signal signal(1);
-    AppendCompletionCallback completion = [&](const TypedResponse<AddDataResponse>& result) -> void {
-        success = result.success;
+    AppendCompletionCallback completion = [&](const TypedResponse<AddDataResponse>& _result) -> void {
+        result = _result;
         signal.signal_level(0);
     };
     AppendOnlyTree<Store, HashingPolicy>::add_values_internal(appended_hashes, completion, false);
     signal.wait_for_level(0);
-    if (!success) {
-        throw std::runtime_error("Failed to initialise tree");
+    if (!result.success) {
+        throw std::runtime_error("Failed to initialise tree: " + result.message);
     }
+
     store_.commit();
+
+    if (store_.get_name() == "nullifier_tree") {
+        std::cout << store_.get_name() << std::endl
+                  << "root: " << result.inner.root << std::endl
+                  << "prefill root: " << result.inner.subtree_root << std::endl;
+    }
 }
 
 template <typename Store, typename HashingPolicy>
@@ -575,8 +582,8 @@ void IndexedTree<Store, HashingPolicy>::update_leaf_and_hash_to_root(const index
     // Extract the value of the leaf node and it's sibling
     bool is_right = static_cast<bool>(index & 0x01);
     // extract the current leaf hash values for the previous hash path
-    fr sibling = get_node(level, is_right ? index - 1 : index + 1);
-    previous_sibling_path.emplace_back(sibling);
+    // fr sibling = get_node(level, is_right ? index - 1 : index + 1);
+    // previous_sibling_path.emplace_back(sibling);
 
     // Write the new leaf hash in place
     write_node(level, index, new_hash);
@@ -594,7 +601,7 @@ void IndexedTree<Store, HashingPolicy>::update_leaf_and_hash_to_root(const index
             index_t index_of_node_above = index >> 1;
             bool node_above_is_right = static_cast<bool>(index_of_node_above & 0x01);
             fr above_sibling = get_node(level, node_above_is_right ? index_of_node_above - 1 : index_of_node_above + 1);
-            previous_sibling_path.emplace_back(above_sibling);
+            // previous_sibling_path.emplace_back(above_sibling);
         }
 
         // Now that we have extracted the hash path from the row above
@@ -602,6 +609,7 @@ void IndexedTree<Store, HashingPolicy>::update_leaf_and_hash_to_root(const index
         is_right = static_cast<bool>(index & 0x01);
         fr new_right_value = is_right ? new_hash : get_node(level, index + 1);
         fr new_left_value = is_right ? get_node(level, index - 1) : new_hash;
+        previous_sibling_path.emplace_back(is_right ? new_left_value : new_right_value);
         new_hash = HashingPolicy::hash_pair(new_left_value, new_right_value);
         index >>= 1;
         --level;

@@ -6,20 +6,20 @@
 namespace bb::world_state {
 
 struct WorldStateRevision {
-    struct HistoricalBlock {
-        const uint32_t block;
+    struct FinalisedBlock {
+        uint32_t block;
     };
 
     struct CurrentState {
-        const bool uncommitted;
+        bool uncommitted;
     };
 
-    using State = std::variant<WorldStateRevision::HistoricalBlock, WorldStateRevision::CurrentState>;
-    const State state;
+    using State = std::variant<WorldStateRevision::FinalisedBlock, WorldStateRevision::CurrentState>;
+    State state;
 
     static WorldStateRevision committed() { return { CurrentState{ false } }; }
     static WorldStateRevision uncommitted() { return { CurrentState{ true } }; }
-    static WorldStateRevision at_block(uint32_t block_number) { return { HistoricalBlock{ block_number } }; }
+    static WorldStateRevision finalised_block(uint32_t block_number) { return { FinalisedBlock{ block_number } }; }
 };
 
 } // namespace bb::world_state

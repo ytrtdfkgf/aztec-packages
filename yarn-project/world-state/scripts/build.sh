@@ -2,6 +2,8 @@
 
 set -e
 
+cd "$(dirname "$0")/.."
+
 # relatiev path from the directory containing package.json
 WORLD_STATE_LIB_PATH=../../barretenberg/cpp/build/lib/world_state_napi.node
 
@@ -23,7 +25,7 @@ link_cpp() {
 }
 
 build_ts() {
-  tsc -b
+  tsc -b ../
 }
 
 case $1 in

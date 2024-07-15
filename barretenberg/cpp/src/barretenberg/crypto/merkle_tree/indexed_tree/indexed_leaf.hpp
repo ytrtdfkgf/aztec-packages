@@ -167,7 +167,7 @@ template <typename LeafType> struct IndexedLeaf {
 
     std::vector<fr> get_hash_inputs() const
     {
-        std::vector<fr> data{ nextIndex, nextValue };
+        std::vector<fr> data{ nextValue, nextIndex };
         std::vector<fr> leafData = value.get_hash_inputs();
         // prepend leaf data to the hash inputs
         data.insert(data.begin(), leafData.begin(), leafData.end());

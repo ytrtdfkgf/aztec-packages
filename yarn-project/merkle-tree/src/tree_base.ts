@@ -1,4 +1,5 @@
 import { SiblingPath } from '@aztec/circuit-types';
+import { Fr } from '@aztec/circuits.js';
 import { toBigIntLE, toBufferLE } from '@aztec/foundation/bigint-buffer';
 import { type DebugLogger, createDebugLogger } from '@aztec/foundation/log';
 import { type Bufferable, type FromBuffer, serializeToBuffer } from '@aztec/foundation/serialize';
