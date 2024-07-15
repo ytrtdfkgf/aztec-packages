@@ -113,36 +113,87 @@ async function assertSiblingPaths(treeId: IndexedTreeId, index: bigint, includeU
 //   .filter((x): x is MerkleTreeId => typeof x === 'number')
 //   .map(x => [MerkleTreeId[x], x] as const);
 
-const treeIds = [[MerkleTreeId[MerkleTreeId.NULLIFIER_TREE], MerkleTreeId.NULLIFIER_TREE]] as const;
-
-for (const [treeName, treeId] of treeIds) {
-  const leaf = new Fr(142);
-  const leafIndex = 128n;
-  const nsb127pre = await nativeWS.getSiblingPath(treeId, leafIndex - 1n, true);
-  const [nr, jr] = await Promise.all([
-    nativeWS.batchInsert(treeId, [leaf.toBuffer()]),
-    jsWS.batchInsert(treeId, [leaf.toBuffer()], 1),
+{
+  const treeId = MerkleTreeId.PUBLIC_DATA_TREE;
+  // const leaves = Array(2).fill(PublicDataTreeLeaf.empty().toBuffer());
+  const leaves = [new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer()];
+  let [native, js] = await Promise.all([
+    nativeWS.batchInsert(treeId, leaves),
+    jsWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
   ]);
-  const nsb127 = await nativeWS.getSiblingPath(treeId, leafIndex - 1n, true);
-  const jsb127 = await jsWS.getSiblingPath(treeId, leafIndex - 1n, true);
+  // nativeWS.commit();
+  // jsWS.commit();
 
-  assertSiblingPaths(treeId, leafIndex, true);
-  console.log(nr.lowLeavesWitnessData);
-  console.log('127th sibling path before insertion', nsb127pre.toFields());
-  console.log();
-  console.log('low leaf witness sibling path', nr.lowLeavesWitnessData![0].siblingPath.toFields());
-  console.log();
-  console.log('127th sibling path after insertion', nsb127.toFields());
-  console.log();
-  console.log();
-  console.log('lwo leaf witness sibling data from js', jr.lowLeavesWitnessData![0].siblingPath.toFields());
-  console.log();
-  console.log('127th sibling path after insertion from js', jsb127.toFields());
+  leaves[0] = new PublicDataTreeLeaf(new Fr(140), new Fr(2)).toBuffer();
+  [native, js] = await Promise.all([
+    nativeWS.batchInsert(treeId, leaves),
+    jsWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
+  ]);
 
-  // await Promise.all([nativeWS.commit(), jsWS.commit()]);
+  // console.log(native.sortedNewLeaves);
+  // console.log(js.sortedNewLeaves);
+  console.assert(native.sortedNewLeaves.length === js.sortedNewLeaves.length);
+  console.log(native.sortedNewLeaves.map(PublicDataTreeLeaf.fromBuffer));
+  console.log(js.sortedNewLeaves.map(PublicDataTreeLeaf.fromBuffer));
 
-  // for (let i = 0; i <= 128; i++) {
-  //   // await assertLeafPreimage(treeId, BigInt(i), true);
-  //   await assertSiblingPaths(treeId, BigInt(i), true);
-  // }
+  console.log(native.lowLeavesWitnessData?.length, js.lowLeavesWitnessData?.length);
+  for (let i = 0; i < native.lowLeavesWitnessData!.length; i++) {
+    const ndata = native.lowLeavesWitnessData![i];
+    const jdata = js.lowLeavesWitnessData![i];
+
+    console.log('native', ndata.index, 'js', jdata.index);
+    console.log('native', ndata.leafPreimage, 'js', jdata.leafPreimage);
+    console.log('native', ndata.siblingPath.toFields());
+    console.log('js', jdata.siblingPath.toFields());
+    console.log();
+  }
+
+  // console.assert(
+  //   native.sortedNewLeaves.map(Fr.fromBuffer).every((x, i) => x.equals(Fr.ZERO)),
+  //   'native sortedNewLeaves',
+  // );
+  // console.assert(
+  //   js.sortedNewLeaves.map(Fr.fromBuffer).every((x, i) => x.equals(Fr.ZERO)),
+  //   'js sortedNewLeaves',
+  // );
+  // console.assert(
+  //   native.sortedNewLeavesIndexes.every((x, i) => x === i),
+  //   'native sortedNewLeavesIndexes',
+  // );
+  // console.assert(
+  //   js.sortedNewLeavesIndexes.every((x, i) => x === i),
+  //   'js sortedNewLeavesIndexes',
+  // );
 }
+
+// for (const [treeName, treeId] of treeIds) {
+//   const leaf = new Fr(142);
+//   const leafIndex = 128n;
+//   const nsb127pre = await nativeWS.getSiblingPath(treeId, leafIndex - 1n, true);
+//   const [nr, jr] = await Promise.all([
+//     nativeWS.batchInsert(treeId, [leaf.toBuffer()]),
+//     jsWS.batchInsert(treeId, [leaf.toBuffer()], 1),
+//   ]);
+//   const nsb127 = await nativeWS.getSiblingPath(treeId, leafIndex - 1n, true);
+//   const jsb127 = await jsWS.getSiblingPath(treeId, leafIndex - 1n, true);
+
+//   assertSiblingPaths(treeId, leafIndex, true);
+//   console.log(nr.lowLeavesWitnessData);
+//   console.log('127th sibling path before insertion', nsb127pre.toFields());
+//   console.log();
+//   console.log('low leaf witness sibling path', nr.lowLeavesWitnessData![0].siblingPath.toFields());
+//   console.log();
+//   console.log('127th sibling path after insertion', nsb127.toFields());
+//   console.log();
+//   console.log();
+//   console.log('lwo leaf witness sibling data from js', jr.lowLeavesWitnessData![0].siblingPath.toFields());
+//   console.log();
+//   console.log('127th sibling path after insertion from js', jsb127.toFields());
+
+//   // await Promise.all([nativeWS.commit(), jsWS.commit()]);
+
+//   // for (let i = 0; i <= 128; i++) {
+//   //   // await assertLeafPreimage(treeId, BigInt(i), true);
+//   //   await assertSiblingPaths(treeId, BigInt(i), true);
+//   // }
+// }

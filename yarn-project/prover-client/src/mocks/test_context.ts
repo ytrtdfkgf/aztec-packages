@@ -98,6 +98,7 @@ export class TestContext {
     await fs.rm('/tmp/native', { recursive: true, force: true });
     await fs.mkdir('/tmp/native', { recursive: true });
     const ws = await NativeWorldStateService.create('world_state_napi', 'WorldState', '/tmp/native');
+    // const ws = await MerkleTrees.new(openTmpStore());
     const actualDb = ws.asLatest();
     const processor = new PublicProcessor(
       actualDb,

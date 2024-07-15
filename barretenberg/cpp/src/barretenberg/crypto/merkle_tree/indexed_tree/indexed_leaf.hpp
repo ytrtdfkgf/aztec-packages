@@ -49,7 +49,10 @@ struct NullifierLeafValue {
 
     bool is_empty() const { return value == fr::zero(); }
 
-    std::vector<fr> get_hash_inputs() const { return std::vector<fr>({ value }); }
+    std::vector<fr> get_hash_inputs(fr nextValue, fr nextIndex) const
+    {
+        return std::vector<fr>({ value, nextValue, nextIndex });
+    }
 
     operator uint256_t() const { return get_key(); }
 
@@ -104,7 +107,10 @@ struct PublicDataLeafValue {
 
     bool is_empty() const { return value == fr::zero() && slot == fr::zero(); }
 
-    std::vector<fr> get_hash_inputs() const { return std::vector<fr>({ slot, value }); }
+    std::vector<fr> get_hash_inputs(fr nextValue, fr nextIndex) const
+    {
+        return std::vector<fr>({ slot, value, nextIndex, nextValue });
+    }
 
     operator uint256_t() const { return get_key(); }
 
@@ -165,15 +171,9 @@ template <typename LeafType> struct IndexedLeaf {
         return os;
     }
 
-    std::vector<fr> get_hash_inputs() const
-    {
-        std::vector<fr> data{ nextValue, nextIndex };
-        std::vector<fr> leafData = value.get_hash_inputs();
-        // prepend leaf data to the hash inputs
-        data.insert(data.begin(), leafData.begin(), leafData.end());
+    std::vector<fr> get_hash_inputs() const { return value.get_hash_inputs(nextValue, nextIndex); }
 
-        return data;
-    }
+    bool is_empty() { return value.is_empty(); }
 
     static IndexedLeaf<LeafType> empty() { return { LeafType::empty(), 0, 0 }; }
 

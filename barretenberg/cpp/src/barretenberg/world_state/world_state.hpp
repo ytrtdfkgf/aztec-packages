@@ -163,7 +163,9 @@ class WorldState {
      * @return BatchInsertionResult<T>
      */
     template <typename T>
-    BatchInsertionResult<T> batch_insert_indexed_leaves(MerkleTreeId tree_id, const std::vector<T>& leaves);
+    BatchInsertionResult<T> batch_insert_indexed_leaves(MerkleTreeId tree_id,
+                                                        const std::vector<T>& leaves,
+                                                        uint32_t subtree_depth);
 
     /**
      * @brief Updates a leaf in an existing Merkle Tree.
@@ -324,7 +326,9 @@ template <typename T> void WorldState::append_leaves(MerkleTreeId id, const std:
 }
 
 template <typename T>
-BatchInsertionResult<T> WorldState::batch_insert_indexed_leaves(MerkleTreeId id, const std::vector<T>& leaves)
+BatchInsertionResult<T> WorldState::batch_insert_indexed_leaves(MerkleTreeId id,
+                                                                const std::vector<T>& leaves,
+                                                                uint32_t subtree_depth)
 {
     using namespace crypto::merkle_tree;
     using Store = CachedTreeStore<LMDBStore, T>;
@@ -336,28 +340,27 @@ BatchInsertionResult<T> WorldState::batch_insert_indexed_leaves(MerkleTreeId id,
     bool success = false;
     std::string error_msg;
 
-    wrapper.tree->add_or_update_values(
-        leaves, [&signal, &result, &error_msg, &success](const TypedResponse<AddIndexedDataResponse<T>>& response) {
-            success = response.success;
-            if (!response.success) {
-                error_msg = response.message;
-                return;
-            }
+    wrapper.tree->add_or_update_values(leaves, [&](const TypedResponse<AddIndexedDataResponse<T>>& response) {
+        success = response.success;
+        if (!response.success) {
+            error_msg = response.message;
+            return;
+        }
 
-            result.low_leaf_witness_data.reserve(response.inner.low_leaf_witness_data->size());
-            std::copy(response.inner.low_leaf_witness_data->begin(),
-                      response.inner.low_leaf_witness_data->end(),
-                      std::back_inserter(result.low_leaf_witness_data));
+        result.low_leaf_witness_data.reserve(response.inner.low_leaf_witness_data->size());
+        std::copy(response.inner.low_leaf_witness_data->begin(),
+                  response.inner.low_leaf_witness_data->end(),
+                  std::back_inserter(result.low_leaf_witness_data));
 
-            result.sorted_leaves.reserve(response.inner.sorted_leaves->size());
-            std::copy(response.inner.sorted_leaves->begin(),
-                      response.inner.sorted_leaves->end(),
-                      std::back_inserter(result.sorted_leaves));
+        result.sorted_leaves.reserve(response.inner.sorted_leaves->size());
+        std::copy(response.inner.sorted_leaves->begin(),
+                  response.inner.sorted_leaves->end(),
+                  std::back_inserter(result.sorted_leaves));
 
-            result.subtree_path = response.inner.add_data_result.subtree_path;
+        result.subtree_path = response.inner.add_data_result.subtree_path;
 
-            signal.signal_level(0);
-        });
+        signal.signal_level(0);
+    });
 
     signal.wait_for_level();
 

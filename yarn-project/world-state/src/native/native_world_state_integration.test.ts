@@ -41,7 +41,7 @@ describe('NativeWorldState', () => {
       currentWS = await MerkleTrees.new(AztecLmdbStore.open(js));
     });
 
-    async function assert(treeId: MerkleTreeId, includeUncommitted = false) {
+    async function assertTreeState(treeId: MerkleTreeId, includeUncommitted = false) {
       const nativeInfo = await nativeWS.getTreeInfo(treeId, includeUncommitted);
       const jsInfo = await currentWS.getTreeInfo(treeId, includeUncommitted);
       expect(nativeInfo.treeId).toBe(jsInfo.treeId);
@@ -55,29 +55,62 @@ describe('NativeWorldState', () => {
         .filter((x): x is MerkleTreeId => typeof x === 'number')
         .map(x => [MerkleTreeId[x], x]),
     )('initial state matches %s', async (_, treeId) => {
-      assert(treeId);
+      assertTreeState(treeId);
     });
 
-    it.each([[MerkleTreeId.NULLIFIER_TREE, [new Fr(142).toBuffer()], 'batchInsert' as const]])(
-      'insertions work',
-      async (treeId, leaves, fn) => {
-        const [native, js] = await Promise.all([
-          nativeWS[fn](treeId as any, leaves),
-          currentWS[fn](treeId as any, leaves, Math.log2(leaves.length) | 0),
-        ]);
+    it.each<[IndexedTreeId, Buffer[]]>([
+      [MerkleTreeId.NULLIFIER_TREE, Array(64).fill(new NullifierLeaf(Fr.ZERO).toBuffer())],
+      [MerkleTreeId.PUBLIC_DATA_TREE, Array(64).fill(new PublicDataTreeLeaf(Fr.ZERO, Fr.ZERO).toBuffer())],
+    ])('inserting 0 leaves', async (treeId, leaves) => {
+      const [native, js] = await Promise.all([
+        nativeWS.batchInsert(treeId, leaves),
+        currentWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
+      ]);
 
-        expect(native.sortedNewLeaves.map(Fr.fromBuffer)).toEqual(js.sortedNewLeaves.map(Fr.fromBuffer));
-        expect(native.sortedNewLeavesIndexes).toEqual(js.sortedNewLeavesIndexes);
-        expect(native.newSubtreeSiblingPath.toFields()).toEqual(js.newSubtreeSiblingPath.toFields());
-        expect(native.lowLeavesWitnessData).toEqual(js.lowLeavesWitnessData);
-      },
-    );
+      expect(native.sortedNewLeaves.map(Fr.fromBuffer)).toEqual(js.sortedNewLeaves.map(Fr.fromBuffer));
+      expect(native.sortedNewLeavesIndexes).toEqual(js.sortedNewLeavesIndexes);
+      expect(native.newSubtreeSiblingPath.toFields()).toEqual(js.newSubtreeSiblingPath.toFields());
+      expect(native.lowLeavesWitnessData).toEqual(js.lowLeavesWitnessData);
 
-    it.each([[MerkleTreeId.NULLIFIER_TREE, 128n]])('sibling paths match', async (treeId, leaf) => {
+      assertTreeState(treeId, false);
+      assertTreeState(treeId, true);
+
+      await Promise.all([nativeWS.rollback(), currentWS.rollback()]);
+
+      assertTreeState(treeId, false);
+    });
+
+    it.each<[IndexedTreeId, Buffer[]]>([
+      [MerkleTreeId.NULLIFIER_TREE, [new Fr(142).toBuffer()]],
+      [MerkleTreeId.PUBLIC_DATA_TREE, [new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer()]],
+      [
+        MerkleTreeId.PUBLIC_DATA_TREE,
+        [
+          PublicDataTreeLeaf.empty().toBuffer(),
+          PublicDataTreeLeaf.empty().toBuffer(),
+          PublicDataTreeLeaf.empty().toBuffer(),
+          PublicDataTreeLeaf.empty().toBuffer(),
+        ],
+      ],
+    ])('insertions into indexed trees', async (treeId, leaves) => {
+      const [native, js] = await Promise.all([
+        nativeWS.batchInsert(treeId, leaves),
+        currentWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
+      ]);
+
+      expect(native.sortedNewLeaves.map(Fr.fromBuffer)).toEqual(js.sortedNewLeaves.map(Fr.fromBuffer));
+      expect(native.sortedNewLeavesIndexes).toEqual(js.sortedNewLeavesIndexes);
+      expect(native.newSubtreeSiblingPath.toFields()).toEqual(js.newSubtreeSiblingPath.toFields());
+      expect(native.lowLeavesWitnessData).toEqual(js.lowLeavesWitnessData);
+    });
+
+    it.each([
+      [MerkleTreeId.NULLIFIER_TREE, 128n],
+      [MerkleTreeId.PUBLIC_DATA_TREE, 130n],
+    ])('sibling paths match', async (treeId, leaf) => {
       const native = await nativeWS.getSiblingPath(treeId, leaf, false);
       const js = await currentWS.getSiblingPath(treeId, leaf, false);
       expect(native.toFields()).toEqual(js.toFields());
-      // expect(native).toEqual(js);
     });
   });
 

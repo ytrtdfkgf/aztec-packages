@@ -502,7 +502,7 @@ export class ProvingOrchestrator {
     kernelVk: VerificationKeyData,
   ): Promise<[BaseRollupInputs, TreeSnapshots] | undefined> {
     if (!provingState?.verifyState()) {
-      logger.debug('Not preparing base rollup inputs, state invalid');
+      console.log('Not preparing base rollup inputs, state invalid');
       return;
     }
     const inputs = await buildBaseRollupInput(tx, provingState.globalVariables, this.db, kernelVk);
@@ -514,7 +514,7 @@ export class ProvingOrchestrator {
     const treeSnapshots: TreeSnapshots = new Map((await Promise.all(promises)).map(obj => [obj.key, obj.value]));
 
     if (!provingState?.verifyState()) {
-      logger.debug(`Discarding proving job, state no longer valid`);
+      console.log(`Discarding proving job, state no longer valid`);
       return;
     }
     return [inputs, treeSnapshots];
