@@ -199,6 +199,8 @@ class WorldState {
     TreeStateReference get_tree_snapshot(MerkleTreeId id);
 
     static bool include_uncommitted(WorldStateRevision rev);
+    static bool block_state_matches_world_state(const WorldStateReference& block_state_ref,
+                                                const WorldStateReference& tree_state_ref);
 };
 
 template <typename T>

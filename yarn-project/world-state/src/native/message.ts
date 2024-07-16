@@ -1,4 +1,4 @@
-import { type MerkleTreeId, SiblingPath } from '@aztec/circuit-types';
+import { MerkleTreeId, SiblingPath } from '@aztec/circuit-types';
 import {
   AppendOnlyTreeSnapshot,
   Fr,
@@ -148,8 +148,13 @@ interface BatchInsertResponse {
   subtree_path: Tuple<Buffer, number>;
 }
 
+interface UpdateArchiveRequest {
+  blockStateRef: BlockStateReference;
+  blockHash: Buffer;
+}
+
 interface SyncBlockRequest {
-  blockStateRef: StateReference;
+  blockStateRef: BlockStateReference;
   blockHash: Fr;
   paddedNoteHashes: readonly Fr[];
   paddedL1ToL2Messages: readonly Fr[];
@@ -175,7 +180,7 @@ export type WorldStateRequest = {
   [WorldStateMessageType.APPEND_LEAVES]: AppendLeavesRequest;
   [WorldStateMessageType.BATCH_INSERT]: BatchInsertRequest;
 
-  [WorldStateMessageType.UPDATE_ARCHIVE]: void;
+  [WorldStateMessageType.UPDATE_ARCHIVE]: UpdateArchiveRequest;
 
   [WorldStateMessageType.COMMIT]: void;
   [WorldStateMessageType.ROLLBACK]: void;
@@ -220,8 +225,22 @@ export function worldStateRevision(includeUncommittedOrBlock: false | true | num
   }
 }
 
-type TreeStateReference = [Buffer, number | BigInt];
+type TreeStateReference = readonly [Buffer, number | BigInt];
+type BlockStateReference = Map<Exclude<MerkleTreeId, MerkleTreeId.ARCHIVE>, TreeStateReference>;
 
 export function treeStateReferenceToSnapshot([root, size]: TreeStateReference): AppendOnlyTreeSnapshot {
   return new AppendOnlyTreeSnapshot(Fr.fromBuffer(root), Number(size));
+}
+
+export function treeStateReference(snapshot: AppendOnlyTreeSnapshot) {
+  return [snapshot.root.toBuffer(), BigInt(snapshot.nextAvailableLeafIndex)] as const;
+}
+
+export function blockStateReference(state: StateReference): BlockStateReference {
+  return new Map([
+    [MerkleTreeId.NULLIFIER_TREE, treeStateReference(state.partial.nullifierTree)],
+    [MerkleTreeId.NOTE_HASH_TREE, treeStateReference(state.partial.noteHashTree)],
+    [MerkleTreeId.PUBLIC_DATA_TREE, treeStateReference(state.partial.publicDataTree)],
+    [MerkleTreeId.L1_TO_L2_MESSAGE_TREE, treeStateReference(state.l1ToL2MessageTree)],
+  ]);
 }

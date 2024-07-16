@@ -1561,14 +1561,14 @@
     "nullifierTree": {
       "root": {
         "type": "Fr",
-        "value": "0x11aca8ce338e88dbf9c46f964e9d2df7590f3f5a64d68b5601f17c802ca8493f"
+        "value": "0x0bcfa3e9f1a8922ee92c6dc964d6595907c1804a86753774322b468f69d4f278"
       },
       "nextAvailableLeafIndex": 192
     },
     "publicDataTree": {
       "root": {
         "type": "Fr",
-        "value": "0x0d05ae1a83a35e54e9cd2ab6c2606c7c8c4cc3397a39c9c96f5ca7f0458ddf9b"
+        "value": "0x021a6cc64c830b4914600d0296c3968c5d28c1b00c5c4b0b33d1f39d948edbd4"
       },
       "nextAvailableLeafIndex": 192
     }
@@ -7771,7 +7771,7 @@
     "nullifierSubtreeSiblingPath": [
       {
         "type": "Fr",
-        "value": "0x1972436ad31463fdc970c6e1e835b7292ec8324ee1a471a9eda02b015b707a19"
+        "value": "0x15d28cad4c0736decea8997cb324cf0a0e0602f4d74472cd977bce2c8dd9923f"
       },
       {
         "type": "Fr",
@@ -7829,7 +7829,7 @@
     "publicDataSiblingPath": [
       {
         "type": "Fr",
-        "value": "0x17b4e56cb4e17c4113005e54f5bc70ed1a25b733b6b533fb98aa18231b2c9b3b"
+        "value": "0x15d28cad4c0736decea8997cb324cf0a0e0602f4d74472cd977bce2c8dd9923f"
       },
       {
         "type": "Fr",

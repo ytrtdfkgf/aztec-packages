@@ -44,6 +44,7 @@ describe('NativeWorldState', () => {
     async function assertTreeState(treeId: MerkleTreeId, includeUncommitted = false) {
       const nativeInfo = await nativeWS.getTreeInfo(treeId, includeUncommitted);
       const jsInfo = await currentWS.getTreeInfo(treeId, includeUncommitted);
+      console.log({ nativeInfo, jsInfo, includeUncommitted });
       expect(nativeInfo.treeId).toBe(jsInfo.treeId);
       expect(nativeInfo.depth).toBe(jsInfo.depth);
       expect(nativeInfo.size).toBe(jsInfo.size);
@@ -73,12 +74,13 @@ describe('NativeWorldState', () => {
       expect(native.newSubtreeSiblingPath.toFields()).toEqual(js.newSubtreeSiblingPath.toFields());
       expect(native.lowLeavesWitnessData).toEqual(js.lowLeavesWitnessData);
 
-      assertTreeState(treeId, false);
-      assertTreeState(treeId, true);
+      await assertTreeState(treeId, false);
+      await assertTreeState(treeId, true);
 
       await Promise.all([nativeWS.rollback(), currentWS.rollback()]);
+      // await Promise.all([nativeWS.commit(), currentWS.commit()]);
 
-      assertTreeState(treeId, false);
+      await assertTreeState(treeId, false);
     });
 
     it.each<[IndexedTreeId, Buffer[], (buf: Buffer) => any]>([

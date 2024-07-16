@@ -383,8 +383,13 @@ bool WorldStateAddon::update_archive(msgpack::object& obj, msgpack::sbuffer& buf
     obj.convert(request);
 
     // TODO (alexg) move this to world state
-    auto state_ref = _ws->get_state_reference(WorldStateRevision::uncommitted());
-    if (state_ref == request.value.blockStateRef) {
+    auto world_state_ref = _ws->get_state_reference(WorldStateRevision::uncommitted());
+    auto block_state_ref = request.value.blockStateRef;
+
+    if (block_state_ref[MerkleTreeId::NULLIFIER_TREE] == world_state_ref[MerkleTreeId::NULLIFIER_TREE] &&
+        block_state_ref[MerkleTreeId::NOTE_HASH_TREE] == world_state_ref[MerkleTreeId::NOTE_HASH_TREE] &&
+        block_state_ref[MerkleTreeId::PUBLIC_DATA_TREE] == world_state_ref[MerkleTreeId::PUBLIC_DATA_TREE] &&
+        block_state_ref[MerkleTreeId::L1_TO_L2_MESSAGE_TREE] == world_state_ref[MerkleTreeId::L1_TO_L2_MESSAGE_TREE]) {
         _ws->append_leaves<bb::fr>(MerkleTreeId::ARCHIVE, { request.value.blockHash });
     } else {
         throw std::runtime_error("Block state reference does not match current state");

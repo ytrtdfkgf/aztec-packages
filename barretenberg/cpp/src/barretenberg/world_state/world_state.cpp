@@ -182,7 +182,7 @@ void WorldState::rollback()
 bool WorldState::sync_block(const BlockData& block)
 {
     auto current_state = get_state_reference(WorldStateRevision::uncommitted());
-    if (current_state == block.block_state_ref) {
+    if (block_state_matches_world_state(block.block_state_ref, current_state)) {
         commit();
         return true;
     }
@@ -254,6 +254,20 @@ std::pair<bool, index_t> WorldState::find_low_leaf(const WorldStateRevision revi
 bool WorldState::include_uncommitted(WorldStateRevision rev)
 {
     return std::get<WorldStateRevision::CurrentState>(rev.state).uncommitted;
+}
+
+bool WorldState::block_state_matches_world_state(const WorldStateReference& block_state_ref,
+                                                 const WorldStateReference& tree_state_ref)
+{
+    std::vector tree_ids{
+        MerkleTreeId::NULLIFIER_TREE,
+        MerkleTreeId::NOTE_HASH_TREE,
+        MerkleTreeId::PUBLIC_DATA_TREE,
+        MerkleTreeId::L1_TO_L2_MESSAGE_TREE,
+    };
+
+    return std::all_of(
+        tree_ids.begin(), tree_ids.end(), [&](auto id) { return block_state_ref.at(id) == tree_state_ref.at(id); });
 }
 
 } // namespace bb::world_state

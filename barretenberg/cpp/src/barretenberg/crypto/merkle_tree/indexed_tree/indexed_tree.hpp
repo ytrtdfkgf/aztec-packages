@@ -475,11 +475,11 @@ void IndexedTree<Store, HashingPolicy>::generate_hashes_for_appending(
 {
     ExecuteAndReport<HashGenerationResponse>(
         [=](TypedResponse<HashGenerationResponse>& response) {
-            response.inner.hashes = std::make_shared<std::vector<fr>>();
+            response.inner.hashes = std::make_shared<std::vector<fr>>(leaves_to_hash->size(), 0);
             std::vector<IndexedLeafValueType>& leaves = *leaves_to_hash;
             for (uint32_t i = 0; i < leaves.size(); ++i) {
                 if (!leaves[i].is_empty()) {
-                    response.inner.hashes->push_back(HashingPolicy::hash(leaves[i].get_hash_inputs()));
+                    (*response.inner.hashes)[i] = (HashingPolicy::hash(leaves[i].get_hash_inputs()));
                 }
                 // (*response.inner.hashes)[i] = HashingPolicy::hash(leaves[i].get_hash_inputs());
             }

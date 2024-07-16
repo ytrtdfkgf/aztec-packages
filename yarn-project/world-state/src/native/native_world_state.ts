@@ -45,6 +45,7 @@ import {
   WorldStateMessageType,
   type WorldStateRequest,
   type WorldStateResponse,
+  blockStateReference,
   treeStateReferenceToSnapshot,
   worldStateRevision,
 } from './message.js';
@@ -245,7 +246,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
   }
 
   getSnapshot(block: number): Promise<TreeSnapshots> {
-    return Promise.reject(new Error('Method not implemented'));
+    return Promise.reject(new Error('getSnapshot not implemented'));
   }
 
   async getStateReference(includeUncommitted: boolean): Promise<StateReference> {
@@ -314,7 +315,7 @@ export class NativeWorldStateService implements MerkleTreeDb {
       paddedNoteHashes,
       paddedNullifiers,
       batchesOfPaddedPublicDataWrites,
-      blockStateRef: l2Block.header.state,
+      blockStateRef: blockStateReference(l2Block.header.state),
     });
   }
 
@@ -322,8 +323,11 @@ export class NativeWorldStateService implements MerkleTreeDb {
     await this.call(WorldStateMessageType.ROLLBACK, void 0);
   }
 
-  async updateArchive(header: Header, args: boolean): Promise<void> {
-    throw new Error('not implemented');
+  async updateArchive(header: Header, _includeUncommitted: boolean): Promise<void> {
+    await this.call(WorldStateMessageType.UPDATE_ARCHIVE, {
+      blockHash: header.hash().toBuffer(),
+      blockStateRef: blockStateReference(header.state),
+    });
   }
 
   async updateLeaf<ID extends IndexedTreeId>(
