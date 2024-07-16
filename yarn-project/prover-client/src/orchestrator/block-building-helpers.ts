@@ -49,8 +49,6 @@ import { type Tuple, assertLength, serializeToFields, toFriendlyJSON } from '@az
 import { HintsBuilder, computeFeePayerBalanceLeafSlot } from '@aztec/simulator';
 import { type MerkleTreeOperations } from '@aztec/world-state';
 
-import { writeFileSync } from 'fs';
-
 // Denotes fields that are not used now, but will be in the future
 const FUTURE_FR = new Fr(0n);
 const FUTURE_NUM = 0;
@@ -66,8 +64,6 @@ type BaseTreeNames = 'NoteHashTree' | 'ContractTree' | 'NullifierTree' | 'Public
  * Type representing the names of the trees.
  */
 export type TreeNames = BaseTreeNames | 'L1ToL2MessageTree' | 'Archive';
-
-let i = 0;
 
 // Builds the base rollup inputs, updating the contract, nullifier, and data trees in the process
 export async function buildBaseRollupInput(
@@ -193,37 +189,6 @@ export async function buildBaseRollupInput(
     constants,
   });
 
-  // const fields = {
-  //   startStateRef: {
-  //     notes: [inputs.start.noteHashTree.root.toString(), inputs.start.noteHashTree.nextAvailableLeafIndex],
-  //     nullifiers: [inputs.start.nullifierTree.root.toString(), inputs.start.nullifierTree.nextAvailableLeafIndex],
-  //     publicData: [inputs.start.publicDataTree.root.toString(), inputs.start.publicDataTree.nextAvailableLeafIndex],
-  //   },
-  //   stateDiffHints: {}
-  // };
-
-  const type = 'cpp';
-  writeFileSync(
-    type + '_inputs_' + i + '.json',
-    JSON.stringify(
-      inputs,
-      (key, value) => {
-        if (value instanceof Fr) {
-          return value.toString();
-        } else if (Buffer.isBuffer(value)) {
-          return value.toString('hex');
-        } else if (typeof value === 'bigint') {
-          return String(value);
-        } else if (key === 'vk' || key === 'proof') {
-          return null;
-        } else {
-          return value;
-        }
-      },
-      2,
-    ),
-  );
-  i++;
   return inputs;
 }
 

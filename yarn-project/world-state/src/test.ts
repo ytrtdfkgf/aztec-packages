@@ -116,10 +116,14 @@ async function assertSiblingPaths(treeId: IndexedTreeId, index: bigint, includeU
 {
   const treeId = MerkleTreeId.PUBLIC_DATA_TREE;
   // const leaves = Array(2).fill(PublicDataTreeLeaf.empty().toBuffer());
-  const leaves = [
-    new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer(),
-    new PublicDataTreeLeaf(new Fr(143), new Fr(2)).toBuffer(),
-  ];
+  // const leaves = [
+  //   new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer(),
+  //   new PublicDataTreeLeaf(new Fr(143), new Fr(2)).toBuffer(),
+  // ];
+  const leaves = Array(64)
+    .fill(0)
+    .map(() => new PublicDataTreeLeaf(Fr.random(), Fr.random()).toBuffer());
+
   const height = Math.ceil(Math.log2(leaves.length));
   let [native, js] = await Promise.all([
     await nativeWS.batchInsert(treeId, leaves, height),

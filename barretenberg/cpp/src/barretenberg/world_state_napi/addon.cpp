@@ -350,6 +350,7 @@ bool WorldStateAddon::batch_insert(msgpack::object& obj, msgpack::sbuffer& buffe
     case MerkleTreeId::PUBLIC_DATA_TREE: {
         TypedMessage<BatchInsertRequest<PublicDataLeafValue>> r1;
         obj.convert(r1);
+        std::cout << "got this many leaves " << r1.value.leaves.size() << std::endl;
         auto result = _ws->batch_insert_indexed_leaves<crypto::merkle_tree::PublicDataLeafValue>(
             request.value.treeId, r1.value.leaves, r1.value.subtreeDepth);
         MsgHeader header(request.header.messageId);

@@ -105,7 +105,7 @@ struct PublicDataLeafValue {
 
     fr get_key() const { return slot; }
 
-    bool is_empty() const { return value == fr::zero() && slot == fr::zero(); }
+    bool is_empty() const { return slot == fr::zero(); }
 
     std::vector<fr> get_hash_inputs(fr nextValue, fr nextIndex) const
     {

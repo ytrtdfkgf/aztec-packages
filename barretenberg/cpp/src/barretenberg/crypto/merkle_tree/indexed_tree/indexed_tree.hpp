@@ -481,7 +481,6 @@ void IndexedTree<Store, HashingPolicy>::generate_hashes_for_appending(
                 if (!leaves[i].is_empty()) {
                     (*response.inner.hashes)[i] = (HashingPolicy::hash(leaves[i].get_hash_inputs()));
                 }
-                // (*response.inner.hashes)[i] = HashingPolicy::hash(leaves[i].get_hash_inputs());
             }
         },
         completion);
@@ -497,13 +496,14 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
             // The first thing we do is sort the values into descending order but maintain knowledge of their
             // orignal order
             struct {
-                bool operator()(std::pair<LeafValueType, size_t>& a, std::pair<LeafValueType, size_t>& b) const
+                bool operator()(const std::pair<LeafValueType, size_t>& a,
+                                const std::pair<LeafValueType, size_t>& b) const
                 {
                     if (uint256_t(a.first.get_key()) > uint256_t(b.first.get_key())) {
                         return true;
                     }
 
-                    if (a.second < b.second) {
+                    if (uint256_t(a.first.get_key()) == uint256_t(b.first.get_key()) && a.second < b.second) {
                         return true;
                     }
 
@@ -511,9 +511,6 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
                 }
             } comp;
             std::sort(values_to_be_sorted->begin(), values_to_be_sorted->end(), comp);
-            // std::sort(values_to_be_sorted->begin(), values_to_be_sorted->end(), [](auto& a, auto& b) {
-            //     return uint256_t(a.first.get_key()) > uint256_t(b.first.get_key());
-            // });
 
             std::vector<std::pair<LeafValueType, size_t>>& values = *values_to_be_sorted;
 
