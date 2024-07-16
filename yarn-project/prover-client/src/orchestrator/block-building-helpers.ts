@@ -165,15 +165,6 @@ export async function buildBaseRollupInput(
     db,
   );
 
-  const archiveRoot = computeRootFromSiblingPath(
-    blockHash.toBuffer(),
-    archiveRootMembershipWitness.siblingPath.map(x => x.toBuffer()),
-    Number(archiveRootMembershipWitness.leafIndex),
-  );
-
-  const archiveInfo = await db.getTreeInfo(MerkleTreeId.ARCHIVE);
-  console.log('expected root', Fr.fromBuffer(archiveInfo.root), 'computed root', Fr.fromBuffer(archiveRoot));
-
   const inputs = BaseRollupInputs.from({
     kernelData: getKernelDataFor(tx, kernelVk),
     start,

@@ -594,7 +594,6 @@ export class StandardIndexedTree extends TreeBase<Buffer> implements IndexedTree
     includeUncommitted: boolean,
   ): Promise<SiblingPath<SubtreeSiblingPathHeight>> {
     const nextAvailableLeafIndex = this.getNumLeaves(includeUncommitted);
-    console.log({ nextAvailableLeafIndex });
     const fullSiblingPath = await this.getSiblingPath(nextAvailableLeafIndex, includeUncommitted);
 
     // Drop the first subtreeHeight items since we only care about the path to the subtree root
