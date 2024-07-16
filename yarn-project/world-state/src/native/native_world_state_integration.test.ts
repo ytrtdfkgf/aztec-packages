@@ -62,9 +62,10 @@ describe('NativeWorldState', () => {
       [MerkleTreeId.NULLIFIER_TREE, Array(64).fill(new NullifierLeaf(Fr.ZERO).toBuffer())],
       [MerkleTreeId.PUBLIC_DATA_TREE, Array(64).fill(new PublicDataTreeLeaf(Fr.ZERO, Fr.ZERO).toBuffer())],
     ])('inserting 0 leaves', async (treeId, leaves) => {
+      const height = Math.ceil(Math.log2(leaves.length) | 0);
       const [native, js] = await Promise.all([
-        nativeWS.batchInsert(treeId, leaves),
-        currentWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
+        nativeWS.batchInsert(treeId, leaves, height),
+        currentWS.batchInsert(treeId, leaves, height),
       ]);
 
       expect(native.sortedNewLeaves.map(Fr.fromBuffer)).toEqual(js.sortedNewLeaves.map(Fr.fromBuffer));
@@ -80,25 +81,21 @@ describe('NativeWorldState', () => {
       assertTreeState(treeId, false);
     });
 
-    it.each<[IndexedTreeId, Buffer[]]>([
-      [MerkleTreeId.NULLIFIER_TREE, [new Fr(142).toBuffer()]],
-      [MerkleTreeId.PUBLIC_DATA_TREE, [new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer()]],
+    it.each<[IndexedTreeId, Buffer[], (buf: Buffer) => any]>([
+      [MerkleTreeId.NULLIFIER_TREE, [new Fr(142).toBuffer()], Fr.fromBuffer],
       [
         MerkleTreeId.PUBLIC_DATA_TREE,
-        [
-          PublicDataTreeLeaf.empty().toBuffer(),
-          PublicDataTreeLeaf.empty().toBuffer(),
-          PublicDataTreeLeaf.empty().toBuffer(),
-          PublicDataTreeLeaf.empty().toBuffer(),
-        ],
+        [new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer()],
+        PublicDataTreeLeaf.fromBuffer,
       ],
-    ])('insertions into indexed trees', async (treeId, leaves) => {
+    ])('insertions into indexed trees', async (treeId, leaves, fromBuffer) => {
+      const height = Math.ceil(Math.log2(leaves.length));
       const [native, js] = await Promise.all([
-        nativeWS.batchInsert(treeId, leaves),
-        currentWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
+        nativeWS.batchInsert(treeId, leaves, height),
+        currentWS.batchInsert(treeId, leaves, height),
       ]);
 
-      expect(native.sortedNewLeaves.map(Fr.fromBuffer)).toEqual(js.sortedNewLeaves.map(Fr.fromBuffer));
+      expect(native.sortedNewLeaves.map(fromBuffer)).toEqual(js.sortedNewLeaves.map(fromBuffer));
       expect(native.sortedNewLeavesIndexes).toEqual(js.sortedNewLeavesIndexes);
       expect(native.newSubtreeSiblingPath.toFields()).toEqual(js.newSubtreeSiblingPath.toFields());
       expect(native.lowLeavesWitnessData).toEqual(js.lowLeavesWitnessData);

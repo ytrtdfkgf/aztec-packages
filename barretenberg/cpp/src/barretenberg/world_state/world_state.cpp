@@ -196,7 +196,7 @@ bool WorldState::sync_block(const BlockData& block)
 
     {
         auto& wrapper = std::get<TreeWithStore<NullifierTree>>(_trees.at(MerkleTreeId::NULLIFIER_TREE));
-        wrapper.tree->add_or_update_values(block.new_nullifiers, decr);
+        wrapper.tree->add_or_update_values(block.new_nullifiers, 0, decr);
     }
 
     {
@@ -208,7 +208,7 @@ bool WorldState::sync_block(const BlockData& block)
         auto& wrapper = std::get<TreeWithStore<PublicDataTree>>(_trees.at(MerkleTreeId::PUBLIC_DATA_TREE));
         for (const auto& batch : block.batches_of_public_writes) {
             // TODO (alexg) this needs to be thread safe!!
-            wrapper.tree->add_or_update_values(batch, decr);
+            wrapper.tree->add_or_update_values(batch, 0, decr);
         }
     }
 

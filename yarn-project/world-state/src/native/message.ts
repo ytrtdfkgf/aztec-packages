@@ -135,7 +135,9 @@ interface FindLowLeafResponse {
 
 interface AppendLeavesRequest extends WithTreeId, WithLeaves {}
 
-interface BatchInsertRequest extends WithTreeId, WithLeaves {}
+interface BatchInsertRequest extends WithTreeId, WithLeaves {
+  subtreeDepth: number;
+}
 interface BatchInsertResponse {
   low_leaf_witness_data: ReadonlyArray<{
     leaf: SerializedIndexedLeaf;

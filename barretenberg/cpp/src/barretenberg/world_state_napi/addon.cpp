@@ -350,8 +350,8 @@ bool WorldStateAddon::batch_insert(msgpack::object& obj, msgpack::sbuffer& buffe
     case MerkleTreeId::PUBLIC_DATA_TREE: {
         TypedMessage<BatchInsertRequest<PublicDataLeafValue>> r1;
         obj.convert(r1);
-        auto result = _ws->batch_insert_indexed_leaves<crypto::merkle_tree::PublicDataLeafValue>(request.value.treeId,
-                                                                                                 r1.value.leaves);
+        auto result = _ws->batch_insert_indexed_leaves<crypto::merkle_tree::PublicDataLeafValue>(
+            request.value.treeId, r1.value.leaves, r1.value.subtreeDepth);
         MsgHeader header(request.header.messageId);
         messaging::TypedMessage<BatchInsertionResult<PublicDataLeafValue>> resp_msg(
             WorldStateMessageType::BATCH_INSERT, header, result);
@@ -362,8 +362,8 @@ bool WorldStateAddon::batch_insert(msgpack::object& obj, msgpack::sbuffer& buffe
     case MerkleTreeId::NULLIFIER_TREE: {
         TypedMessage<BatchInsertRequest<NullifierLeafValue>> r2;
         obj.convert(r2);
-        auto result = _ws->batch_insert_indexed_leaves<crypto::merkle_tree::NullifierLeafValue>(request.value.treeId,
-                                                                                                r2.value.leaves);
+        auto result = _ws->batch_insert_indexed_leaves<crypto::merkle_tree::NullifierLeafValue>(
+            request.value.treeId, r2.value.leaves, r2.value.subtreeDepth);
         MsgHeader header(request.header.messageId);
         messaging::TypedMessage<BatchInsertionResult<NullifierLeafValue>> resp_msg(
             WorldStateMessageType::BATCH_INSERT, header, result);

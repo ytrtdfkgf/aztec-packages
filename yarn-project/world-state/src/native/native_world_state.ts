@@ -122,9 +122,10 @@ export class NativeWorldStateService implements MerkleTreeDb {
   async batchInsert<TreeHeight extends number, SubtreeSiblingPathHeight extends number, ID extends IndexedTreeId>(
     treeId: ID,
     rawLeaves: Buffer[],
+    subtreeHeight: number,
   ): Promise<BatchInsertionResult<TreeHeight, SubtreeSiblingPathHeight>> {
     const leaves = rawLeaves.map((leaf: Buffer) => hydrateLeaf(treeId, leaf)).map(serializeLeaf);
-    const resp = await this.call(WorldStateMessageType.BATCH_INSERT, { leaves, treeId });
+    const resp = await this.call(WorldStateMessageType.BATCH_INSERT, { leaves, treeId, subtreeDepth: subtreeHeight });
 
     return {
       newSubtreeSiblingPath: new SiblingPath<SubtreeSiblingPathHeight>(

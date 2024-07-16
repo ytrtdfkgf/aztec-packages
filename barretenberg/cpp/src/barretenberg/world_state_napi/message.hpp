@@ -127,7 +127,8 @@ template <typename T> struct AppendLeavesRequest {
 template <typename T> struct BatchInsertRequest {
     MerkleTreeId treeId;
     std::vector<T> leaves;
-    MSGPACK_FIELDS(treeId, leaves);
+    uint32_t subtreeDepth;
+    MSGPACK_FIELDS(treeId, leaves, subtreeDepth);
 };
 
 struct UpdateArchiveRequest {

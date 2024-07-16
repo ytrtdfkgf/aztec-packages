@@ -489,9 +489,11 @@ export function validateSimulatedTree(
   label?: string,
 ) {
   if (!simulatedTree.root.toBuffer().equals(localTree.root.toBuffer())) {
+    console.trace('tree failure', name);
     throw new Error(`${label ?? name} tree root mismatch (local ${localTree.root}, simulated ${simulatedTree.root})`);
   }
   if (simulatedTree.nextAvailableLeafIndex !== localTree.nextAvailableLeafIndex) {
+    console.trace('tree failure', name);
     throw new Error(
       `${label ?? name} tree next available leaf index mismatch (local ${localTree.nextAvailableLeafIndex}, simulated ${
         simulatedTree.nextAvailableLeafIndex

@@ -59,7 +59,7 @@ template <typename Store, typename HashingPolicy> class IndexedTree : public App
      * @returns The 'previous' hash paths of all updated values
      */
     void add_or_update_values(const std::vector<LeafValueType>& values,
-                              const uint32_t subtree_depth,
+                              uint32_t subtree_depth,
                               const AddCompletionCallback& completion);
 
     void get_leaf(const index_t& index, bool includeUncommitted, const LeafCallback& completion) const;
@@ -205,12 +205,6 @@ IndexedTree<Store, HashingPolicy>::IndexedTree(Store& store, ThreadPool& workers
     }
 
     store_.commit();
-
-    if (store_.get_name() == "nullifier_tree") {
-        std::cout << store_.get_name() << std::endl
-                  << "root: " << result.inner.root << std::endl
-                  << "prefill root: " << result.inner.subtree_root << std::endl;
-    }
 }
 
 template <typename Store, typename HashingPolicy>
@@ -282,7 +276,7 @@ template <typename Store, typename HashingPolicy>
 void IndexedTree<Store, HashingPolicy>::add_or_update_value(const LeafValueType& value,
                                                             const AddCompletionCallback& completion)
 {
-    add_or_update_values(std::vector<LeafValueType>{ value }, completion);
+    add_or_update_values(std::vector<LeafValueType>{ value }, 1, completion);
 }
 
 template <typename Store, typename HashingPolicy>
@@ -303,9 +297,8 @@ void IndexedTree<Store, HashingPolicy>::add_or_update_values(const std::vector<L
         std::shared_ptr<std::vector<fr>> hashes_to_append;
         // info about the low leaves that have been updated
         std::shared_ptr<std::vector<LowLeafWitnessData<LeafValueType>>> low_leaf_witness_data;
-        std::shared_ptr<fr_sibling_path> subtree_path;
+        fr_sibling_path subtree_path;
         std::atomic<uint32_t> count;
-        AddDataResponse add_data;
         Status status;
 
         // We set to 2 here as we will kick off the 2 main async operations concurrently and we need to trakc thri
@@ -330,62 +323,67 @@ void IndexedTree<Store, HashingPolicy>::add_or_update_values(const std::vector<L
     };
 
     // Thsi is the final callback triggered once the leaves have been appended to the tree
-    AppendCompletionCallback final_completion = [=](const TypedResponse<AddDataResponse>& add_result) {
+    auto final_completion = [=](const TypedResponse<AddDataResponse>& add_data_response) {
         TypedResponse<AddIndexedDataResponse<LeafValueType>> response;
-        response.success = add_result.success;
-        response.message = add_result.message;
-        if (add_result.success) {
-            response.inner.add_data_result = add_result.inner;
+        response.success = add_data_response.success;
+        response.message = add_data_response.message;
+        if (add_data_response.success) {
+            response.inner.subtree_path = results->subtree_path;
             response.inner.sorted_leaves = values_to_be_sorted;
             response.inner.low_leaf_witness_data = results->low_leaf_witness_data;
+            response.inner.add_data_result = add_data_response.inner;
         }
         // Trigger the client's provided callback
         completion(response);
     };
 
-    auto append_completion = [=](const TypedResponse<AddDataResponse>& response) {
+    auto sibling_path_completion = [=, this](const TypedResponse<GetSiblingPathResponse>& response) {
         if (!response.success) {
             results->status.set_failure(response.message);
         } else {
-            results->add_data_result = response.inner;
-            AppendOnlyTree<Store, HashingPolicy>::get_subtree_sibling_path(subtree_depth, final_completion, true);
-        }
-    };
-
-    auto append_new_leaves_if_ready = [=]() {
-        if (results->count.fetch_sub(1) == 1) {
-            if (!results->status.success) {
-                on_error(results->status.message);
-                return;
-            }
+            results->subtree_path = response.inner.path;
             AppendOnlyTree<Store, HashingPolicy>::add_values_internal(
-                (*results->hashes_to_append), append_completion, false);
+                (*results->hashes_to_append), final_completion, false);
         }
     };
 
     // This signals the completion of the appended hash generation
     // If the low leaf updates are also completed then we will append the leaves
-    HashGenerationCallback hash_completion = [=, this](const TypedResponse<HashGenerationResponse>& hashes_response) {
+    HashGenerationCallback hash_completion = [=](const TypedResponse<HashGenerationResponse>& hashes_response) {
         if (!hashes_response.success) {
             results->status.set_failure(hashes_response.message);
         } else {
             results->hashes_to_append = hashes_response.inner.hashes;
         }
 
-        append_new_leaves_if_ready();
+        if (results->count.fetch_sub(1) == 1) {
+            if (!results->status.success) {
+                on_error(results->status.message);
+                return;
+            }
+            AppendOnlyTree<Store, HashingPolicy>::get_subtree_sibling_path(
+                subtree_depth, sibling_path_completion, true);
+        }
     };
 
     // This signals the completion of the low leaf updates
     // If the append hash generation has also copleted then the hashes can be appended
     InsertionCompletionCallback insertion_completion =
-        [=, this](const TypedResponse<InsertionCompletionResponse>& insertion_response) {
+        [=](const TypedResponse<InsertionCompletionResponse>& insertion_response) {
             if (!insertion_response.success) {
                 results->status.set_failure(insertion_response.message);
             } else {
                 results->low_leaf_witness_data = insertion_response.inner.low_leaf_witness_data;
             }
 
-            append_new_leaves_if_ready();
+            if (results->count.fetch_sub(1) == 1) {
+                if (!results->status.success) {
+                    on_error(results->status.message);
+                    return;
+                }
+                AppendOnlyTree<Store, HashingPolicy>::get_subtree_sibling_path(
+                    subtree_depth, sibling_path_completion, true);
+            }
         };
 
     // This signals the completion of the insertion data generation
@@ -421,7 +419,6 @@ void IndexedTree<Store, HashingPolicy>::perform_insertions(size_t total_leaves,
     std::shared_ptr<Status> status = std::make_shared<Status>();
 
     if (insertions->size() == 0) {
-        // std::cout << "no insertions" << std::endl;
         TypedResponse<InsertionCompletionResponse> response;
         response.success = true;
         response.inner.low_leaf_witness_data = low_leaf_witness_data;
@@ -486,8 +483,6 @@ void IndexedTree<Store, HashingPolicy>::generate_hashes_for_appending(
                 }
                 // (*response.inner.hashes)[i] = HashingPolicy::hash(leaves[i].get_hash_inputs());
             }
-
-            std::cout << "finished generating append hashes" << std::endl;
         },
         completion);
 }
@@ -526,7 +521,6 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
             // This is performed sequentially and is stored in this 'leaf_insertion' struct
             response.inner.insertions = std::make_shared<std::vector<LeafInsertion>>();
             response.inner.insertions->reserve(values.size());
-            // std::cout << "insertions size " << response.inner.insertions->size() << std::endl;
             response.inner.indexed_leaves =
                 std::make_shared<std::vector<IndexedLeafValueType>>(values.size(), IndexedLeafValueType::empty());
             index_t old_size = 0;
@@ -546,7 +540,6 @@ void IndexedTree<Store, HashingPolicy>::generate_insertions(
                     size_t index_into_appended_leaves = value_pair.second;
                     index_t index_of_new_leaf = static_cast<index_t>(index_into_appended_leaves) + old_size;
                     if (value_pair.first.is_empty()) {
-                        // std::cout << "leaf is empty" << std::endl;
                         continue;
                     }
                     fr value = value_pair.first.get_key();

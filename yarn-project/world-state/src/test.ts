@@ -116,37 +116,41 @@ async function assertSiblingPaths(treeId: IndexedTreeId, index: bigint, includeU
 {
   const treeId = MerkleTreeId.PUBLIC_DATA_TREE;
   // const leaves = Array(2).fill(PublicDataTreeLeaf.empty().toBuffer());
-  const leaves = [new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer()];
+  const leaves = [
+    new PublicDataTreeLeaf(new Fr(142), new Fr(1)).toBuffer(),
+    new PublicDataTreeLeaf(new Fr(143), new Fr(2)).toBuffer(),
+  ];
+  const height = Math.ceil(Math.log2(leaves.length));
   let [native, js] = await Promise.all([
-    nativeWS.batchInsert(treeId, leaves),
-    jsWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
+    await nativeWS.batchInsert(treeId, leaves, height),
+    await jsWS.batchInsert(treeId, leaves, height),
   ]);
   // nativeWS.commit();
   // jsWS.commit();
 
-  leaves[0] = new PublicDataTreeLeaf(new Fr(140), new Fr(2)).toBuffer();
-  [native, js] = await Promise.all([
-    nativeWS.batchInsert(treeId, leaves),
-    jsWS.batchInsert(treeId, leaves, Math.log2(leaves.length) | 0),
-  ]);
+  // leaves[0] = new PublicDataTreeLeaf(new Fr(140), new Fr(2)).toBuffer();
+  // [native, js] = await Promise.all([nativeWS.batchInsert(treeId, leaves, 1), jsWS.batchInsert(treeId, leaves, 1)]);
 
   // console.log(native.sortedNewLeaves);
   // console.log(js.sortedNewLeaves);
   console.assert(native.sortedNewLeaves.length === js.sortedNewLeaves.length);
-  console.log(native.sortedNewLeaves.map(PublicDataTreeLeaf.fromBuffer));
-  console.log(js.sortedNewLeaves.map(PublicDataTreeLeaf.fromBuffer));
+  console.log('native', native.sortedNewLeaves.map(PublicDataTreeLeaf.fromBuffer));
+  console.log('js', js.sortedNewLeaves.map(PublicDataTreeLeaf.fromBuffer));
 
   console.log(native.lowLeavesWitnessData?.length, js.lowLeavesWitnessData?.length);
-  for (let i = 0; i < native.lowLeavesWitnessData!.length; i++) {
-    const ndata = native.lowLeavesWitnessData![i];
-    const jdata = js.lowLeavesWitnessData![i];
+  console.log('native', native.newSubtreeSiblingPath);
+  console.log('js', js.newSubtreeSiblingPath);
 
-    console.log('native', ndata.index, 'js', jdata.index);
-    console.log('native', ndata.leafPreimage, 'js', jdata.leafPreimage);
-    console.log('native', ndata.siblingPath.toFields());
-    console.log('js', jdata.siblingPath.toFields());
-    console.log();
-  }
+  // for (let i = 0; i < native.lowLeavesWitnessData!.length; i++) {
+  //   const ndata = native.lowLeavesWitnessData![i];
+  //   const jdata = js.lowLeavesWitnessData![i];
+
+  //   console.log('native', ndata.index, 'js', jdata.index);
+  //   console.log('native', ndata.leafPreimage, 'js', jdata.leafPreimage);
+  //   console.log('native', ndata.siblingPath.toFields());
+  //   console.log('js', jdata.siblingPath.toFields());
+  //   console.log();
+  // }
 
   // console.assert(
   //   native.sortedNewLeaves.map(Fr.fromBuffer).every((x, i) => x.equals(Fr.ZERO)),
