@@ -543,7 +543,7 @@ impl<'a, B: BlackBoxFunctionSolver<FieldElement>> DebugContext<'a, B> {
     }
 
     pub fn finalize(self) -> WitnessMap<FieldElement> {
-        self.acvm.finalize()
+        self.acvm.finalize().0
     }
 }
 

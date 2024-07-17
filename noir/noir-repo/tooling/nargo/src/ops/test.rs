@@ -46,7 +46,7 @@ pub fn run_test<B: BlackBoxFunctionSolver<FieldElement>>(
                 test_function,
                 compiled_program.abi,
                 compiled_program.debug,
-                circuit_execution,
+                circuit_execution.map(|(wit, _)| wit),
             )
         }
         Err(err) => test_status_program_compile_fail(err, test_function),

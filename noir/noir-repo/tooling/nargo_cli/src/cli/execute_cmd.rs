@@ -119,7 +119,7 @@ pub(crate) fn execute_program(
         &mut DefaultForeignCallExecutor::new(true, foreign_call_resolver_url),
     );
     match solved_witness_stack_err {
-        Ok(solved_witness_stack) => Ok(solved_witness_stack),
+        Ok((solved_witness_stack, _)) => Ok(solved_witness_stack),
         Err(err) => {
             let debug_artifact = DebugArtifact {
                 debug_symbols: compiled_program.debug.clone(),
