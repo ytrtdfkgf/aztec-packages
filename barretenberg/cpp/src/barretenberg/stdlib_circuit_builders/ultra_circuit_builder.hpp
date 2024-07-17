@@ -772,8 +772,8 @@ class UltraCircuitBuilder_ : public CircuitBuilderBase<typename Arithmetization_
     std::array<uint32_t, 2> evaluate_non_native_field_multiplication(
         const non_native_field_witnesses<FF>& input, const bool range_constrain_quotient_and_remainder = true);
     std::array<uint32_t, 2> queue_partial_non_native_field_multiplication(const non_native_field_witnesses<FF>& input);
-    typedef std::pair<uint32_t, FF> scaled_witness;
-    typedef std::tuple<scaled_witness, scaled_witness, FF> add_simple;
+    using scaled_witness = std::pair<uint32_t, FF>;
+    using add_simple = std::tuple<scaled_witness, scaled_witness, FF>;
     std::array<uint32_t, 5> evaluate_non_native_field_subtraction(add_simple limb0,
                                                                   add_simple limb1,
                                                                   add_simple limb2,

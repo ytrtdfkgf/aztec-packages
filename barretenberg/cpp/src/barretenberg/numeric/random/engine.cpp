@@ -76,7 +76,7 @@ class DebugEngine : public RNG {
     DebugEngine()
         // disable linting for this line: we want the DEBUG engine to produce predictable pseudorandom numbers!
         // NOLINTNEXTLINE(cert-msc32-c, cert-msc51-cpp)
-        : engine(std::mt19937_64(12345))
+        : engine(std::mt19937_64((size_t)atoi(std::getenv("SEED"))))
     {}
 
     DebugEngine(std::uint_fast64_t seed)
@@ -131,9 +131,9 @@ RNG& get_debug_randomness(bool reset, std::uint_fast64_t seed)
  */
 RNG& get_randomness()
 {
-    // return get_debug_randomness();
-    static RandomEngine engine;
-    return engine;
+    return get_debug_randomness();
+    // static RandomEngine engine;
+    // return engine;
 }
 
 } // namespace bb::numeric

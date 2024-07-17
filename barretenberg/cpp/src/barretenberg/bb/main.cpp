@@ -542,7 +542,7 @@ void prove_tube(const std::string& output_path)
     std::string translatorVkPath = output_path + "/translator_vk";
     std::string eccVkPath = output_path + "/ecc_vk";
 
-    // Note: this could be decreased once we optimise the size of the ClientIVC recursiveve rifier
+    // Note: this could be decreased once we optimise the size of the ClientIVC recursive verifier
     init_bn254_crs(1 << 25);
     init_grumpkin_crs(1 << 18);
 
