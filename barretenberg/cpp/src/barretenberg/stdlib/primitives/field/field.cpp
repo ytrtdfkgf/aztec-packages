@@ -3,7 +3,6 @@
 #include "../circuit_builders/circuit_builders.hpp"
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
 #include <functional>
-
 using namespace bb;
 
 namespace bb::stdlib {
