@@ -237,8 +237,9 @@ fn complex_brillig_foreign_call() {
             },
             brillig::Opcode::Const {
                 destination: MemoryAddress(0),
-                value: FieldElement::from(32_usize),
+                value: 32,
                 bit_size: BitSize::Integer(IntegerBitSize::U32),
+                phantom: Default::default(),
             },
             brillig::Opcode::CalldataCopy {
                 destination_address: MemoryAddress(1),

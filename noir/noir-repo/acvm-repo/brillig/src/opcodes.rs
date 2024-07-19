@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::black_box::BlackBoxOp;
 use acir_field::AcirField;
 use serde::{Deserialize, Serialize};
@@ -221,7 +223,8 @@ pub enum BrilligOpcode<F> {
     Const {
         destination: MemoryAddress,
         bit_size: BitSize,
-        value: F,
+        value: u128,
+        phantom: PhantomData<F>,
     },
     Return,
     /// Used to get data from an outside source.

@@ -72,6 +72,14 @@ impl<F: AcirField> MemoryValue<F> {
         }
     }
 
+    pub fn new_from_u128(value: u128, bit_size: BitSize) -> Self {
+        if let BitSize::Integer(bit_size) = bit_size {
+            MemoryValue::new_integer(value, bit_size)
+        } else {
+            MemoryValue::new_field(F::from(value))
+        }
+    }
+
     /// Builds a memory value from a field element, checking that the value is within the bit size.
     pub fn new_checked(value: F, bit_size: BitSize) -> Option<Self> {
         if let BitSize::Integer(bit_size) = bit_size {

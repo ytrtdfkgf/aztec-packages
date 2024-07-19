@@ -869,7 +869,6 @@ mod tests {
 
     #[test]
     fn test_resolve_foreign_calls_stepping_into_brillig() {
-        let fe_0 = FieldElement::zero();
         let fe_1 = FieldElement::one();
         let w_x = Witness(1);
 
@@ -882,8 +881,9 @@ mod tests {
                 },
                 BrilligOpcode::Const {
                     destination: MemoryAddress::from(1),
-                    value: fe_0,
+                    value: 0,
                     bit_size: BitSize::Integer(IntegerBitSize::U32),
+                    phantom: Default::default(),
                 },
                 BrilligOpcode::ForeignCall {
                     function: "clear_mock".into(),

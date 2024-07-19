@@ -406,8 +406,11 @@ impl<F: AcirField + DebugToString> BrilligContext<F> {
         } else {
             self.push_opcode(BrilligOpcode::Const {
                 destination: result.address,
-                value: constant,
+                value: constant.try_into_u128().expect(
+                    "Constant larger than 128 bits should have been handled with decomposition",
+                ),
                 bit_size: BitSize::try_from_u32::<F>(result.bit_size).unwrap(),
+                phantom: Default::default(),
             });
         }
     }

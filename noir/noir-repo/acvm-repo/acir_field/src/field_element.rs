@@ -1,3 +1,5 @@
+use ark_ff::BigInt;
+use ark_ff::BigInteger;
 use ark_ff::PrimeField;
 use ark_ff::Zero;
 use num_bigint::BigUint;
@@ -137,19 +139,32 @@ impl<'de, T: ark_ff::PrimeField> Deserialize<'de> for FieldElement<T> {
     }
 }
 
+// Concrete efficient impl for Bigint<N> backed prime fields.
+impl<const N: usize, F: PrimeField<BigInt = BigInt<N>>> From<u128> for FieldElement<F>
+where
+    F: PrimeField<BigInt = BigInt<N>>,
+{
+    fn from(mut a: u128) -> FieldElement<F> {
+        let low = a as u64;
+        let high = (a >> 64) as u64;
+        let mut repr = BigInt::from(low);
+        repr.0[1] = high;
+        FieldElement(F::from(repr))
+    }
+}
+
+// Generic trait impl for any underlying store
 impl<F: PrimeField> From<u128> for FieldElement<F> {
     fn from(a: u128) -> FieldElement<F> {
-        let result = match F::from_str(&a.to_string()) {
-            Ok(result) => result,
-            Err(_) => panic!("Cannot convert u128 as a string to a field element"),
-        };
-        FieldElement(result)
+        let as_big_uint = BigUint::from(a);
+        FieldElement(F::from(as_big_uint))
     }
 }
 
 impl<F: PrimeField> From<usize> for FieldElement<F> {
     fn from(a: usize) -> FieldElement<F> {
-        FieldElement::from(a as u128)
+        let as_big_uint = BigUint::from(a);
+        FieldElement(F::from(as_big_uint))
     }
 }
 

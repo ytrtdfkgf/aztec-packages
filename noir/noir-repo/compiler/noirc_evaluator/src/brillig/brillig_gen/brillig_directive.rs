@@ -27,8 +27,9 @@ pub(crate) fn directive_invert<F: AcirField>() -> GeneratedBrillig<F> {
             // Put value zero in register (2)
             BrilligOpcode::Const {
                 destination: zero_const,
-                value: F::from(0_usize),
+                value: 0,
                 bit_size: BitSize::Field,
+                phantom: Default::default(),
             },
             BrilligOpcode::BinaryFieldOp {
                 op: BinaryFieldOp::Equals,
@@ -41,8 +42,9 @@ pub(crate) fn directive_invert<F: AcirField>() -> GeneratedBrillig<F> {
             // Put value one in register (1)
             BrilligOpcode::Const {
                 destination: one_const,
-                value: F::one(),
+                value: 1,
                 bit_size: BitSize::Field,
+                phantom: Default::default(),
             },
             // Divide 1 by the input, and set the result of the division into register (0)
             BrilligOpcode::BinaryFieldOp {
