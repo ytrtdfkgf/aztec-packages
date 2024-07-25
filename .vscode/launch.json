@@ -19,6 +19,17 @@
       "request": "attach",
       "name": "Attach",
       "port": 9229
+    },
+    {
+        "name": "Launch tube_bench",
+        "type": "lldb",
+        "request": "launch",
+        "program": "/mnt/user-data/adam/aztec-packages/barretenberg/cpp/build-debug/bin/tube_bench",
+        "args": [],
+        "cwd": "/mnt/user-data/adam/aztec-packages/barretenberg/cpp/build-debug/",
+        "env": {
+          "SEED": "41"
+        }
     }
   ]
 }
