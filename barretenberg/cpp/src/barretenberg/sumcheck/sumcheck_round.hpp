@@ -408,6 +408,7 @@ template <typename Flavor> class SumcheckVerifierRound {
         FF total_sum =
             FF::conditional_assign(dummy_round, target_total_sum, univariate.value_at(0) + univariate.value_at(1));
         // TODO(#673): Conditionals like this can go away once native verification is is just recursive verification
+        info("ROUND ", " T ", total_sum, " t ", target_total_sum);
         // with a simulated builder.
         bool sumcheck_round_failed(false);
         if constexpr (IsRecursiveFlavor<Flavor>) {

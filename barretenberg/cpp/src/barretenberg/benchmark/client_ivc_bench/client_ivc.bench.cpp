@@ -142,6 +142,21 @@ class ClientIVCBench : public benchmark::Fixture {
         }
         ivc.accumulate(kernel_circuit, precomputed_vks.back());
     }
+
+    /**
+     * @brief Prove and verify the IVC scheme
+     * @details Constructs four proofs: merge, eccvm, translator, decider; Verifies these four plus the final folding
+     * proof constructed on the last accumulation round
+     *
+     */
+    static void prove(benchmark::State& state, ClientIVC& ivc)
+    {
+        auto proof = ivc.prove();
+        state.PauseTiming();
+        auto verifier_inst = std::make_shared<ClientIVC::VerifierInstance>(ivc.instance_vk);
+        std::cout << "Is IVC proof valid: " << ivc.verify(proof, { ivc.verifier_accumulator, verifier_inst });
+        state.ResumeTiming();
+    }
 };
 
 /**
@@ -161,7 +176,7 @@ BENCHMARK_DEFINE_F(ClientIVCBench, Full)(benchmark::State& state)
         perform_ivc_accumulation_rounds(num_circuits, ivc, precomputed_vks);
 
         // Construct IVC scheme proof (fold, decider, merge, eccvm, translator)
-        ivc.prove();
+        prove(state, ivc);
     }
 }
 
@@ -183,7 +198,7 @@ BENCHMARK_DEFINE_F(ClientIVCBench, FullStructured)(benchmark::State& state)
         perform_ivc_accumulation_rounds(num_circuits, ivc, precomputed_vks);
 
         // Construct IVC scheme proof (fold, decider, merge, eccvm, translator)
-        ivc.prove();
+        prove(state, ivc);
     }
 }
 

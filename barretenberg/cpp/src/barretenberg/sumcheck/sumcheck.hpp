@@ -398,7 +398,6 @@ template <typename Flavor> class SumcheckVerifier {
                 transcript->template receive_from_prover<bb::Univariate<FF, BATCHED_RELATION_PARTIAL_LENGTH>>(
                     round_univariate_label);
             FF round_challenge = transcript->template get_challenge<FF>("Sumcheck:u_" + std::to_string(round_idx));
-
             if constexpr (IsRecursiveFlavor<Flavor>) {
                 typename Flavor::CircuitBuilder* builder = round_challenge.get_context();
                 stdlib::bool_t dummy_round = stdlib::witness_t(builder, round_idx >= multivariate_d);
@@ -411,7 +410,6 @@ template <typename Flavor> class SumcheckVerifier {
 
                 round.compute_next_target_sum(round_univariate, round_challenge, dummy_round);
                 pow_univariate.partially_evaluate(round_challenge, dummy_round);
-
             } else {
                 if (round_idx < multivariate_d) {
                     bool checked = round.check_sum(round_univariate);
