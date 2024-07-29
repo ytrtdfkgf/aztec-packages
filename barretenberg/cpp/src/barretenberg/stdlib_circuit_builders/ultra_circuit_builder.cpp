@@ -7,6 +7,7 @@
  */
 #include "ultra_circuit_builder.hpp"
 #include <barretenberg/plonk/proof_system/constants.hpp>
+#include <sanitizer/dfsan_interface.h>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -1512,12 +1513,10 @@ std::array<uint32_t, 2> UltraCircuitBuilder_<Arithmetization>::decompose_non_nat
 
     const uint32_t low_idx = this->add_variable(low);
     const uint32_t hi_idx = this->add_variable(hi);
-
     ASSERT(num_limb_bits > DEFAULT_NON_NATIVE_FIELD_LIMB_BITS);
     const size_t lo_bits = DEFAULT_NON_NATIVE_FIELD_LIMB_BITS;
     const size_t hi_bits = num_limb_bits - DEFAULT_NON_NATIVE_FIELD_LIMB_BITS;
     range_constrain_two_limbs(low_idx, hi_idx, lo_bits, hi_bits);
-
     return std::array<uint32_t, 2>{ low_idx, hi_idx };
 }
 
@@ -1817,7 +1816,6 @@ std::array<uint32_t, 5> UltraCircuitBuilder_<Arithmetization>::evaluate_non_nati
     const auto& x_2 = std::get<0>(limb2).first;
     const auto& x_3 = std::get<0>(limb3).first;
     const auto& x_p = std::get<0>(limbp);
-
     const auto& x_mulconst0 = std::get<0>(limb0).second;
     const auto& x_mulconst1 = std::get<0>(limb1).second;
     const auto& x_mulconst2 = std::get<0>(limb2).second;
@@ -1828,6 +1826,29 @@ std::array<uint32_t, 5> UltraCircuitBuilder_<Arithmetization>::evaluate_non_nati
     const auto& y_2 = std::get<1>(limb2).first;
     const auto& y_3 = std::get<1>(limb3).first;
     const auto& y_p = std::get<1>(limbp);
+
+    auto x_0_value = this->get_variable(x_0);
+    auto x_1_value = this->get_variable(x_1);
+    auto x_2_value = this->get_variable(x_2);
+    auto x_3_value = this->get_variable(x_3);
+    auto x_p_value = this->get_variable(x_p);
+    auto y_0_value = this->get_variable(y_0);
+    auto y_1_value = this->get_variable(y_1);
+    auto y_2_value = this->get_variable(y_2);
+    auto y_3_value = this->get_variable(y_3);
+    auto y_p_value = this->get_variable(y_p);
+
+    info("x0 label:", (uint32_t)dfsan_read_label(&x_0_value, sizeof(FF)));
+    info("x1 label:", (uint32_t)dfsan_read_label(&x_1_value, sizeof(FF)));
+    info("x2 label:", (uint32_t)dfsan_read_label(&x_2_value, sizeof(FF)));
+    info("x3 label:", (uint32_t)dfsan_read_label(&x_3_value, sizeof(FF)));
+    info("xp label:", (uint32_t)dfsan_read_label(&x_p_value, sizeof(FF)));
+
+    info("y0 label:", (uint32_t)dfsan_read_label(&y_0_value, sizeof(FF)));
+    info("y1 label:", (uint32_t)dfsan_read_label(&y_1_value, sizeof(FF)));
+    info("y2 label:", (uint32_t)dfsan_read_label(&y_2_value, sizeof(FF)));
+    info("y3 label:", (uint32_t)dfsan_read_label(&y_3_value, sizeof(FF)));
+    info("yp label:", (uint32_t)dfsan_read_label(&y_p_value, sizeof(FF)));
 
     const auto& y_mulconst0 = std::get<1>(limb0).second;
     const auto& y_mulconst1 = std::get<1>(limb1).second;
@@ -1848,6 +1869,11 @@ std::array<uint32_t, 5> UltraCircuitBuilder_<Arithmetization>::evaluate_non_nati
     const auto z_3value = this->get_variable(x_3) * x_mulconst3 + this->get_variable(y_3) * y_mulconst3 + addconst3;
     const auto z_pvalue = this->get_variable(x_p) + this->get_variable(y_p) + addconstp;
 
+    info("Z0 label:", (uint32_t)dfsan_read_label(&z_0value, sizeof(z_0value)));
+    info("Z1 label:", (uint32_t)dfsan_read_label(&z_1value, sizeof(z_1value)));
+    info("Z2 label:", (uint32_t)dfsan_read_label(&z_2value, sizeof(z_2value)));
+    info("Z3 label:", (uint32_t)dfsan_read_label(&z_3value, sizeof(z_3value)));
+    info("Z4 label:", (uint32_t)dfsan_read_label(&z_pvalue, sizeof(z_pvalue)));
     const auto z_0 = this->add_variable(z_0value);
     const auto z_1 = this->add_variable(z_1value);
     const auto z_2 = this->add_variable(z_2value);

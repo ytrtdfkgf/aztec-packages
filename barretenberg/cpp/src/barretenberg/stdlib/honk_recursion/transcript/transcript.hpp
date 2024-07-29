@@ -96,7 +96,6 @@ template <typename Builder> struct StdlibTranscriptParams {
             dfsan_set_witness_label(val.y, label);
         } else {
             // Array or Univariate
-            std::vector<bb::stdlib::field_conversion::fr<Builder>> fr_vec;
             for (auto& x : val) {
                 dfsan_set_witness_label(x, label);
             }
@@ -110,7 +109,8 @@ template <typename Builder> struct StdlibTranscriptParams {
         } else if constexpr (IsAnyOf<T, bb::stdlib::field_conversion::fr<Builder>>) {
             return dfsan_read_label(&(val.get_context()->variables[val.get_witness_index()]), sizeof(bb::fr));
         } else if constexpr (IsAnyOf<T, bb::stdlib::field_conversion::fq<Builder>>) {
-            auto label = dfsan_read_label(val.get_context()->variables[val.prime_basis_limb.get_witness_index()]);
+            auto label = dfsan_read_label(&val.get_context()->variables[val.prime_basis_limb.get_witness_index()],
+                                          sizeof(bb::fr));
             for (size_t i = 0; i < 4; i++) {
                 label = dfsan_union(
                     label,
@@ -127,8 +127,7 @@ template <typename Builder> struct StdlibTranscriptParams {
             // Array or Univariate
             dfsan_label label = 0;
             for (auto& x : val) {
-                label = dfsan_union(
-                    label, dfsan_read_label(&(x.get_context()->variables[x.get_witness_index()]), sizeof(bb::fr)));
+                label = dfsan_union(dfsan_get_witness_label(x), label);
             }
             return label;
         }

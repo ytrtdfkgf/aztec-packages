@@ -255,6 +255,24 @@
       },
       "cacheVariables": {
         "HAVE_STD_REGEX": "ON",
+        "CMAKE_CXX_FLAGS": "$env{DFSAN_CFLAGS} -mllvm -dfsan-track-origins=1",
+        "CMAKE_EXE_LINKER_FLAGS": "$env{DFSAN_LFLAGS} -mllvm -dfsan-track-origins=1",
+        "DATAFLOW_SANITIZER":"ON",
+        "DISABLE_ASM": "ON"
+      }
+    },{
+      "name": "dfsan-no-tracking",
+      "displayName": "Debugging build with data flow sanitizer on Clang-16",
+      "description": "Build with data flow sanitizer on clang16 with debugging information",
+      "inherits": "clang16-dbg",
+      "binaryDir": "build-dfsan-no-tracking",
+      "environment": {
+        "CFLAGS": "-fsanitize=dataflow",
+        "CXXFLAGS": "-fsanitize=dataflow",
+        "LDFLAGS": "-fsanitize=dataflow"
+      },
+      "cacheVariables": {
+        "HAVE_STD_REGEX": "ON",
         "CMAKE_CXX_FLAGS": "$env{DFSAN_CFLAGS}",
         "CMAKE_EXE_LINKER_FLAGS": "$env{DFSAN_LFLAGS}",
         "DATAFLOW_SANITIZER":"ON",

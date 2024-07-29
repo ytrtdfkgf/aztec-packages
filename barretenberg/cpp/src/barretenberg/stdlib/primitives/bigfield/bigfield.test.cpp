@@ -124,6 +124,34 @@ template <typename Builder> class stdlib_bigfield : public testing::Test {
         }
         bool result = CircuitChecker::check(builder);
         EXPECT_EQ(result, true);
+
+        builder = Builder();
+        for (size_t i = 0; i < num_repetitions - 1; ++i) {
+            fq inputs[3]{ fq::random_element(), fq::random_element(), fq::random_element() };
+            fq_ct a(witness_ct(&builder, fr(uint256_t(inputs[0]).slice(0, fq_ct::NUM_LIMB_BITS * 2))),
+                    witness_ct(&builder,
+                               fr(uint256_t(inputs[0]).slice(fq_ct::NUM_LIMB_BITS * 2, fq_ct::NUM_LIMB_BITS * 4))));
+            fq_ct b(witness_ct(&builder, fr(uint256_t(inputs[1]).slice(0, fq_ct::NUM_LIMB_BITS * 2))),
+                    witness_ct(&builder,
+                               fr(uint256_t(inputs[1]).slice(fq_ct::NUM_LIMB_BITS * 2, fq_ct::NUM_LIMB_BITS * 4))));
+            fq_ct c = a * b;
+            builder.finalize();
+            std::cerr << "3 steps:" <<= builder.get_num_gates();
+        }
+
+        builder = Builder();
+        for (size_t i = 0; i < num_repetitions; ++i) {
+            fq inputs[3]{ fq::random_element(), fq::random_element(), fq::random_element() };
+            fq_ct a(witness_ct(&builder, fr(uint256_t(inputs[0]).slice(0, fq_ct::NUM_LIMB_BITS * 2))),
+                    witness_ct(&builder,
+                               fr(uint256_t(inputs[0]).slice(fq_ct::NUM_LIMB_BITS * 2, fq_ct::NUM_LIMB_BITS * 4))));
+            fq_ct b(witness_ct(&builder, fr(uint256_t(inputs[1]).slice(0, fq_ct::NUM_LIMB_BITS * 2))),
+                    witness_ct(&builder,
+                               fr(uint256_t(inputs[1]).slice(fq_ct::NUM_LIMB_BITS * 2, fq_ct::NUM_LIMB_BITS * 4))));
+            fq_ct c = a * b;
+            builder.finalize();
+            std::cerr << "3 steps:" <<= builder.get_num_gates();
+        }
     }
 
     static void test_sqr()

@@ -83,12 +83,15 @@ template <typename FF_> uint32_t CircuitBuilderBase<FF_>::add_variable(const FF&
 {
 #ifdef DATAFLOW_SANITIZER
     dfsan_label value_label = dfsan_read_label(&in, sizeof(FF));
+    // dfsan_set_label(0, (void*)&in, sizeof(FF));
     dfsan_label dangerous_interaction_label_1 =
         (1 << TRANSCRIPT_SHIFT_IS_CHALLENGE_FIRST_HALF) | (1 << TRANSCRIPT_SHIFT_IS_SUBMITTED_SECOND_HALF);
     dfsan_label dangerous_interaction_label_2 =
         dangerous_interaction_label_1 | (1 << TRANSCRIPT_SHIFT_IS_CHALLENGE_SECOND_HALF);
     if (value_label == dangerous_interaction_label_1 || value_label == dangerous_interaction_label_2) {
-        throw_or_abort("Dangerous transcript interaction detected");
+        // dfsan_print_origin_trace(&in, "The trace of the offending variable");
+        abort();
+        // throw_or_abort("Dangerous transcript interaction detected");
     }
 #endif
     variables.emplace_back(in);
@@ -97,6 +100,15 @@ template <typename FF_> uint32_t CircuitBuilderBase<FF_>::add_variable(const FF&
     next_var_index.emplace_back(REAL_VARIABLE);
     prev_var_index.emplace_back(FIRST_VARIABLE_IN_CLASS);
     real_variable_tags.emplace_back(DUMMY_TAG);
+
+#ifdef DATAFLOW_SANITIZER
+    dfsan_set_label(0, (void*)&index, 4);
+    dfsan_set_label(0, &real_variable_index[index], 4);
+    dfsan_set_label(0, &next_var_index[index], 4);
+    dfsan_set_label(0, &prev_var_index[index], 4);
+    dfsan_set_label(0, &real_variable_tags[index], 4);
+    // dfsan_set_label(value_label, &variables[index], sizeof(FF));
+#endif
     return index;
 }
 
