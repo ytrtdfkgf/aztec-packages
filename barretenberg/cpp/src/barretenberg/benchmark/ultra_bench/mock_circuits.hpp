@@ -9,6 +9,7 @@
 #include "barretenberg/stdlib/hash/keccak/keccak.hpp"
 #include "barretenberg/stdlib/hash/sha256/sha256.hpp"
 #include "barretenberg/ultra_honk/ultra_prover.hpp"
+#include "tracy/Tracy.hpp"
 
 namespace bb::mock_circuits {
 
@@ -76,6 +77,7 @@ void construct_proof_with_specified_num_iterations(
     srs::init_crs_factory("../srs_db/ignition");
 
     for (auto _ : state) {
+        ZoneScopedN("ultra honk bench");
         // Construct circuit and prover; don't include this part in measurement
         state.PauseTiming();
         Prover prover = get_prover<Prover>(test_circuit_function, num_iterations);
