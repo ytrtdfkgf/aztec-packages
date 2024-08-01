@@ -1,4 +1,5 @@
 #include "barretenberg/client_ivc/client_ivc.hpp"
+#include "tracy/Tracy.hpp"
 
 namespace bb {
 
@@ -29,7 +30,7 @@ void ClientIVC::accumulate(ClientCircuit& circuit, const std::shared_ptr<Verific
     prover_instance = std::make_shared<ProverInstance>(circuit, trace_structure);
 
     // Track the maximum size of each block for all circuits porcessed (for debugging purposes only)
-    max_block_sizes.update(circuit);
+    max_block_size_tracker.update(circuit);
 
     // Set the instance verification key from precomputed if available, else compute it
     if (precomputed_vk) {
@@ -56,8 +57,8 @@ void ClientIVC::accumulate(ClientCircuit& circuit, const std::shared_ptr<Verific
  */
 ClientIVC::Proof ClientIVC::prove()
 {
-    ZoneScopedN("client shizz");
-    max_block_sizes.print(); // print minimum structured sizes for each block
+    ZoneScoped;
+    max_block_size_tracker.print(); // print minimum structured sizes for each block
     return { fold_output.proof, decider_prove(), goblin.prove() };
 };
 
