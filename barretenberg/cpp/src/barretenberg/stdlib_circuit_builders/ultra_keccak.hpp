@@ -172,7 +172,7 @@ class UltraKeccakFlavor {
                               w_r_shift,     // column 5
                               w_o_shift,     // column 6
                               w_4_shift,     // column 7
-                              z_perm_shift)  // column 10
+                              z_perm_shift)  // column 8
 
         auto get_shifted()
         {

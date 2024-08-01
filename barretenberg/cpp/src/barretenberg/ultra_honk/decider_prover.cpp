@@ -62,13 +62,17 @@ template <IsUltraFlavor Flavor> HonkProof DeciderProver_<Flavor>::export_proof()
 template <IsUltraFlavor Flavor> HonkProof DeciderProver_<Flavor>::construct_proof()
 {
     BB_OP_COUNT_TIME_NAME("Decider::construct_proof");
-
-    // Run sumcheck subprotocol.
-    execute_relation_check_rounds();
-
-    // Fiat-Shamir: rho, y, x, z
-    // Execute Zeromorph multilinear PCS
-    execute_pcs_rounds();
+    {
+        ZoneScopedN("sumcheck");
+        // Run sumcheck subprotocol.
+        execute_relation_check_rounds();
+    }
+    {
+        ZoneScopedN("ZM");
+        // Fiat-Shamir: rho, y, x, z
+        // Execute Zeromorph multilinear PCS
+        execute_pcs_rounds();
+    }
 
     return export_proof();
 }

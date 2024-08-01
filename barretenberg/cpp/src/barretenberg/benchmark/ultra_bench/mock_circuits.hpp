@@ -21,6 +21,7 @@ namespace bb::mock_circuits {
  */
 template <typename Builder> void generate_basic_arithmetic_circuit(Builder& builder, size_t log2_num_gates)
 {
+    ZoneScopedN("building the basic arithmetic circuit");
     stdlib::field_t a(stdlib::witness_t(&builder, fr::random_element()));
     stdlib::field_t b(stdlib::witness_t(&builder, fr::random_element()));
     stdlib::field_t c(&builder);
