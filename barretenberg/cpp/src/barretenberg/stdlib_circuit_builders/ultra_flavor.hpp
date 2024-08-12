@@ -215,6 +215,7 @@ class UltraFlavor {
                              this->w_r,     this->w_o,     this->w_4,     this->z_perm };
         };
         auto get_shifted() { return ShiftedEntities<DataType>::get_all(); };
+        // Because of how Gemini is written, is importat to put the polynomials out in this order.
     };
 
   public:

@@ -3,7 +3,6 @@
 #include "../claim.hpp"
 #include "barretenberg/polynomials/polynomial.hpp"
 #include "barretenberg/transcript/transcript.hpp"
-
 #include <vector>
 
 /**
@@ -58,8 +57,8 @@ namespace bb {
  * @tparam Curve CommitmentScheme parameters
  */
 template <typename Curve> struct GeminiProverOutput {
-    std::vector<OpeningPair<Curve>> opening_pairs;
     std::vector<bb::Polynomial<typename Curve::ScalarField>> witnesses;
+    std::vector<OpeningPair<Curve>> opening_pairs;
 };
 
 namespace gemini {
@@ -108,9 +107,8 @@ template <typename Curve> class GeminiProver_ {
                                                               Polynomial&& batched_unshifted,
                                                               Polynomial&& batched_to_be_shifted);
 
-    static GeminiProverOutput<Curve> compute_fold_polynomial_evaluations(std::span<const Fr> mle_opening_point,
-                                                                         std::vector<Polynomial>&& gemini_polynomials,
-                                                                         const Fr& r_challenge);
+    static std::vector<ProverOpeningClaim<Curve>> compute_fold_polynomial_evaluations(
+        std::span<const Fr> mle_opening_point, std::vector<Polynomial>&& gemini_polynomials, const Fr& r_challenge);
 }; // namespace bb
 
 template <typename Curve> class GeminiVerifier_ {
@@ -264,5 +262,5 @@ template <typename Curve> class GeminiVerifier_ {
         return { C0_r_pos, C0_r_neg };
     }
 };
-
+// using GeminiProver = GeminiProver_<bb::curve::BN254>;
 } // namespace bb

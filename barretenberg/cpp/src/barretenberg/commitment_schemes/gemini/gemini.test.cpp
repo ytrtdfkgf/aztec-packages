@@ -72,7 +72,7 @@ template <class Curve> class GeminiTest : public CommitmentTest<Curve> {
 
         for (size_t l = 0; l < log_n; ++l) {
             std::string label = "Gemini:a_" + std::to_string(l);
-            const auto& evaluation = prover_output.opening_pairs[l + 1].evaluation;
+            const auto& evaluation = prover_output.opening_pair[l + 1].evaluation;
             prover_transcript->send_to_verifier(label, evaluation);
         }
 

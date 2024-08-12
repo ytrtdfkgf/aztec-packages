@@ -141,7 +141,7 @@ std::vector<typename bb::Polynomial<typename Curve::ScalarField>> GeminiProver_<
  * @param r_challenge univariate opening challenge
  */
 template <typename Curve>
-GeminiProverOutput<Curve> GeminiProver_<Curve>::compute_fold_polynomial_evaluations(
+std::vector<ProverOpeningClaim<Curve>> GeminiProver_<Curve>::compute_fold_polynomial_evaluations(
     std::span<const Fr> mle_opening_point, std::vector<Polynomial>&& gemini_polynomials, const Fr& r_challenge)
 {
     const size_t num_variables = mle_opening_point.size(); // m
@@ -183,9 +183,14 @@ GeminiProverOutput<Curve> GeminiProver_<Curve>::compute_fold_polynomial_evaluati
             OpeningPair<Curve>{ -r_squares[l], gemini_polynomials[l + 1].evaluate(-r_squares[l]) });
     }
 
-    return { fold_poly_opening_pairs, std::move(gemini_polynomials) };
+    std::vector<ProverOpeningClaim<Curve>> result;
+    result.reserve(gemini_polynomials.size());
+    for (size_t i = 0; i < gemini_polynomials.size(); ++i) {
+        result.push_back(ProverOpeningClaim<Curve>{ .polynomial = std::move(gemini_polynomials[i]),
+                                                    .opening_pair = std::move(fold_poly_opening_pairs[i]) });
+    }
+    return result;
 };
-
-template class GeminiProver_<curve::BN254>;
-template class GeminiProver_<curve::Grumpkin>;
-}; // namespace bb
+template class GeminiProver_<bb::curve::BN254>;
+template class GeminiProver_<bb::curve::Grumpkin>;
+} // namespace bb

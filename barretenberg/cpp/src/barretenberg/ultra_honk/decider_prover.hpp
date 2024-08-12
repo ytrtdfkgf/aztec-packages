@@ -1,4 +1,7 @@
 #pragma once
+#include "barretenberg/commitment_schemes/claim.hpp"
+#include "barretenberg/commitment_schemes/gemini/gemini.hpp"
+#include "barretenberg/commitment_schemes/shplonk/shplonk.hpp"
 #include "barretenberg/commitment_schemes/zeromorph/zeromorph.hpp"
 #include "barretenberg/honk/proof_system/types/proof.hpp"
 #include "barretenberg/relations/relation_parameters.hpp"
@@ -7,6 +10,7 @@
 #include "barretenberg/sumcheck/instance/prover_instance.hpp"
 #include "barretenberg/sumcheck/sumcheck_output.hpp"
 #include "barretenberg/transcript/transcript.hpp"
+#include "work_queue.hpp"
 
 namespace bb {
 
@@ -30,7 +34,11 @@ template <IsUltraFlavor Flavor> class DeciderProver_ {
 
     BB_PROFILE void execute_relation_check_rounds();
     BB_PROFILE void execute_pcs_rounds();
-
+    BB_PROFILE void execute_univariatization_round();
+    BB_PROFILE void execute_pcs_evaluation_round();
+    BB_PROFILE void execute_shplonk_batched_quotient_round();
+    BB_PROFILE void execute_shplonk_partial_evaluation_round();
+    BB_PROFILE void execute_final_pcs_round();
     HonkProof export_proof();
     HonkProof construct_proof();
 
@@ -47,6 +55,19 @@ template <IsUltraFlavor Flavor> class DeciderProver_ {
     SumcheckOutput<Flavor> sumcheck_output;
 
     std::shared_ptr<CommitmentKey> commitment_key;
+    // Container for d + 1 Fold polynomials produced by Gemini
+    std::vector<Polynomial> fold_polynomials;
+
+    // work_queue<Flavor> queue;
+
+    using Gemini = GeminiProver_<Curve>;
+    using Shplonk = ShplonkProver_<Curve>;
+
+    std::vector<ProverOpeningClaim<Curve>> gemini_output;
+    ProverOpeningClaim<Curve> shplonk_output;
+
+    Polynomial batched_quotient_Q; // batched quotient poly computed by Shplonk
+    FF nu_challenge;
 
   private:
     HonkProof proof;
