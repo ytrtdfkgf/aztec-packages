@@ -37,7 +37,9 @@ class MegaHonkComposerTests : public ::testing::Test {
         MegaProver prover(instance);
         auto verification_key = std::make_shared<MegaFlavor::VerificationKey>(instance->proving_key);
         MegaVerifier verifier(verification_key);
+        info("before constructing the proof");
         auto proof = prover.construct_proof();
+        info("before verifying the proof");
         bool verified = verifier.verify_proof(proof);
 
         return verified;

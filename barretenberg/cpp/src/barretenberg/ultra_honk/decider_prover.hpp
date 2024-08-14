@@ -33,10 +33,8 @@ template <IsUltraFlavor Flavor> class DeciderProver_ {
                             const std::shared_ptr<Transcript>& transcript = std::make_shared<Transcript>());
 
     BB_PROFILE void execute_relation_check_rounds();
-    BB_PROFILE void execute_pcs_rounds();
     BB_PROFILE void execute_univariatization_round();
     BB_PROFILE void execute_pcs_evaluation_round();
-    BB_PROFILE void execute_shplonk_batched_quotient_round();
     BB_PROFILE void execute_shplonk_partial_evaluation_round();
     BB_PROFILE void execute_final_pcs_round();
     HonkProof export_proof();

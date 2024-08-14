@@ -10,6 +10,7 @@ template <typename Flavor> class UltraRecursiveVerifier_ {
   public:
     using FF = typename Flavor::FF;
     using Commitment = typename Flavor::Commitment;
+    using Curve = typename Flavor::Curve;
     using GroupElement = typename Flavor::GroupElement;
     using VerificationKey = typename Flavor::VerificationKey;
     using NativeVerificationKey = typename Flavor::NativeVerificationKey;

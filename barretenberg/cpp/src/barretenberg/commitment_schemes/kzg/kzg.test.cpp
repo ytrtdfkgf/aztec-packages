@@ -127,17 +127,17 @@ TYPED_TEST(KZGTest, GeminiShplonkKzgWithShift)
 
     const Fr r_challenge = prover_transcript->template get_challenge<Fr>("Gemini:r");
 
-    const auto [gemini_opening_pairs, gemini_witnesses] = GeminiProver::compute_fold_polynomial_evaluations(
+    const auto gemini_output = GeminiProver::compute_fold_polynomial_evaluations(
         mle_opening_point, std::move(gemini_polynomials), r_challenge);
 
     std::vector<ProverOpeningClaim<TypeParam>> opening_claims;
     for (size_t l = 0; l < log_n; ++l) {
         std::string label = "Gemini:a_" + std::to_string(l);
-        const auto& evaluation = gemini_opening_pairs[l + 1].evaluation;
+        const auto& evaluation = gemini_output[l + 1].opening_pair.evaluation;
         prover_transcript->send_to_verifier(label, evaluation);
-        opening_claims.emplace_back(gemini_witnesses[l], gemini_opening_pairs[l]);
+        opening_claims.emplace_back(gemini_output[l].polynomial, gemini_output[l].opening_pair);
     }
-    opening_claims.emplace_back(gemini_witnesses[log_n], gemini_opening_pairs[log_n]);
+    opening_claims.emplace_back(gemini_output[log_n].polynomial, gemini_output[log_n].opening_pair);
 
     // Shplonk prover output:
     // - opening pair: (z_challenge, 0)

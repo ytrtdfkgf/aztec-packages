@@ -159,9 +159,11 @@ BENCHMARK_DEFINE_F(ClientIVCBench, Full)(benchmark::State& state)
         BB_REPORT_OP_COUNT_IN_BENCH(state);
         // Perform a specified number of iterations of function/kernel accumulation
         perform_ivc_accumulation_rounds(num_circuits, ivc, precomputed_vks);
+        info("before proving");
 
         // Construct IVC scheme proof (fold, decider, merge, eccvm, translator)
         ivc.prove();
+        info("breaks here");
     }
 }
 

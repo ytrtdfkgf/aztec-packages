@@ -86,7 +86,6 @@ std::vector<typename bb::Polynomial<typename Curve::ScalarField>> GeminiProver_<
         // A_l_fold = Aₗ₊₁(X) = (1-uₗ)⋅even(Aₗ)(X) + uₗ⋅odd(Aₗ)(X)
         gemini_polynomials.emplace_back(Polynomial(n_l));
     }
-
     // A_l = Aₗ(X) is the polynomial being folded
     // in the first iteration, we take the batched polynomial
     // in the next iteration, it is the previously folded one
@@ -116,8 +115,11 @@ std::vector<typename bb::Polynomial<typename Curve::ScalarField>> GeminiProver_<
                 // fold(Aₗ)[j] = (1-uₗ)⋅even(Aₗ)[j] + uₗ⋅odd(Aₗ)[j]
                 //            = (1-uₗ)⋅Aₗ[2j]      + uₗ⋅Aₗ[2j+1]
                 //            = Aₗ₊₁[j]
-                A_l_fold[j] = A_l[j << 1] + u_l * (A_l[(j << 1) + 1] - A_l[j << 1]);
-            }
+                auto idx = static_cast<ptrdiff_t>(j);
+                auto idx_to_2 = static_cast<ptrdiff_t>(j << 1);
+                A_l_fold[idx] = A_l[idx_to_2] + u_l * (A_l[idx_to_2 + 1] - A_l[idx_to_2]);
+                // info("chunk", j);
+            };
         });
         // set Aₗ₊₁ = Aₗ for the next iteration
         A_l = A_l_fold;

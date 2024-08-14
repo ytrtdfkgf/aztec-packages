@@ -108,7 +108,7 @@ template <typename Flavor> bool UltraVerifier_<Flavor>::verify_proof(const HonkP
         batched_commitment_to_be_shifted = batched_commitment_to_be_shifted + commitment * rhos[commitment_idx];
         ++commitment_idx;
     }
-
+    multivariate_challenge.resize(log_circuit_size);
     auto gemini_opening_claim = Gemini::reduce_verification(multivariate_challenge,
                                                             /*define!*/ batched_evaluation,
                                                             /*define*/ batched_commitment_unshifted,

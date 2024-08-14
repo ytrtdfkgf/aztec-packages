@@ -72,12 +72,18 @@ template <class Curve> class GeminiTest : public CommitmentTest<Curve> {
 
         for (size_t l = 0; l < log_n; ++l) {
             std::string label = "Gemini:a_" + std::to_string(l);
-            const auto& evaluation = prover_output.opening_pair[l + 1].evaluation;
+            const auto& evaluation = prover_output[l + 1].opening_pair.evaluation;
             prover_transcript->send_to_verifier(label, evaluation);
         }
+        std::vector<OpeningPair<Curve>> opening_pairs;
+        std::vector<Polynomial> witnesses;
 
+        for (auto claim : prover_output) {
+            opening_pairs.emplace_back(claim.opening_pair);
+            witnesses.emplace_back(claim.polynomial);
+        }
         // Check that the Fold polynomials have been evaluated correctly in the prover
-        this->verify_batch_opening_pair(prover_output.opening_pairs, prover_output.witnesses);
+        this->verify_batch_opening_pair(opening_pairs, witnesses);
 
         auto verifier_transcript = NativeTranscript::verifier_init_empty(prover_transcript);
 
@@ -93,11 +99,11 @@ template <class Curve> class GeminiTest : public CommitmentTest<Curve> {
 
         // Check equality of the opening pairs computed by prover and verifier
         for (size_t i = 0; i < (log_n + 1); ++i) {
-            ASSERT_EQ(prover_output.opening_pairs[i], verifier_claim[i].opening_pair);
+            ASSERT_EQ(prover_output[i].opening_pair, verifier_claim[i].opening_pair);
         }
 
         // Explicitly verify the claims computed by the verfier
-        this->verify_batch_opening_claim(verifier_claim, prover_output.witnesses);
+        this->verify_batch_opening_claim(verifier_claim, witnesses);
     }
 };
 

@@ -1,5 +1,4 @@
 #include "decider_prover.hpp"
-
 #include "barretenberg/common/op_count.hpp"
 #include "barretenberg/sumcheck/sumcheck.hpp"
 
@@ -34,26 +33,26 @@ template <IsUltraFlavor Flavor> void DeciderProver_<Flavor>::execute_relation_ch
     sumcheck_output = sumcheck.prove(accumulator);
 }
 
-/**
- * @brief Execute the ZeroMorph protocol to produce an opening claim for the multilinear evaluations produced by
- * Sumcheck and then produce an opening proof with a univariate PCS.
- * @details See https://hackmd.io/dlf9xEwhTQyE3hiGbq4FsA?view for a complete description of the unrolled protocol.
- *
- * */
-template <IsUltraFlavor Flavor> void DeciderProver_<Flavor>::execute_pcs_rounds()
-{
-    using ZeroMorph = ZeroMorphProver_<Curve>;
+// /**
+//  * @brief Execute the ZeroMorph protocol to produce an opening claim for the multilinear evaluations produced by
+//  * Sumcheck and then produce an opening proof with a univariate PCS.
+//  * @details See https://hackmd.io/dlf9xEwhTQyE3hiGbq4FsA?view for a complete description of the unrolled protocol.
+//  *
+//  * */
+// template <IsUltraFlavor Flavor> void DeciderProver_<Flavor>::execute_pcs_rounds()
+// {
+//     using ZeroMorph = ZeroMorphProver_<Curve>;
 
-    auto prover_opening_claim = ZeroMorph::prove(accumulator->proving_key.circuit_size,
-                                                 accumulator->proving_key.polynomials.get_unshifted(),
-                                                 accumulator->proving_key.polynomials.get_to_be_shifted(),
-                                                 sumcheck_output.claimed_evaluations.get_unshifted(),
-                                                 sumcheck_output.claimed_evaluations.get_shifted(),
-                                                 sumcheck_output.challenge,
-                                                 commitment_key,
-                                                 transcript);
-    PCS::compute_opening_proof(commitment_key, prover_opening_claim, transcript);
-}
+//     auto prover_opening_claim = ZeroMorph::prove(accumulator->proving_key.circuit_size,
+//                                                  accumulator->proving_key.polynomials.get_unshifted(),
+//                                                  accumulator->proving_key.polynomials.get_to_be_shifted(),
+//                                                  sumcheck_output.claimed_evaluations.get_unshifted(),
+//                                                  sumcheck_output.claimed_evaluations.get_shifted(),
+//                                                  sumcheck_output.challenge,
+//                                                  commitment_key,
+//                                                  transcript);
+//     PCS::compute_opening_proof(commitment_key, prover_opening_claim, transcript);
+// }
 
 /**
  * - Get rho challenge
@@ -68,6 +67,9 @@ template <IsUltraFlavor Flavor> void DeciderProver_<Flavor>::execute_univariatiz
     FF rho = transcript->template get_challenge<FF>("rho");
     std::vector<FF> rhos = gemini::powers_of_rho(rho, NUM_POLYNOMIALS);
     size_t circuit_size = accumulator->proving_key.circuit_size;
+    auto sumcheck_challenges = sumcheck_output.challenge;
+    size_t log_circuit_size = accumulator->proving_key.log_circuit_size;
+    sumcheck_challenges.resize(log_circuit_size);
     // Batch the unshifted polynomials and the to-be-shifted polynomials using ρ
     Polynomial batched_poly_unshifted(circuit_size); // batched unshifted polynomials
     size_t poly_idx = 0;                             // TODO(#391) zip
@@ -84,9 +86,8 @@ template <IsUltraFlavor Flavor> void DeciderProver_<Flavor>::execute_univariatiz
 
     // Compute d-1 polynomials Fold^(i), i = 1, ..., d-1.
     fold_polynomials = Gemini::compute_gemini_polynomials(
-        sumcheck_output.challenge, std::move(batched_poly_unshifted), std::move(batched_poly_to_be_shifted));
-
-    // Compute and add to trasnscript the commitments [Fold^(i)], i = 1, ..., d-1
+        sumcheck_challenges, std::move(batched_poly_unshifted), std::move(batched_poly_to_be_shifted));
+    // Comute and add to trasnscript the commitments [Fold^(i)], i = 1, ..., d-1
     for (size_t l = 0; l < accumulator->proving_key.log_circuit_size - 1; ++l) {
         Commitment current_commitment = commitment_key->commit(fold_polynomials[l + 2]);
         transcript->send_to_verifier("Gemini:FOLD_" + std::to_string(l + 1), current_commitment);
@@ -102,8 +103,11 @@ template <IsUltraFlavor Flavor> void DeciderProver_<Flavor>::execute_univariatiz
 template <IsUltraFlavor Flavor> void DeciderProver_<Flavor>::execute_pcs_evaluation_round()
 {
     const FF r_challenge = transcript->template get_challenge<FF>("Gemini:r");
-    gemini_output = Gemini::compute_fold_polynomial_evaluations(
-        sumcheck_output.challenge, std ::move(fold_polynomials), r_challenge);
+    auto sumcheck_challenges = sumcheck_output.challenge;
+    size_t log_circuit_size = accumulator->proving_key.log_circuit_size;
+    sumcheck_challenges.resize(log_circuit_size);
+    gemini_output =
+        Gemini::compute_fold_polynomial_evaluations(sumcheck_challenges, std ::move(fold_polynomials), r_challenge);
 
     for (size_t l = 0; l < accumulator->proving_key.log_circuit_size; ++l) {
         std::string label = "Gemini:a_" + std::to_string(l);
@@ -153,11 +157,10 @@ template <IsUltraFlavor Flavor> HonkProof DeciderProver_<Flavor>::construct_proo
 
     // Run sumcheck subprotocol.
     execute_relation_check_rounds();
-
-    // Fiat-Shamir: rho, y, x, z
-    // Execute Zeromorph multilinear PCS
-    execute_pcs_rounds();
-
+    execute_univariatization_round();
+    execute_pcs_evaluation_round();
+    execute_shplonk_partial_evaluation_round();
+    execute_final_pcs_round();
     return export_proof();
 }
 
