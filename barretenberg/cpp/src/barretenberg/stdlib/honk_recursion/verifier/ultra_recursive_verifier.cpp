@@ -147,7 +147,8 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
     }
     auto [multivariate_challenge, claimed_evaluations, sumcheck_verified] =
         sumcheck.verify(relation_parameters, alpha, gate_challenges);
-
+    size_t prev_num_gates;
+    prev_num_gates = builder->num_gates;
     // Compute powers of batching challenge rho
     FF rho = transcript->template get_challenge<FF>("rho");
     std::vector<FF> rhos = gemini::powers_of_rho(rho, Flavor::NUM_ALL_ENTITIES);
@@ -166,6 +167,7 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
     // each MSM then perform the two batch muls.
     const size_t NUM_UNSHIFTED = commitments.get_unshifted().size();
     const size_t NUM_TO_BE_SHIFTED = commitments.get_to_be_shifted().size();
+
     std::vector<FF> scalars_unshifted;
     std::vector<FF> scalars_to_be_shifted;
     size_t idx = 0;
@@ -195,8 +197,6 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
     auto batched_commitment_to_be_shifted = GroupElement::batch_mul(shifted_comms, scalars_to_be_shifted);
 
     multivariate_challenge.resize(log_circuit_size);
-    size_t prev_num_gates;
-    prev_num_gates = builder->num_gates;
 
     auto gemini_opening_claim = Gemini::reduce_verification(multivariate_challenge,
                                                             /*define!*/ batched_evaluation,
