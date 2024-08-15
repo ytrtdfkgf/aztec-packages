@@ -6,6 +6,7 @@
 #include "barretenberg/protogalaxy/decider_verifier.hpp"
 #include "barretenberg/protogalaxy/protogalaxy_prover.hpp"
 #include "barretenberg/protogalaxy/protogalaxy_verifier.hpp"
+#include "barretenberg/stdlib/primitives/databus/databus.hpp"
 #include "barretenberg/sumcheck/instance/instances.hpp"
 #include "barretenberg/ultra_honk/decider_prover.hpp"
 #include <algorithm>
@@ -28,6 +29,7 @@ class AztecIVC {
     using VerificationKey = Flavor::VerificationKey;
     using FF = Flavor::FF;
     using FoldProof = std::vector<FF>;
+    using MergeProof = std::vector<FF>;
     using ProverInstance = ProverInstance_<Flavor>;
     using VerifierInstance = VerifierInstance_<Flavor>;
     using ClientCircuit = MegaCircuitBuilder; // can only be Mega
@@ -44,6 +46,8 @@ class AztecIVC {
     using RecursiveVerifierInstances = bb::stdlib::recursion::honk::RecursiveVerifierInstances_<GURecursiveFlavor, 2>;
     using FoldingRecursiveVerifier =
         bb::stdlib::recursion::honk::ProtoGalaxyRecursiveVerifier_<RecursiveVerifierInstances>;
+
+    using DataBusDepot = stdlib::DataBusDepot<ClientCircuit>;
 
     // A full proof for the IVC scheme
     struct Proof {
@@ -77,13 +81,21 @@ class AztecIVC {
 
     // Set of pairs of {fold_proof, verification_key} to be recursively verified
     std::vector<FoldingVerifierInputs> verification_queue;
+    // Set of merge proofs to be recursively verified
+    std::vector<MergeProof> merge_verification_queue;
+
+    // Management of linking databus commitments between circuits in the IVC
+    DataBusDepot bus_depot;
 
     // A flag indicating whether or not to construct a structured trace in the ProverInstance
     TraceStructure trace_structure = TraceStructure::NONE;
 
-    // The number of circuits processed into the IVC
-    size_t circuit_count = 0;
+    bool initialized = false; // Is the IVC accumulator initialized
 
+    // Complete the logic of a kernel circuit (e.g. PG/merge recursive verification, databus consistency checks)
+    void complete_kernel_circuit_logic(ClientCircuit& circuit);
+
+    // Perform prover work for accumulation (e.g. PG folding, merge proving)
     void accumulate(ClientCircuit& circuit, const std::shared_ptr<VerificationKey>& precomputed_vk = nullptr);
 
     Proof prove();
@@ -99,7 +111,5 @@ class AztecIVC {
     bool prove_and_verify();
 
     HonkProof decider_prove() const;
-
-    std::vector<std::shared_ptr<VerificationKey>> precompute_folding_verification_keys(std::vector<ClientCircuit>);
 };
 } // namespace bb

@@ -5,8 +5,8 @@
 
 #include "barretenberg/stdlib_circuit_builders/circuit_builder_base.hpp"
 
-#include "barretenberg/vm/generated/{{snakeCase name}}_full_row.hpp"
-#include "barretenberg/vm/generated/{{snakeCase name}}_flavor.hpp"
+#include "barretenberg/vm/{{snakeCase name}}/generated/full_row.hpp"
+#include "barretenberg/vm/{{snakeCase name}}/generated/flavor.hpp"
 
 namespace bb {
 
@@ -20,8 +20,6 @@ class {{name}}CircuitBuilder {
         using Polynomial = Flavor::Polynomial;
         using ProverPolynomials = Flavor::ProverPolynomials;
 
-        static constexpr size_t num_fixed_columns = {{len all_cols}};
-        static constexpr size_t num_polys = {{len all_cols}} + {{len to_be_shifted}};
         std::vector<Row> rows;
 
         void set_trace(std::vector<Row>&& trace) { rows = std::move(trace); }
