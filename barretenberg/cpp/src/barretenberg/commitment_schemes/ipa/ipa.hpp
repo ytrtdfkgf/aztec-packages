@@ -452,9 +452,13 @@ template <typename Curve_> class IPA {
 
         // Step 8.
         // Compute G₀
-        Commitment G_zero = bb::scalar_multiplication::pippenger_without_endomorphism_basis_points<Curve>(
-            &s_vec[0], &G_vec_local[0], poly_length, vk->pippenger_runtime_state);
-
+        Commitment G_zero;
+        {
+            BB_OP_COUNT_TIME_NAME("IPA verification");
+            // info("NUM MSM SCALARS IN IPA VERIFICATION: ", s_vec.size());
+            G_zero = bb::scalar_multiplication::pippenger_without_endomorphism_basis_points<Curve>(
+                &s_vec[0], &G_vec_local[0], poly_length, vk->pippenger_runtime_state);
+        }
         // Step 9.
         // Receive a₀ from the prover
         auto a_zero = transcript->template receive_from_prover<Fr>("IPA:a_0");

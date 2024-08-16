@@ -271,6 +271,52 @@ BENCHMARK_DEFINE_F(ClientIVCBench, Translator)(benchmark::State& state)
     }
 }
 
+/**
+ * @brief Benchmark the verifier
+ *
+ */
+BENCHMARK_DEFINE_F(ClientIVCBench, NativeVerifier)(benchmark::State& state)
+{
+    ClientIVC ivc;
+    ivc.trace_structure = TraceStructure::CLIENT_IVC_BENCH;
+
+    auto num_circuits = static_cast<size_t>(state.range(0));
+    auto precomputed_vks = precompute_verification_keys(ivc, num_circuits);
+
+    // Perform a specified number of iterations of function/kernel accumulation
+    perform_ivc_accumulation_rounds(num_circuits, ivc, precomputed_vks);
+
+    // Construct IVC scheme proof (fold, decider, merge, eccvm, translator)
+    auto proof = ivc.prove();
+    auto verifier_inst = std::make_shared<typename ClientIVC::VerifierInstance>(ivc.instance_vk);
+
+    BB_REPORT_OP_COUNT_IN_BENCH(state);
+
+    for (auto _ : state) {
+        ivc.verify(proof, { ivc.verifier_accumulator, verifier_inst });
+    }
+
+    // std::vector<decltype(proof)> proofs(1 << 12);
+    // std::fill(proofs.begin(), proofs.end(), proof);
+
+    // std::vector<decltype(ivc.verifier_accumulator)> accumulators(1 << 12);
+    // std::fill(accumulators.begin(), accumulators.end(), ivc.verifier_accumulator);
+
+    // std::vector<decltype(verifier_inst)> verifier_insts(1 << 12);
+    // std::fill(verifier_insts.begin(), verifier_insts.end(), verifier_inst);
+
+    // BB_REPORT_OP_COUNT_IN_BENCH(state);
+
+    // for (auto _ : state) {
+    //     run_loop_in_parallel(proofs.size(), [&](size_t start, size_t end) {
+    //         for (size_t idx = start; idx < end; idx++) {
+    //             ClientIVC verifier_ivc;
+    //             verifier_ivc.verify(proofs[idx], { accumulators[idx], verifier_insts[idx] });
+    //         }
+    //     });
+    // }
+}
+
 #define ARGS                                                                                                           \
     Arg(ClientIVCBench::NUM_ITERATIONS_MEDIUM_COMPLEXITY)                                                              \
         ->Arg(1 << 1)                                                                                                  \
@@ -286,6 +332,7 @@ BENCHMARK_REGISTER_F(ClientIVCBench, Accumulate)->Unit(benchmark::kMillisecond)-
 BENCHMARK_REGISTER_F(ClientIVCBench, Decide)->Unit(benchmark::kMillisecond)->ARGS;
 BENCHMARK_REGISTER_F(ClientIVCBench, ECCVM)->Unit(benchmark::kMillisecond)->ARGS;
 BENCHMARK_REGISTER_F(ClientIVCBench, Translator)->Unit(benchmark::kMillisecond)->ARGS;
+BENCHMARK_REGISTER_F(ClientIVCBench, NativeVerifier)->Unit(benchmark::kMillisecond)->ARGS;
 
 } // namespace
 
