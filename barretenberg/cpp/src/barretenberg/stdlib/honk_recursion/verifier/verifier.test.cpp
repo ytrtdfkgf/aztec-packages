@@ -48,7 +48,7 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
      * @param public_inputs
      * @param log_num_gates
      */
-    static InnerBuilder create_inner_circuit(size_t log_num_gates = 10)
+    static InnerBuilder create_inner_circuit(size_t log_num_gates = 20)
     {
         using fr = typename InnerCurve::ScalarFieldNative;
 
@@ -57,11 +57,11 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
         // Create 2^log_n many add gates based on input log num gates
         const size_t num_gates = (1 << log_num_gates);
         for (size_t i = 0; i < num_gates; ++i) {
-            fr a = fr::random_element();
+            fr a = fr(3);
             uint32_t a_idx = builder.add_variable(a);
 
-            fr b = fr::random_element();
-            fr c = fr::random_element();
+            fr b = fr(51);
+            fr c = fr(5);
             fr d = a + b + c;
             uint32_t b_idx = builder.add_variable(b);
             uint32_t c_idx = builder.add_variable(c);

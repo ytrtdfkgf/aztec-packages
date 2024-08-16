@@ -229,6 +229,7 @@ template <typename Curve> class ShplonkVerifier_ {
             scalars.emplace_back(G_commitment_constant);
 
             // [G] += G₀⋅[1] = [G] + (∑ⱼ ρʲ ⋅ vⱼ / ( r − xⱼ ))⋅[1]
+            info("batch mul size", scalars.size());
             G_commitment = GroupElement::batch_mul(commitments, scalars);
 
         } else {
