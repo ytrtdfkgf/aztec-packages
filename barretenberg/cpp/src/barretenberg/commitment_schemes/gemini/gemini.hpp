@@ -129,6 +129,53 @@ template <typename Curve> class GeminiVerifier_ {
      * @return Fold polynomial opening claims: (r, A₀(r), C₀₊), (-r, A₀(-r), C₀₋), and
      * (Cⱼ, Aⱼ(-r^{2ʲ}), -r^{2}), j = [1, ..., m-1]
      */
+    static std::vector<OpeningClaim<Curve>> reduce_efficient_verification(std::span<const Fr> mle_opening_point, /* u */
+                                                                          const Fr batched_evaluation, /* all */
+                                                                          Fr& a_0_pos,
+                                                                          Fr& a_0_neg,
+                                                                          Fr& r, // gemini challenge
+                                                                          auto& transcript)
+    {
+        const size_t num_variables = mle_opening_point.size();
+
+        // Get commitments to polynomials Fold_i, i = 1,...,m-1 from transcript
+        std::vector<Commitment> commitments;
+        commitments.reserve(num_variables - 1);
+        for (size_t i = 0; i < num_variables - 1; ++i) {
+            auto commitment =
+                transcript->template receive_from_prover<Commitment>("Gemini:FOLD_" + std::to_string(i + 1));
+            commitments.emplace_back(commitment);
+        }
+        info("number FOLD gemini comms ", commitments.size());
+        // compute vector of powers of random evaluation point r
+        r = transcript->template get_challenge<Fr>("Gemini:r");
+        std::vector<Fr> r_squares = gemini::squares_of_r(r, num_variables);
+
+        // Get evaluations a_i, i = 0,...,m-1 from transcript
+        std::vector<Fr> evaluations;
+        evaluations.reserve(num_variables);
+        for (size_t i = 0; i < num_variables; ++i) {
+            auto eval = transcript->template receive_from_prover<Fr>("Gemini:a_" + std::to_string(i));
+            evaluations.emplace_back(eval);
+        }
+
+        // Compute the evaluation of the batched polynomial at X = r
+        a_0_pos = compute_eval_pos(batched_evaluation, mle_opening_point, r_squares, evaluations);
+        // Get the evaluation of the batched polynomial at X = -r
+        a_0_neg = evaluations[0];
+
+        std::vector<OpeningClaim<Curve>> fold_polynomial_opening_claims;
+        fold_polynomial_opening_claims.reserve(num_variables - 1);
+
+        for (size_t l = 0; l < num_variables - 1; ++l) {
+            // ([A₀₋], −r^{2ˡ}, Aₗ(−r^{2ˡ}) )
+            fold_polynomial_opening_claims.emplace_back(
+                OpeningClaim<Curve>{ { -r_squares[l + 1], evaluations[l + 1] }, commitments[l] });
+        }
+
+        return fold_polynomial_opening_claims;
+    }
+
     static std::vector<OpeningClaim<Curve>> reduce_verification(std::span<const Fr> mle_opening_point, /* u */
                                                                 const Fr batched_evaluation,           /* all */
                                                                 GroupElement& batched_f,               /* unshifted */
@@ -149,6 +196,7 @@ template <typename Curve> class GeminiVerifier_ {
         // compute vector of powers of random evaluation point r
         const Fr r = transcript->template get_challenge<Fr>("Gemini:r");
         std::vector<Fr> r_squares = gemini::squares_of_r(r, num_variables);
+        info("size of squares of r", r_squares.size());
 
         // Get evaluations a_i, i = 0,...,m-1 from transcript
         std::vector<Fr> evaluations;
@@ -244,9 +292,9 @@ template <typename Curve> class GeminiVerifier_ {
             std::vector<GroupElement> commitments = { batched_f, batched_g };
             auto builder = r.get_context();
             auto one = Fr(builder, 1);
-            // TODO(#707): these batch muls include the use of 1 as a scalar. This is handled appropriately as a non-mul
-            // (add-accumulate) in the goblin batch_mul but is done inefficiently as a scalar mul in the conventional
-            // emulated batch mul.
+            // TODO(#707): these batch muls include the use of 1 as a scalar. This is handled appropriately as a
+            // non-mul (add-accumulate) in the goblin batch_mul but is done inefficiently as a scalar mul in the
+            // conventional emulated batch mul.
             C0_r_pos = GroupElement::batch_mul(commitments, { one, r_inv });
             C0_r_neg = GroupElement::batch_mul(commitments, { one, -r_inv });
         } else {

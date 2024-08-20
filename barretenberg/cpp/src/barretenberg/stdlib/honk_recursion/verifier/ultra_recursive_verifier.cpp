@@ -49,7 +49,7 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
     using CommitmentLabels = typename Flavor::CommitmentLabels;
     using RelationParams = ::bb::RelationParameters<FF>;
     using Transcript = typename Flavor::Transcript;
-    using GroupElement = typename Flavor::GroupElement;
+    // using GroupElement = typename Flavor::GroupElement;
 
     transcript = std::make_shared<Transcript>(proof);
 
@@ -147,11 +147,16 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
     }
     auto [multivariate_challenge, claimed_evaluations, sumcheck_verified] =
         sumcheck.verify(relation_parameters, alpha, gate_challenges);
+
+    // PCS stuff begins
     size_t prev_num_gates;
     prev_num_gates = builder->num_gates;
     // Compute powers of batching challenge rho
     FF rho = transcript->template get_challenge<FF>("rho");
+
     std::vector<FF> rhos = gemini::powers_of_rho(rho, Flavor::NUM_ALL_ENTITIES);
+    info("Powers: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
+    prev_num_gates = builder->num_gates;
 
     // Compute batched multivariate evaluation
     FF batched_evaluation = FF(0);
@@ -178,58 +183,73 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
         scalars_to_be_shifted.emplace_back(rhos[idx++]);
     }
 
-    std::vector<GroupElement> unshifted_comms;
+    // std::vector<GroupElement> unshifted_comms;
 
-    for (auto commitment : commitments.get_unshifted()) {
-        unshifted_comms.emplace_back(commitment);
-    }
-    prev_num_gates = builder->num_gates;
-    scalars_unshifted[0] = FF(builder, 1);
-    // Batch the commitments to the unshifted and to-be-shifted polynomials using powers of rho
-    auto batched_commitment_unshifted = GroupElement::batch_mul(unshifted_comms, scalars_unshifted);
-    info("size batch mul = ", scalars_unshifted.size());
-    info("Unshifted Batched mul: num gates = ",
-         builder->num_gates - prev_num_gates,
-         ", (total = ",
-         builder->num_gates,
-         ")");
-    prev_num_gates = builder->num_gates;
+    // for (auto commitment : commitments.get_unshifted()) {
+    //     unshifted_comms.emplace_back(commitment);
+    // }
+    // prev_num_gates = builder->num_gates;
+    // scalars_unshifted[0] = FF(builder, 1);
+    // // Batch the commitments to the unshifted and to-be-shifted polynomials using powers of rho
+    // auto batched_commitment_unshifted = GroupElement::batch_mul(unshifted_comms, scalars_unshifted);
+    // info("size batch mul = ", scalars_unshifted.size());
+    // info("Unshifted Batched mul: num gates = ",
+    //      builder->num_gates - prev_num_gates,
+    //      ", (total = ",
+    //      builder->num_gates,
+    //      ")");
+    // prev_num_gates = builder->num_gates;
 
-    std::vector<GroupElement> shifted_comms;
+    // std::vector<GroupElement> shifted_comms;
 
-    for (auto commitment : commitments.get_to_be_shifted()) {
-        shifted_comms.emplace_back(commitment);
-    }
-    prev_num_gates = builder->num_gates;
-    auto batched_commitment_to_be_shifted = GroupElement::batch_mul(shifted_comms, scalars_to_be_shifted);
-    info("Shifted Batched mul: num gates = ",
-         builder->num_gates - prev_num_gates,
-         ", (total = ",
-         builder->num_gates,
-         ")");
-    info("size batch mul = ", scalars_to_be_shifted.size());
+    // for (auto commitment : commitments.get_to_be_shifted()) {
+    //     shifted_comms.emplace_back(commitment);
+    // }
+    // prev_num_gates = builder->num_gates;
+    // auto batched_commitment_to_be_shifted = GroupElement::batch_mul(shifted_comms, scalars_to_be_shifted);
+    // info("Shifted Batched mul: num gates = ",
+    //      builder->num_gates - prev_num_gates,
+    //      ", (total = ",
+    //      builder->num_gates,
+    //      ")");
+    // info("size batch mul = ", scalars_to_be_shifted.size());
 
     prev_num_gates = builder->num_gates;
 
     multivariate_challenge.resize(log_circuit_size);
 
-    auto gemini_opening_claim = Gemini::reduce_verification(multivariate_challenge,
-                                                            /*define!*/ batched_evaluation,
-                                                            /*define*/ batched_commitment_unshifted,
-                                                            /*define*/ batched_commitment_to_be_shifted,
-                                                            transcript);
+    FF a_0_pos;
+    FF a_0_neg;
+    FF gemini_challenge;
+    auto gemini_eff_opening_claim = Gemini::reduce_efficient_verification(
+        multivariate_challenge, batched_evaluation, a_0_pos, a_0_neg, gemini_challenge, transcript);
+    auto shplemini_claim = Shplonk::verify_gemini(key->pcs_verification_key->get_g1_identity(),
+                                                  commitments.get_unshifted(),
+                                                  commitments.get_to_be_shifted(),
+                                                  rho,              // batching challenge
+                                                  gemini_challenge, // gemini opening
+                                                  a_0_pos,
+                                                  a_0_neg,
+                                                  gemini_eff_opening_claim, // opening claims for the folds
+                                                  transcript);
+    info(shplemini_claim.opening_pair.challenge);
+    // auto gemini_opening_claim = Gemini::reduce_verification(multivariate_challenge,
+    //                                                         /*define!*/ batched_evaluation,
+    //                                                         /*define*/ batched_commitment_unshifted,
+    //                                                         /*define*/ batched_commitment_to_be_shifted,
+    //                                                         transcript);
 
-    info("Gemini: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
-    prev_num_gates = builder->num_gates;
+    // info("Gemini: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
+    // prev_num_gates = builder->num_gates;
 
-    // Produce a Shplonk claim: commitment [Q] - [Q_z], evaluation zero (at random challenge z)
-    auto shplonk_claim =
-        Shplonk::reduce_verification(key->pcs_verification_key->get_g1_identity(), gemini_opening_claim, transcript);
+    // // Produce a Shplonk claim: commitment [Q] - [Q_z], evaluation zero (at random challenge z)
+    // auto shplonk_claim =
+    //     Shplonk::reduce_verification(key->pcs_verification_key->get_g1_identity(), gemini_opening_claim, transcript);
 
-    info("Shplonk: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
-    prev_num_gates = builder->num_gates;
-    // // Verify the Shplonk claim with KZG or IPA
-    auto shplonk_pairing_points = PCS::reduce_verify(shplonk_claim, transcript);
+    // info("Shplonk: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
+    // prev_num_gates = builder->num_gates;
+    // // // Verify the Shplonk claim with KZG or IPA
+    auto shplonk_pairing_points = PCS::reduce_verify(shplemini_claim, transcript);
     info("KZG: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
 
     return shplonk_pairing_points;
