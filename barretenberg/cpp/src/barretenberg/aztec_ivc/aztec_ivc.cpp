@@ -2,10 +2,22 @@
 
 namespace bb {
 
+void AztecIVC::instantiate_verification_queue_from_witness(ClientCircuit& circuit)
+{
+    stdlib_verification_queue.clear();
+    for (auto& [proof, vkey] : verification_queue) {
+        // Construct stdlib accumulator, vkey and proof
+        stdlib_verification_queue.emplace_back(bb::convert_proof_to_witness(&circuit, proof),
+                                               std::make_shared<RecursiveVerificationKey>(&circuit, vkey));
+    }
+    verification_queue.clear();
+}
+
 /**
  * @brief Append logic to complete a kernel circuit
- * @details A kernel circuit may contain some combination of PG recursive verification, merge recursive verification,
- * and databus commitment consistency checks. This method appends this logic to a provided kernel circuit.
+ * @details A kernel circuit may contain some combination of PG recursive verification, merge recursive
+ * verification, and databus commitment consistency checks. This method appends this logic to a provided kernel
+ * circuit.
  *
  * @param circuit
  */
@@ -32,6 +44,40 @@ void AztecIVC::complete_kernel_circuit_logic(ClientCircuit& circuit)
         bus_depot.execute(verifier.instances);
     }
     verification_queue.clear();
+
+    // Recusively verify all merge proofs in queue
+    for (auto& proof : merge_verification_queue) {
+        goblin.verify_merge(circuit, proof);
+    }
+    merge_verification_queue.clear();
+}
+
+void AztecIVC::complete_kernel_circuit_logic_new(ClientCircuit& circuit)
+{
+    circuit.databus_propagation_data.is_kernel = true;
+
+    // The folding verification queue should be either empty or contain two fold proofs
+    ASSERT(verification_queue.empty() || verification_queue.size() == 2);
+
+    // Construct stdlib proof/vkey from the corresponding internal witness
+    instantiate_verification_queue_from_witness(circuit);
+
+    for (auto& [proof, vkey] : stdlib_verification_queue) {
+
+        // Construct stdlib accumulator
+        // WORKTODO: there's a subtelty here. the first accumulator is not really an accum and its vk needs to be
+        // connected to a vk coming from acir. This is possibly a reason to have the PG prover/verfier be able to run on
+        // a single instance. Otherwise we kind of have two proofs and two vks on the first call to PG.
+        auto verifier_accum = std::make_shared<RecursiveVerifierInstance>(&circuit, verifier_accumulator);
+
+        // Perform folding recursive verification
+        FoldingRecursiveVerifier verifier{ &circuit, verifier_accum, { vkey } };
+        verifier_accum = verifier.verify_folding_proof(proof);
+        verifier_accumulator = std::make_shared<VerifierInstance>(verifier_accum->get_value());
+
+        // Perform databus commitment consistency checks and propagate return data commitments via public inputs
+        bus_depot.execute(verifier.instances);
+    }
 
     // Recusively verify all merge proofs in queue
     for (auto& proof : merge_verification_queue) {

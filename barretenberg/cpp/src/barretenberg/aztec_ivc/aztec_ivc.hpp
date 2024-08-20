@@ -67,6 +67,11 @@ class AztecIVC {
         std::shared_ptr<VerificationKey> instance_vk;
     };
 
+    struct StdlibFoldingVerifierInputs {
+        StdlibProof<ClientCircuit> proof;
+        std::shared_ptr<RecursiveVerificationKey> instance_vk;
+    };
+
     // Utility for tracking the max size of each block across the full IVC
     MaxBlockSizeTracker max_block_size_tracker;
 
@@ -86,6 +91,9 @@ class AztecIVC {
     // Set of merge proofs to be recursively verified
     std::vector<MergeProof> merge_verification_queue;
 
+    // Set of pairs of stdlib {fold_proof, verification_key} to be recursively verified
+    std::vector<StdlibFoldingVerifierInputs> stdlib_verification_queue;
+
     // Management of linking databus commitments between circuits in the IVC
     DataBusDepot bus_depot;
 
@@ -94,8 +102,11 @@ class AztecIVC {
 
     bool initialized = false; // Is the IVC accumulator initialized
 
+    void instantiate_verification_queue_from_witness(ClientCircuit& circuit);
+
     // Complete the logic of a kernel circuit (e.g. PG/merge recursive verification, databus consistency checks)
     void complete_kernel_circuit_logic(ClientCircuit& circuit);
+    void complete_kernel_circuit_logic_new(ClientCircuit& circuit);
 
     // Perform prover work for accumulation (e.g. PG folding, merge proving)
     void accumulate(ClientCircuit& circuit, const std::shared_ptr<VerificationKey>& precomputed_vk = nullptr);

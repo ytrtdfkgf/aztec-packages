@@ -67,7 +67,7 @@ class AztecIVCTests : public ::testing::Test {
             ClientCircuit circuit{ ivc.goblin.op_queue };
             circuit = create_mock_circuit(ivc, log2_num_gates); // construct mock base logic
             if (is_kernel) {
-                ivc.complete_kernel_circuit_logic(circuit); // complete with recursive verifiers etc
+                ivc.complete_kernel_circuit_logic_new(circuit); // complete with recursive verifiers etc
             }
             is_kernel = !is_kernel; // toggle is_kernel on/off alternatingly
 
