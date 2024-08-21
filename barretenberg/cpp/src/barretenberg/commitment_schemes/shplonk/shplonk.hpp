@@ -333,7 +333,7 @@ template <typename Curve> class ShplonkVerifier_ {
         }
 
         Fr unshifted_scalar = inverse_vanishing_evals[0] + nu * inverse_vanishing_evals[1];
-        Fr shifted_scalar = gemini_r.invert() * (-inverse_vanishing_evals[0] + nu * inverse_vanishing_evals[1]);
+        Fr shifted_scalar = gemini_r.invert() * (inverse_vanishing_evals[0] - nu * inverse_vanishing_evals[1]);
         Fr current_rho = Fr(1);
         info("num claims ", num_claims);
         // The first two claims are handled outside of the loop
@@ -374,14 +374,9 @@ template <typename Curve> class ShplonkVerifier_ {
         commitments.emplace_back(g1_identity);
         scalars.emplace_back(G_commitment_constant);
 
-        // [G] += G₀⋅[1] = [G] + (∑ⱼ ρʲ ⋅ vⱼ / ( r − xⱼ ))⋅[1]
-        info("scalars Shplonk size ", scalars.size());
-        for (auto scalar : scalars) {
-            info(scalar);
-        }
         info("commitments Shplonk size ", commitments.size());
 
-        G_commitment = GroupElement::batch_mul(commitments, scalars);
+        G_commitment = GroupElement::batch_mul(commitments, scalars, /*max_num_bits=*/0, /*with_edgecases=*/true);
 
         // Return opening pair (z, 0) and commitment [G]
         return { { z_challenge, Fr(0) }, G_commitment };

@@ -170,49 +170,6 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
     // Note: For efficiency in emulating the construction of the batched commitments, we want to perform a batch mul
     // rather than naively accumulate the points one by one. To do this, we collect the points and scalars required for
     // each MSM then perform the two batch muls.
-    const size_t NUM_UNSHIFTED = commitments.get_unshifted().size();
-    const size_t NUM_TO_BE_SHIFTED = commitments.get_to_be_shifted().size();
-
-    std::vector<FF> scalars_unshifted;
-    std::vector<FF> scalars_to_be_shifted;
-    size_t idx = 0;
-    for (size_t i = 0; i < NUM_UNSHIFTED; ++i) {
-        scalars_unshifted.emplace_back(rhos[idx++]);
-    }
-    for (size_t i = 0; i < NUM_TO_BE_SHIFTED; ++i) {
-        scalars_to_be_shifted.emplace_back(rhos[idx++]);
-    }
-
-    // std::vector<GroupElement> unshifted_comms;
-
-    // for (auto commitment : commitments.get_unshifted()) {
-    //     unshifted_comms.emplace_back(commitment);
-    // }
-    // prev_num_gates = builder->num_gates;
-    // scalars_unshifted[0] = FF(builder, 1);
-    // // Batch the commitments to the unshifted and to-be-shifted polynomials using powers of rho
-    // auto batched_commitment_unshifted = GroupElement::batch_mul(unshifted_comms, scalars_unshifted);
-    // info("size batch mul = ", scalars_unshifted.size());
-    // info("Unshifted Batched mul: num gates = ",
-    //      builder->num_gates - prev_num_gates,
-    //      ", (total = ",
-    //      builder->num_gates,
-    //      ")");
-    // prev_num_gates = builder->num_gates;
-
-    // std::vector<GroupElement> shifted_comms;
-
-    // for (auto commitment : commitments.get_to_be_shifted()) {
-    //     shifted_comms.emplace_back(commitment);
-    // }
-    // prev_num_gates = builder->num_gates;
-    // auto batched_commitment_to_be_shifted = GroupElement::batch_mul(shifted_comms, scalars_to_be_shifted);
-    // info("Shifted Batched mul: num gates = ",
-    //      builder->num_gates - prev_num_gates,
-    //      ", (total = ",
-    //      builder->num_gates,
-    //      ")");
-    // info("size batch mul = ", scalars_to_be_shifted.size());
 
     prev_num_gates = builder->num_gates;
 
@@ -232,23 +189,8 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
                                                   a_0_neg,
                                                   gemini_eff_opening_claim, // opening claims for the folds
                                                   transcript);
-    info(shplemini_claim.opening_pair.challenge);
-    // auto gemini_opening_claim = Gemini::reduce_verification(multivariate_challenge,
-    //                                                         /*define!*/ batched_evaluation,
-    //                                                         /*define*/ batched_commitment_unshifted,
-    //                                                         /*define*/ batched_commitment_to_be_shifted,
-    //                                                         transcript);
-
-    // info("Gemini: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
-    // prev_num_gates = builder->num_gates;
-
-    // // Produce a Shplonk claim: commitment [Q] - [Q_z], evaluation zero (at random challenge z)
-    // auto shplonk_claim =
-    //     Shplonk::reduce_verification(key->pcs_verification_key->get_g1_identity(), gemini_opening_claim, transcript);
-
-    // info("Shplonk: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
-    // prev_num_gates = builder->num_gates;
-    // // // Verify the Shplonk claim with KZG or IPA
+    // info(shplemini_claim.opening_pair.challenge);
+    // Verify the Shplonk claim with KZG or IPA
     auto shplonk_pairing_points = PCS::reduce_verify(shplemini_claim, transcript);
     info("KZG: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
 
