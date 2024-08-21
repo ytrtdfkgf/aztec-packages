@@ -163,16 +163,6 @@ template <typename Curve_> class IPA {
         // Set initial vector a to the polynomial monomial coefficients and load vector G
         auto a_vec = polynomial;
         auto* srs_elements = ck->srs->get_monomial_points();
-        std::vector<Commitment> G_vec_local(poly_length);
-
-        // The SRS stored in the commitment key is the result after applying the pippenger point table so the
-        // values at odd indices contain the point {srs[i-1].x * beta, srs[i-1].y}, where beta is the endomorphism
-        // G_vec_local should use only the original SRS thus we extract only the even indices.
-        parallel_for_heuristic(
-            poly_length,
-            [&](size_t i) {
-                G_vec_local[i] = srs_elements[i * 2];
-            }, thread_heuristics::FF_COPY_COST);
 
         // Step 5.
         // Compute vector b (vector of the powers of the challenge)
@@ -214,14 +204,14 @@ template <typename Curve_> class IPA {
             auto [inner_prod_L, inner_prod_R] = sum_pairs(inner_prods);
             // Step 6.a (using letters, because doxygen automaticall converts the sublist counters to letters :( )
             // L_i = < a_vec_lo, G_vec_hi > + inner_prod_L * aux_generator
-            L_i = bb::scalar_multiplication::pippenger_without_endomorphism_basis_points<Curve>(
-                &a_vec[0], &G_vec_local[round_size], round_size, ck->pippenger_runtime_state);
+            L_i = bb::scalar_multiplication::pippenger_unsafe<Curve>(
+                &a_vec[0], &srs_elements[round_size * 2], round_size, ck->pippenger_runtime_state);
             L_i += aux_generator * inner_prod_L;
 
             // Step 6.b
             // R_i = < a_vec_hi, G_vec_lo > + inner_prod_R * aux_generator
-            R_i = bb::scalar_multiplication::pippenger_without_endomorphism_basis_points<Curve>(
-                &a_vec[round_size], &G_vec_local[0], round_size, ck->pippenger_runtime_state);
+            R_i = bb::scalar_multiplication::pippenger_unsafe<Curve>(
+                &a_vec[round_size], srs_elements, round_size, ck->pippenger_runtime_state);
             R_i += aux_generator * inner_prod_R;
 
             // Step 6.c
