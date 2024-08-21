@@ -149,18 +149,6 @@ resource "aws_ecs_task_definition" "aztec-prover-node" {
 
   container_definitions = jsonencode([
     {
-      name      = "init-container"
-      image     = "amazonlinux:latest"
-      essential = false
-      command   = ["sh", "-c", "mkdir -p ${local.data_dir}/prover_node_${count.index + 1}/data ${local.data_dir}/prover_node_${count.index + 1}/temp"]
-      mountPoints = [
-        {
-          containerPath = local.data_dir
-          sourceVolume  = "efs-data-store"
-        }
-      ]
-    },
-    {
       name              = "${var.DEPLOY_TAG}-aztec-prover-node-${count.index + 1}"
       image             = "${var.DOCKERHUB_ACCOUNT}/aztec:${var.IMAGE_TAG}"
       command           = ["start", "--prover-node", "--archiver"]
@@ -182,7 +170,7 @@ resource "aws_ecs_task_definition" "aztec-prover-node" {
       environment = [
         // General
         { name = "NODE_ENV", value = "production" },
-        { name = "LOG_LEVEL", value = "debug" },
+        { name = "LOG_LEVEL", value = "verbose" },
         { name = "DEBUG", value = "aztec:*,-json-rpc:json_proxy:*,-aztec:avm_simulator:*" },
         { name = "DEPLOY_TAG", value = var.DEPLOY_TAG },
         { name = "NETWORK_NAME", value = "${var.DEPLOY_TAG}" },
@@ -210,6 +198,7 @@ resource "aws_ecs_task_definition" "aztec-prover-node" {
         { name = "PROVER_REAL_PROOFS", value = tostring(var.PROVING_ENABLED) },
         { name = "BB_WORKING_DIRECTORY", value = "${local.data_dir}/prover_node_${count.index + 1}/temp" },
         { name = "ACVM_WORKING_DIRECTORY", value = "${local.data_dir}/prover_node_${count.index + 1}/temp" },
+        { name = "PROVER_NODE_MAX_PENDING_JOBS", value = tostring(var.PROVER_NODE_MAX_PENDING_JOBS) },
 
         // Metrics
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://aztec-otel.local:4318" },
@@ -246,10 +235,6 @@ resource "aws_ecs_task_definition" "aztec-prover-node" {
         }
       ]
       dependsOn = [
-        {
-          containerName = "init-container"
-          condition     = "COMPLETE"
-        }
       ]
       logConfiguration = {
         logDriver = "awslogs"
