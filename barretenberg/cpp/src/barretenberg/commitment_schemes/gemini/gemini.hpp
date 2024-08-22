@@ -129,16 +129,12 @@ template <typename Curve> class GeminiVerifier_ {
      * @return Fold polynomial opening claims: (r, A₀(r), C₀₊), (-r, A₀(-r), C₀₋), and
      * (Cⱼ, Aⱼ(-r^{2ʲ}), -r^{2}), j = [1, ..., m-1]
      */
-    static std::vector<OpeningClaim<Curve>> reduce_efficient_verification(std::span<const Fr> mle_opening_point, /* u */
-                                                                          const Fr batched_evaluation, /* all */
-                                                                          Fr& a_0_pos,
-                                                                          Fr& a_0_neg,
-                                                                          Fr& r, // gemini challenge
-                                                                          auto& transcript)
+    static std::tuple<std::vector<Fr>, std::vector<Fr>, std::vector<Commitment>> reduce_efficient_verification(
+        const size_t num_variables, // log circuit size
+        Fr& r,                      // gemini challenge
+        auto& transcript)
     {
-        const size_t num_variables = mle_opening_point.size();
-
-        // Get commitments to polynomials Fold_i, i = 1,...,m-1 from transcript
+        // Get commitments to polynomials A_i, i = 1,...,m-1 from transcript
         std::vector<Commitment> commitments;
         commitments.reserve(num_variables - 1);
         for (size_t i = 0; i < num_variables - 1; ++i) {
@@ -146,11 +142,9 @@ template <typename Curve> class GeminiVerifier_ {
                 transcript->template receive_from_prover<Commitment>("Gemini:FOLD_" + std::to_string(i + 1));
             commitments.emplace_back(commitment);
         }
-        info("number FOLD gemini comms ", commitments.size());
         // compute vector of powers of random evaluation point r
         r = transcript->template get_challenge<Fr>("Gemini:r");
         std::vector<Fr> r_squares = gemini::squares_of_r(r, num_variables);
-
         // Get evaluations a_i, i = 0,...,m-1 from transcript
         std::vector<Fr> evaluations;
         evaluations.reserve(num_variables);
@@ -159,21 +153,9 @@ template <typename Curve> class GeminiVerifier_ {
             evaluations.emplace_back(eval);
         }
 
-        // Compute the evaluation of the batched polynomial at X = r
-        a_0_pos = compute_eval_pos(batched_evaluation, mle_opening_point, r_squares, evaluations);
-        // Get the evaluation of the batched polynomial at X = -r
-        a_0_neg = evaluations[0];
-
         std::vector<OpeningClaim<Curve>> fold_polynomial_opening_claims;
         fold_polynomial_opening_claims.reserve(num_variables - 1);
-
-        for (size_t l = 0; l < num_variables - 1; ++l) {
-            // ([A₀₋], −r^{2ˡ}, Aₗ(−r^{2ˡ}) )
-            fold_polynomial_opening_claims.emplace_back(
-                OpeningClaim<Curve>{ { -r_squares[l + 1], evaluations[l + 1] }, commitments[l] });
-        }
-
-        return fold_polynomial_opening_claims;
+        return std::make_tuple(r_squares, evaluations, commitments);
     }
 
     static std::vector<OpeningClaim<Curve>> reduce_verification(std::span<const Fr> mle_opening_point, /* u */

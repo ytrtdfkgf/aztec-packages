@@ -148,49 +148,30 @@ std::array<typename Flavor::GroupElement, 2> UltraRecursiveVerifier_<Flavor>::ve
     auto [multivariate_challenge, claimed_evaluations, sumcheck_verified] =
         sumcheck.verify(relation_parameters, alpha, gate_challenges);
 
-    // PCS stuff begins
+    // Apply Shplonk + Gemini to open the evaluation claims
     size_t prev_num_gates;
     prev_num_gates = builder->num_gates;
     // Compute powers of batching challenge rho
     FF rho = transcript->template get_challenge<FF>("rho");
-
-    std::vector<FF> rhos = gemini::powers_of_rho(rho, Flavor::NUM_ALL_ENTITIES);
-    info("Powers: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
-    prev_num_gates = builder->num_gates;
-
-    // Compute batched multivariate evaluation
-    FF batched_evaluation = FF(0);
-    size_t evaluation_idx = 0;
-    for (auto& value : claimed_evaluations.get_all()) {
-        batched_evaluation += value * rhos[evaluation_idx];
-        ++evaluation_idx;
-    }
-
-    // Compute batched commitments needed for input to Gemini.
-    // Note: For efficiency in emulating the construction of the batched commitments, we want to perform a batch mul
-    // rather than naively accumulate the points one by one. To do this, we collect the points and scalars required for
-    // each MSM then perform the two batch muls.
-
-    prev_num_gates = builder->num_gates;
-
     multivariate_challenge.resize(log_circuit_size);
-
-    FF a_0_pos;
-    FF a_0_neg;
     FF gemini_challenge;
-    auto gemini_eff_opening_claim = Gemini::reduce_efficient_verification(
-        multivariate_challenge, batched_evaluation, a_0_pos, a_0_neg, gemini_challenge, transcript);
+    auto gemini_eff_opening_claim =
+        Gemini::reduce_efficient_verification(log_circuit_size, gemini_challenge, transcript);
+    // batch commitments to prover polynomials and verify gemini claims
     auto shplemini_claim = Shplonk::verify_gemini(key->pcs_verification_key->get_g1_identity(),
                                                   commitments.get_unshifted(),
                                                   commitments.get_to_be_shifted(),
-                                                  rho,              // batching challenge
-                                                  gemini_challenge, // gemini opening
-                                                  a_0_pos,
-                                                  a_0_neg,
+                                                  claimed_evaluations.get_all(),
+                                                  multivariate_challenge,
+                                                  rho,                      // batching challenge
+                                                  gemini_challenge,         // gemini opening
+                                                                            //   a_0_pos,
                                                   gemini_eff_opening_claim, // opening claims for the folds
                                                   transcript);
-    // info(shplemini_claim.opening_pair.challenge);
     // Verify the Shplonk claim with KZG or IPA
+    info("Shplonk: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
+    prev_num_gates = builder->num_gates;
+
     auto shplonk_pairing_points = PCS::reduce_verify(shplemini_claim, transcript);
     info("KZG: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
 

@@ -273,114 +273,146 @@ template <typename Curve> class ShplonkVerifier_ {
 
   public:
     /**
-     * @brief Recomputes the new claim commitment [G] given the proof and
-     * the challenge r. No verification happens so this function always succeeds.
+     * @brief Shplonk verifier optimized to verify gemini opening claims.
+     *
+     * @details This method receives commitments to all prover polynomials, their claimed evaluations, the sumcheck
+challenge, a challenge \f$ \rho \f$ aimed to batch the commitments to prover polynomials, a challenge \f$ r \f$ for the
+Gemini opening claims, and the Gemini claims.
+The latter is a tuple of a vector of powers of \f$ r \f$, a vector of evaluations of Gemini fold polynomials at \f$ - r,
+- r^2, \ldots, - r^{2^{d-1}}\f$ where \f$ d \f$ is the log_circuit_size, and a vector of commitments to the Gemini fold
+polynomials.
+
      *
      * @param g1_identity the identity element for the Curve
-     * @param claims list of opening claims (Cⱼ, xⱼ, vⱼ) for a witness polynomial fⱼ(X), s.t. fⱼ(xⱼ) = vⱼ.
-     * @param transcript
      * @return OpeningClaim
      */
-    static OpeningClaim<Curve> verify_gemini(Commitment g1_identity,
-                                             RefSpan<Commitment> f_commitments,
-                                             RefSpan<Commitment> g_commitments,
-                                             Fr rho,
-                                             Fr gemini_r,
-                                             Fr a_0_pos,
-                                             Fr a_0_neg,
-                                             std::span<const OpeningClaim<Curve>> claims,
-                                             auto& transcript)
+    static OpeningClaim<Curve> verify_gemini(
+        Commitment g1_identity,
+        RefSpan<Commitment> f_commitments,
+        RefSpan<Commitment> g_commitments,
+        auto claimed_evaluations,
+        std::vector<Fr>& multivariate_challenge,
+        const Fr& rho,
+        const Fr& gemini_r,
+        //  Fr a_0_pos,
+        std::tuple<std::vector<Fr>, std::vector<Fr>, std::vector<Commitment>> claims,
+        auto& transcript)
     {
-
-        const size_t num_claims = claims.size();
-        // nu is a batching challenge for shplonk polynomials
-        const Fr nu = transcript->template get_challenge<Fr>("Shplonk:nu");
-        // W in paper
+        // (r, r^2, ... , r^{2^{d-1}}), where d = log circuit size
+        auto& r_squares = std::get<0>(claims);
+        // (A_0(-r), A_1(-r^2), ... , A_{d-1}(-r^{2^{d-1}}))
+        auto& gemini_evaluations = std::get<1>(claims);
+        // (com(A_1), com(A_2), ... , com(A_{d-1}))
+        auto& gemini_commitments = std::get<2>(claims);
+        const size_t num_claims = gemini_commitments.size();
+        const Fr shplonk_batching_challenge = transcript->template get_challenge<Fr>("Shplonk:nu");
+        // quotient commitment for the batched opening claim
         auto Q_commitment = transcript->template receive_from_prover<Commitment>("Shplonk:Q");
-        // opening point to check that L(z) = 0 => L == 0 (step 4 in Shplonk)
+        // random opening point to check that the evaluation claims and the correctness of the batching
         const Fr z_challenge = transcript->template get_challenge<Fr>("Shplonk:z");
-
-        // [G] = [Q] - ∑ⱼ ρʲ / ( r − xⱼ )⋅[fⱼ] + G₀⋅[1]
-        //     = [Q] - [∑ⱼ ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( r − xⱼ )]
-        GroupElement G_commitment;
-
-        // compute simulated commitment to [G] as a linear combination of
-        // [Q], { [fⱼ] }, [1]:
-        //  [G] = [Q] - ∑ⱼ (1/zⱼ(r))[Bⱼ]  + ( ∑ⱼ (1/zⱼ(r)) Tⱼ(r) )[1]
-        //      = [Q] - ∑ⱼ (1/zⱼ(r))[Bⱼ]  +                    G₀ [1]
-        // G₀ = ∑ⱼ ρʲ ⋅ vⱼ / ( r − xⱼ )
-        auto G_commitment_constant = Fr(0);
-        auto builder = nu.get_context();
-
-        // To be populated as follows (Q, f_0,..., f_{k-1}, g_0,..., g_{m-1}, claims[0].commitment,..., [1])
+        // accumulate the scalars that will be multiplied by [1]_1
+        auto constant_term_accumulator = Fr(0);
+        auto builder = shplonk_batching_challenge.get_context();
+        // to be populated as follows (Q, f_0,..., f_{k-1}, g_0,..., g_{m-1}, com(A_1),..., com(A_{d-1}), [1]_1)
         std::vector<Commitment> commitments;
-        // To be populated as follows (\nu^0/(?), (\nu + \rho)/(?), ..., g_commitment_constant)
+        // see explicit formulas in the description of the method
         std::vector<Fr> scalars;
-
-        // [G] = [Q] - ∑ⱼ ρʲ / ( r − xⱼ )⋅[fⱼ] + G₀⋅[1]
-        //     = [Q] - [∑ⱼ ρʲ ⋅ ( fⱼ(X) − vⱼ) / ( r − xⱼ )]
         commitments.emplace_back(Q_commitment);
         scalars.emplace_back(Fr(builder, 1)); // Fr(1)
-
-        // Compute {ẑⱼ(r)}ⱼ , where ẑⱼ(r) = 1/zⱼ(r) = 1/(r - xⱼ)
+        // compute denominators 1/(z - r), 1/(z+r), 1/(z+r^2),..., 1/(z+r^{2^{d-1}})
         std::vector<Fr> inverse_vanishing_evals;
-        inverse_vanishing_evals.reserve(num_claims);
-        // handle first denominators manually, because they are not included in the gemini output
+        inverse_vanishing_evals.reserve(num_claims + 2);
+        // place the first denominator manually
         inverse_vanishing_evals.emplace_back((z_challenge - gemini_r).invert());
-        inverse_vanishing_evals.emplace_back((z_challenge + gemini_r).invert());
-        for (const auto& claim : claims) {
-            inverse_vanishing_evals.emplace_back((z_challenge - claim.opening_pair.challenge).invert());
+        for (const auto& challenge_point : r_squares) {
+            inverse_vanishing_evals.emplace_back((z_challenge + challenge_point).invert());
         }
-
-        Fr unshifted_scalar = inverse_vanishing_evals[0] + nu * inverse_vanishing_evals[1];
-        Fr shifted_scalar = gemini_r.invert() * (inverse_vanishing_evals[0] - nu * inverse_vanishing_evals[1]);
-        Fr current_rho = Fr(1);
-        info("num claims ", num_claims);
-        // The first two claims are handled outside of the loop
-        G_commitment_constant += a_0_pos * inverse_vanishing_evals[0];
-        G_commitment_constant += a_0_neg * nu * inverse_vanishing_evals[1];
-        // Populate the vector of scalars and
-        // emplace the commitments to original polynomials to the vector that will be batchmuled later
+        // the scalar corresponding to the batched unshifted prover polynomials
+        Fr unshifted_scalar = inverse_vanishing_evals[0] + shplonk_batching_challenge * inverse_vanishing_evals[1];
+        // the scalar corresponding to the batched shifted prover polynomials
+        Fr shifted_scalar =
+            gemini_r.invert() * (inverse_vanishing_evals[0] - shplonk_batching_challenge * inverse_vanishing_evals[1]);
+        // place the commitments to prover polynomials in the commitments vector, compute the evaluation of the batched
+        // multilinear polynomial, populate the vector of scalars for the final batch mul.
+        Fr current_batching_challenge = Fr(1);
+        Fr batched_evaluation = Fr(0);
+        size_t evaluation_idx = 0;
+        // handle commitments to unshifted polynomials
         for (auto& unshifted_commitment : f_commitments) {
             commitments.emplace_back(unshifted_commitment);
-            scalars.emplace_back(-unshifted_scalar * current_rho);
-            current_rho *= rho;
+            scalars.emplace_back(-unshifted_scalar * current_batching_challenge);
+            batched_evaluation += claimed_evaluations[evaluation_idx] * current_batching_challenge;
+            info(claimed_evaluations[evaluation_idx]);
+            evaluation_idx += 1;
+            current_batching_challenge *= rho;
         }
+        // handle commitments to shifted_polynomials
         for (auto& shifted_commitment : g_commitments) {
             commitments.emplace_back(shifted_commitment);
-            scalars.emplace_back(-shifted_scalar * current_rho);
-            current_rho *= rho;
+            scalars.emplace_back(-shifted_scalar * current_batching_challenge);
+            batched_evaluation += claimed_evaluations[evaluation_idx] * current_batching_challenge;
+            evaluation_idx += 1;
+            current_batching_challenge *= rho;
         }
 
-        auto current_nu = nu * nu;
-        info("inverse vanishing evals size ", inverse_vanishing_evals.size());
-        // Note: commitments and scalars vectors used only in recursion setting for batch mul
+        current_batching_challenge = shplonk_batching_challenge * shplonk_batching_challenge;
         for (size_t j = 0; j < num_claims; ++j) {
-            // (Cⱼ, xⱼ, vⱼ)
-            const auto& [opening_pair, commitment] = claims[j];
-
-            Fr scaling_factor = current_nu * inverse_vanishing_evals[j + 2]; // = ρʲ / ( r − xⱼ )
-
-            // G₀ += ρʲ / ( r − xⱼ ) ⋅ vⱼ
-            G_commitment_constant += scaling_factor * opening_pair.evaluation;
-
-            current_nu *= nu;
-
-            // Store MSM inputs for batch mul
-            commitments.emplace_back(commitment);
+            // (shplonk_batching_challenge)^(j+2) * (z + r^{2^j})
+            Fr scaling_factor = current_batching_challenge * inverse_vanishing_evals[j + 2];
+            // (shplonk_batching_challenge)^(j+2) * (z + r^{2^j}) * A_j(-r^{2^j})
+            constant_term_accumulator += scaling_factor * gemini_evaluations[j + 1];
+            current_batching_challenge *= shplonk_batching_challenge;
+            commitments.emplace_back(gemini_commitments[j]);
             scalars.emplace_back(-scaling_factor);
         }
-
+        // extract A_0(-r)
+        Fr a_0_neg = gemini_evaluations[0];
+        // compute A_0(r)
+        auto a_0_pos = compute_eval_pos(batched_evaluation, multivariate_challenge, r_squares, gemini_evaluations);
+        // add A_0(r)/(z-r) to the constant term accumulator
+        constant_term_accumulator += a_0_pos * inverse_vanishing_evals[0];
+        // add A_0(-r)/(z+r) to the constant term accumulator
+        constant_term_accumulator += a_0_neg * shplonk_batching_challenge * inverse_vanishing_evals[1];
+        // finalize the vector of commitments by adding [1]_1
         commitments.emplace_back(g1_identity);
-        scalars.emplace_back(G_commitment_constant);
-
+        // finalize the vector of scalars
+        scalars.emplace_back(constant_term_accumulator);
         info("commitments Shplonk size ", commitments.size());
-
+        GroupElement G_commitment;
         G_commitment = GroupElement::batch_mul(commitments, scalars, /*max_num_bits=*/0, /*with_edgecases=*/true);
 
         // Return opening pair (z, 0) and commitment [G]
         return { { z_challenge, Fr(0) }, G_commitment };
     };
+
+    static Fr compute_eval_pos(const Fr batched_mle_eval,
+                               std::span<const Fr> mle_vars,
+                               std::span<const Fr> r_squares,
+                               std::span<const Fr> fold_polynomial_evals)
+    {
+        const size_t num_variables = mle_vars.size();
+
+        const auto& evals = fold_polynomial_evals;
+
+        // Initialize eval_pos with batched MLE eval v = ∑ⱼ ρʲ vⱼ + ∑ⱼ ρᵏ⁺ʲ v↺ⱼ
+        Fr eval_pos = batched_mle_eval;
+        for (size_t l = num_variables; l != 0; --l) {
+            info("access problem at ", l);
+            const Fr r = r_squares[l - 1];    // = rₗ₋₁ = r^{2ˡ⁻¹}
+            const Fr eval_neg = evals[l - 1]; // = Aₗ₋₁(−r^{2ˡ⁻¹})
+            const Fr u = mle_vars[l - 1];     // = uₗ₋₁
+
+            // The folding property ensures that
+            //                     Aₗ₋₁(r^{2ˡ⁻¹}) + Aₗ₋₁(−r^{2ˡ⁻¹})      Aₗ₋₁(r^{2ˡ⁻¹}) - Aₗ₋₁(−r^{2ˡ⁻¹})
+            // Aₗ(r^{2ˡ}) = (1-uₗ₋₁) ----------------------------- + uₗ₋₁ -----------------------------
+            //                                   2                                2r^{2ˡ⁻¹}
+            // We solve the above equation in Aₗ₋₁(r^{2ˡ⁻¹}), using the previously computed Aₗ(r^{2ˡ}) in eval_pos
+            // and using Aₗ₋₁(−r^{2ˡ⁻¹}) sent by the prover in the proof.
+            eval_pos = ((r * eval_pos * 2) - eval_neg * (r * (Fr(1) - u) - u)) / (r * (Fr(1) - u) + u);
+        }
+
+        return eval_pos; // return A₀(r)
+    }
 };
 
 } // namespace bb
