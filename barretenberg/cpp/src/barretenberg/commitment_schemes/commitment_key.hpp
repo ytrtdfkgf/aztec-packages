@@ -7,6 +7,7 @@
  * simplify the codebase.
  */
 
+#include "barretenberg/common/debug_log.hpp"
 #include "barretenberg/common/op_count.hpp"
 #include "barretenberg/ecc/scalar_multiplication/scalar_multiplication.hpp"
 #include "barretenberg/numeric/bitop/pow.hpp"
@@ -78,8 +79,11 @@ template <class Curve> class CommitmentKey {
                  srs->get_monomial_size());
             ASSERT(false);
         }
-        return scalar_multiplication::pippenger_unsafe<Curve>(
+        DEBUG_LOG_ALL(polynomial);
+        Commitment point = scalar_multiplication::pippenger_unsafe<Curve>(
             const_cast<Fr*>(polynomial.data()), srs->get_monomial_points(), degree, pippenger_runtime_state);
+        DEBUG_LOG(point);
+        return point;
     };
 
     /**

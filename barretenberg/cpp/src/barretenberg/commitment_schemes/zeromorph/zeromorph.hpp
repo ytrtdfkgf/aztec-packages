@@ -1,7 +1,9 @@
 #pragma once
+
 #include "barretenberg/commitment_schemes/claim.hpp"
 #include "barretenberg/commitment_schemes/commitment_key.hpp"
 #include "barretenberg/commitment_schemes/verification_key.hpp"
+#include "barretenberg/common/debug_log.hpp"
 #include "barretenberg/common/ref_span.hpp"
 #include "barretenberg/common/ref_vector.hpp"
 #include "barretenberg/common/zip_view.hpp"
@@ -42,8 +44,8 @@ template <typename Curve> class ZeroMorphProver_ {
     using OpeningClaim = ProverOpeningClaim<Curve>;
 
     // TODO(#742): Set this N_max to be the number of G1 elements in the mocked zeromorph SRS once it's in place.
-    // (Then, eventually, set it based on the real SRS). For now we set it to be larger then the Client IVC recursive
-    // verifier circuit.
+    // (Then, eventually, set it based on the real SRS). For now we set it to be larger then the Client IVC
+    // recursive verifier circuit.
     static const size_t N_max = 1 << 25;
 
   public:
@@ -70,6 +72,7 @@ template <typename Curve> class ZeroMorphProver_ {
     static std::vector<Polynomial> compute_multilinear_quotients(Polynomial& polynomial,
                                                                  std::span<const FF> u_challenge)
     {
+        DEBUG_LOG(polynomial, u_challenge);
         size_t log_N = numeric::get_msb(polynomial.size());
         // Define the vector of quotients q_k, k = 0, ..., log_N-1
         std::vector<Polynomial> quotients;
@@ -86,6 +89,7 @@ template <typename Curve> class ZeroMorphProver_ {
         }
 
         quotients[log_N - 1] = q.share();
+        DEBUG_LOG(quotients[log_N - 1], log_N - 1);
 
         std::vector<FF> f_k;
         f_k.resize(size_q);
@@ -116,10 +120,10 @@ template <typename Curve> class ZeroMorphProver_ {
     /**
      * @brief Construct batched, lifted-degree univariate quotient \hat{q} = \sum_k y^k * X^{N - d_k - 1} * q_k
      * @details The purpose of the batched lifted-degree quotient is to reduce the individual degree checks
-     * deg(q_k) <= 2^k - 1 to a single degree check on \hat{q}. This is done by first shifting each of the q_k to the
-     * right (i.e. multiplying by an appropriate power of X) so that each is degree N-1, then batching them all together
-     * using powers of the provided challenge. Note: In practice, we do not actually compute the shifted q_k, we simply
-     * accumulate them into \hat{q} at the appropriate offset.
+     * deg(q_k) <= 2^k - 1 to a single degree check on \hat{q}. This is done by first shifting each of the q_k to
+     * the right (i.e. multiplying by an appropriate power of X) so that each is degree N-1, then batching them all
+     * together using powers of the provided challenge. Note: In practice, we do not actually compute the shifted
+     * q_k, we simply accumulate them into \hat{q} at the appropriate offset.
      *
      * @param quotients Polynomials q_k, interpreted as univariates; deg(q_k) = 2^k - 1
      * @param N circuit size
@@ -129,6 +133,7 @@ template <typename Curve> class ZeroMorphProver_ {
                                                              FF y_challenge,
                                                              size_t N)
     {
+        DEBUG_LOG(quotients, y_challenge, N);
         // Batched lifted degree quotient polynomial
         auto result = Polynomial(N);
 
@@ -136,8 +141,9 @@ template <typename Curve> class ZeroMorphProver_ {
         size_t k = 0;
         auto scalar = FF(1); // y^k
         for (auto& quotient : quotients) {
-            // Rather than explicitly computing the shifts of q_k by N - d_k - 1 (i.e. multiplying q_k by X^{N - d_k -
-            // 1}) then accumulating them, we simply accumulate y^k*q_k into \hat{q} at the index offset N - d_k - 1
+            // Rather than explicitly computing the shifts of q_k by N - d_k - 1 (i.e. multiplying q_k by X^{N - d_k
+            // - 1}) then accumulating them, we simply accumulate y^k*q_k into \hat{q} at the index offset N - d_k -
+            // 1
             auto deg_k = static_cast<size_t>((1 << k) - 1);
             size_t offset = N - deg_k - 1;
             for (size_t idx = 0; idx < deg_k + 1; ++idx) {
@@ -167,6 +173,7 @@ template <typename Curve> class ZeroMorphProver_ {
                                                                           FF y_challenge,
                                                                           FF x_challenge)
     {
+        DEBUG_LOG(batched_quotient, quotients, y_challenge, x_challenge);
         size_t N = batched_quotient.size();
         size_t log_N = quotients.size();
 
@@ -216,6 +223,8 @@ template <typename Curve> class ZeroMorphProver_ {
         FF x_challenge,
         std::vector<Polynomial> concatenation_groups_batched = {})
     {
+        DEBUG_LOG(
+            f_batched, g_batched, quotients, v_evaluation, u_challenge, x_challenge, concatenation_groups_batched);
         size_t N = f_batched.size();
         size_t log_N = quotients.size();
 
@@ -287,6 +296,7 @@ template <typename Curve> class ZeroMorphProver_ {
                                                                              Polynomial& Z_x,
                                                                              FF z_challenge)
     {
+        DEBUG_LOG(zeta_x, Z_x, z_challenge);
         // We cannot commit to polynomials with size > N_max
         size_t N = zeta_x.size();
         ASSERT(N <= N_max);
@@ -295,16 +305,16 @@ template <typename Curve> class ZeroMorphProver_ {
         auto batched_polynomial = zeta_x;
         batched_polynomial.add_scaled(Z_x, z_challenge);
 
-        // TODO(#742): To complete the degree check, we need to do an opening proof for x_challenge with a univariate
-        // PCS for the degree-lifted polynomial (\zeta_c + z*Z_x)*X^{N_max - N - 1}. If this PCS is KZG, verification
-        // then requires a pairing check similar to the standard KZG check but with [1]_2 replaced by [X^{N_max - N
-        // -1}]_2. Two issues: A) we do not have an SRS with these G2 elements (so need to generate a fake setup until
-        // we can do the real thing), and B) its not clear to me how to update our pairing algorithms to do this type of
-        // pairing. For now, simply construct pi without the shift and do a standard KZG pairing check if the PCS is
-        // KZG. When we're ready, all we have to do to make this fully legit is commit to the shift here and update the
-        // pairing check accordingly. Note: When this is implemented properly, it doesnt make sense to store the
-        // (massive) shifted polynomial of size N_max. Ideally would only store the unshifted version and just compute
-        // the shifted commitment directly via a new method.
+        // TODO(#742): To complete the degree check, we need to do an opening proof for x_challenge with a
+        // univariate PCS for the degree-lifted polynomial (\zeta_c + z*Z_x)*X^{N_max - N - 1}. If this PCS is KZG,
+        // verification then requires a pairing check similar to the standard KZG check but with [1]_2 replaced by
+        // [X^{N_max - N -1}]_2. Two issues: A) we do not have an SRS with these G2 elements (so need to generate a
+        // fake setup until we can do the real thing), and B) its not clear to me how to update our pairing
+        // algorithms to do this type of pairing. For now, simply construct pi without the shift and do a standard
+        // KZG pairing check if the PCS is KZG. When we're ready, all we have to do to make this fully legit is
+        // commit to the shift here and update the pairing check accordingly. Note: When this is implemented
+        // properly, it doesnt make sense to store the (massive) shifted polynomial of size N_max. Ideally would
+        // only store the unshifted version and just compute the shifted commitment directly via a new method.
 
         return batched_polynomial;
     }
@@ -335,6 +345,15 @@ template <typename Curve> class ZeroMorphProver_ {
                               RefSpan<FF> concatenated_evaluations = {},
                               const std::vector<RefVector<Polynomial>>& concatenation_groups = {})
     {
+        DEBUG_LOG(f_polynomials,
+                  g_polynomials,
+                  g_shift_evaluations,
+                  multilinear_challenge,
+                  commitment_key,
+                  transcript,
+                  concatenated_polynomials,
+                  concatenated_evaluations,
+                  concatenation_groups);
         // Generate batching challenge \rho and powers 1,...,\rho^{m-1}
         const FF rho = transcript->template get_challenge<FF>("rho");
 
@@ -386,8 +405,8 @@ template <typename Curve> class ZeroMorphProver_ {
             batching_scalar *= rho;
         }
 
-        // Compute the full batched polynomial f = f_batched + g_batched.shifted() = f_batched + h_batched. This is the
-        // polynomial for which we compute the quotients q_k and prove f(u) = v_batched.
+        // Compute the full batched polynomial f = f_batched + g_batched.shifted() = f_batched + h_batched. This is
+        // the polynomial for which we compute the quotients q_k and prove f(u) = v_batched.
         Polynomial f_polynomial = f_batched;
         f_polynomial += g_batched.shifted();
         f_polynomial += concatenated_batched;
@@ -397,6 +416,7 @@ template <typename Curve> class ZeroMorphProver_ {
         // Compute and send commitments C_{q_k} = [q_k], k = 0,...,d-1
         for (size_t idx = 0; idx < log_N; ++idx) {
             Commitment q_k_commitment = commitment_key->commit(quotients[idx]);
+            DEBUG_LOG(idx, q_k_commitment);
             std::string label = "ZM:C_q_" + std::to_string(idx);
             transcript->send_to_verifier(label, q_k_commitment);
         }
@@ -508,7 +528,8 @@ template <typename Curve> class ZeroMorphVerifier_ {
                 auto builder = x_challenge.get_context();
                 FF zero = FF::from_witness(builder, 0);
                 stdlib::bool_t dummy_round = stdlib::witness_t(builder, is_dummy_round);
-                // TODO(https://github.com/AztecProtocol/barretenberg/issues/1039): is it kosher to reassign like this?
+                // TODO(https://github.com/AztecProtocol/barretenberg/issues/1039): is it kosher to reassign like
+                // this?
                 scalar = FF::conditional_assign(dummy_round, zero, scalar);
             } else {
                 if (is_dummy_round) {
@@ -697,8 +718,8 @@ template <typename Curve> class ZeroMorphVerifier_ {
         std::vector<Commitment> points;
         std::vector<FF> scalars;
         for (auto [point, scalar] : zip_view(_points, _scalars)) {
-            // TODO(https://github.com/AztecProtocol/barretenberg/issues/866) Special handling of point at infinity here
-            // due to incorrect serialization.
+            // TODO(https://github.com/AztecProtocol/barretenberg/issues/866) Special handling of point at infinity
+            // here due to incorrect serialization.
             if (!scalar.is_zero() && !point.is_point_at_infinity() && !point.y.is_zero()) {
                 points.emplace_back(point);
                 scalars.emplace_back(scalar);
@@ -717,8 +738,8 @@ template <typename Curve> class ZeroMorphVerifier_ {
     }
 
     /**
-     * @brief Return the univariate opening claim used to verify, in a subsequent PCS, a set of multilinear evaluation
-     * claims for unshifted polynomials f_i and to-be-shifted polynomials g_i
+     * @brief Return the univariate opening claim used to verify, in a subsequent PCS, a set of multilinear
+     * evaluation claims for unshifted polynomials f_i and to-be-shifted polynomials g_i
      *
      * @param commitments Commitments to polynomials f_i and g_i (unshifted and to-be-shifted)
      * @param claimed_evaluations Claimed evaluations v_i = f_i(u) and w_i = h_i(u) = g_i_shifted(u)

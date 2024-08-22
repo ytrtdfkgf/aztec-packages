@@ -3,6 +3,7 @@
 // #define LOG_CHALLENGES
 // #define LOG_INTERACTIONS
 
+#include "barretenberg/common/debug_log.hpp"
 #include "barretenberg/ecc/curves/bn254/fr.hpp"
 #include "barretenberg/ecc/curves/bn254/g1.hpp"
 #include "barretenberg/ecc/curves/grumpkin/grumpkin.hpp"
@@ -302,6 +303,8 @@ template <typename TranscriptParams> class BaseTranscript {
      */
     template <class T> void send_to_verifier(const std::string& label, const T& element)
     {
+        DEBUG_LOG(label, element);
+
         // TODO(Adrian): Ensure that serialization of affine elements (including point at infinity) is consistent.
         // TODO(Adrian): Consider restricting serialization (via concepts) to types T for which sizeof(T) reliably
         // returns the size of T in frs. (E.g. this is true for std::array but not for std::vector).
@@ -334,6 +337,7 @@ template <typename TranscriptParams> class BaseTranscript {
         BaseTranscript::consume_prover_element_frs(label, element_frs);
 
         auto element = TranscriptParams::template convert_from_bn254_frs<T>(element_frs);
+        DEBUG_LOG(label, element);
 
 #ifdef LOG_INTERACTIONS
         if constexpr (Loggable<T>) {
@@ -377,6 +381,7 @@ template <typename TranscriptParams> class BaseTranscript {
 #if defined LOG_CHALLENGES || defined LOG_INTERACTIONS
         info("challenge: ", label, ": ", result);
 #endif
+        DEBUG_LOG(label, result);
         return result;
     }
 
