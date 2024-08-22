@@ -405,7 +405,6 @@ template <typename Flavor> class SumcheckVerifierRound {
     template <typename Builder>
     bool check_sum(bb::Univariate<FF, BATCHED_RELATION_PARTIAL_LENGTH>& univariate, stdlib::bool_t<Builder> dummy_round)
     {
-        info("CHECK SUM");
         FF total_sum =
             FF::conditional_assign(dummy_round, target_total_sum, univariate.value_at(0) + univariate.value_at(1));
         // TODO(#673): Conditionals like this can go away once native verification is is just recursive verification
@@ -471,7 +470,7 @@ template <typename Flavor> class SumcheckVerifierRound {
     // also copy paste in PG
     // so instead of having claimed evaluations of each relation in part  you have the actual evaluations
     // kill the pow_univariate
-    FF compute_full_honk_relation_purported_value(ClaimedEvaluations purported_evaluations,
+    FF compute_full_honk_relation_purported_value(const ClaimedEvaluations& purported_evaluations,
                                                   const bb::RelationParameters<FF>& relation_parameters,
                                                   const bb::PowPolynomial<FF>& pow_polynomial,
                                                   const RelationSeparator alpha)

@@ -1,6 +1,6 @@
-#include "barretenberg/eccvm_recursion/eccvm_recursive_verifier.hpp"
-#include "barretenberg/eccvm/eccvm_prover.hpp"
 #include "barretenberg/eccvm/eccvm_verifier.hpp"
+#include "barretenberg/eccvm/eccvm_prover.hpp"
+#include "barretenberg/eccvm_recursion/eccvm_recursive_verifier.hpp"
 #include "barretenberg/ultra_honk/ultra_prover.hpp"
 #include "barretenberg/ultra_honk/ultra_verifier.hpp"
 
@@ -22,13 +22,6 @@ template <typename RecursiveFlavor> class ECCVMTranscriptSecurityTest : public :
 
     using Transcript = InnerFlavor::Transcript;
 
-    using RecursiveVerifier = ECCVMRecursiveVerifier_<RecursiveFlavor>;
-
-    using OuterBuilder = typename RecursiveFlavor::CircuitBuilder;
-    using OuterFlavor = std::conditional_t<IsMegaBuilder<OuterBuilder>, MegaFlavor, UltraFlavor>;
-    using OuterProver = UltraProver_<OuterFlavor>;
-    using OuterVerifier = UltraVerifier_<OuterFlavor>;
-    using OuterProverInstance = ProverInstance_<OuterFlavor>;
     static void SetUpTestSuite()
     {
         srs::init_grumpkin_crs_factory("../srs_db/grumpkin");
@@ -72,25 +65,28 @@ template <typename RecursiveFlavor> class ECCVMTranscriptSecurityTest : public :
         return builder;
     }
 
-    static void test_recursive_verification()
+    static void test_verification()
     {
         InnerBuilder builder = generate_circuit(&engine);
         InnerProver prover(builder);
         auto proof = prover.construct_proof();
         auto verification_key = std::make_shared<typename InnerFlavor::VerificationKey>(prover.key);
 
-        OuterBuilder outer_circuit;
-        RecursiveVerifier verifier{ &outer_circuit, verification_key };
-        verifier.verify_proof(proof);
+        InnerVerifier verifier{ verification_key };
+        size_t maximum_index = 0;
+        verifier.verify_proof(proof, &maximum_index, true, 0);
+        for (size_t i = 1; i < maximum_index; i++) {
+            verifier.verify_proof(proof, nullptr, true, i);
+        }
     }
 };
 using FlavorTypes = testing::Types<ECCVMRecursiveFlavor_<UltraCircuitBuilder>>;
 
 TYPED_TEST_SUITE(ECCVMTranscriptSecurityTest, FlavorTypes);
 
-TYPED_TEST(ECCVMTranscriptSecurityTest, SingleRecursiveVerification)
+TYPED_TEST(ECCVMTranscriptSecurityTest, SingleVerification)
 {
-    TestFixture::test_recursive_verification();
+    TestFixture::test_verification();
 };
 
 } // namespace bb

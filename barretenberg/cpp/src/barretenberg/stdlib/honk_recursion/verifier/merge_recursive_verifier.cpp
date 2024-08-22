@@ -16,19 +16,10 @@ MergeRecursiveVerifier_<CircuitBuilder>::MergeRecursiveVerifier_(CircuitBuilder*
  */
 template <typename CircuitBuilder>
 std::array<typename bn254<CircuitBuilder>::Element, 2> MergeRecursiveVerifier_<CircuitBuilder>::verify_proof(
-#ifdef DATAFLOW_SANITIZER
-    const HonkProof& proof, size_t separation_index)
-#else
     const HonkProof& proof)
-#endif
 {
     // transform it into stdlib proof
     StdlibProof<CircuitBuilder> stdlib_proof = bb::convert_proof_to_witness(builder, proof);
-#ifdef DATAFLOW_SANITIZER
-    transcript = std::make_shared<Transcript>(stdlib_proof, separation_index);
-#else
-    transcript = std::make_shared<Transcript>(stdlib_proof);
-#endif
 
     // Receive commitments [t_i^{shift}], [T_{i-1}], and [T_i]
     std::array<Commitment, NUM_WIRES> C_T_prev;

@@ -1,10 +1,10 @@
 #pragma once
+#include "barretenberg/common/dfsan_helper.hpp"
 #include "barretenberg/plonk_honk_shared/library/grand_product_delta.hpp"
 #include "barretenberg/sumcheck/instance/prover_instance.hpp"
 #include "barretenberg/sumcheck/sumcheck_output.hpp"
 #include "barretenberg/transcript/transcript.hpp"
 #include "sumcheck_round.hpp"
-
 namespace bb {
 
 /*! \brief The implementation of the sumcheck Prover for statements of the form \f$\sum_{\vec \ell \in \{0,1\}^d}
@@ -375,9 +375,19 @@ template <typename Flavor> class SumcheckVerifier {
      * @param relation_parameters
      * @param transcript
      */
+
+#ifdef DATAFLOW_SANITIZER
+    SumcheckOutput<Flavor> verify(
+        const bb::RelationParameters<FF>& relation_parameters,
+        RelationSeparator alpha,
+        const std::vector<FF>& gate_challenges,
+        std::function<void(FF&, size_t)> labeller = [](FF&, size_t) {})
+#else
     SumcheckOutput<Flavor> verify(const bb::RelationParameters<FF>& relation_parameters,
                                   RelationSeparator alpha,
                                   const std::vector<FF>& gate_challenges)
+
+#endif
     {
         bool verified(true);
 
@@ -431,9 +441,20 @@ template <typename Flavor> class SumcheckVerifier {
         auto transcript_evaluations =
             transcript->template receive_from_prover<std::array<FF, NUM_POLYNOMIALS>>("Sumcheck:evaluations");
 
+#ifdef DATAFLOW_SANITIZER
+        dfsan_set_label(0, &transcript_evaluations, sizeof(transcript_evaluations));
+        dfsan_set_label(0, &purported_evaluations, sizeof(purported_evaluations));
+        size_t eval_index = 0;
+        for (auto [eval, transcript_eval] : zip_view(purported_evaluations.get_all(), transcript_evaluations)) {
+            eval = transcript_eval;
+            labeller(eval, eval_index);
+            eval_index++;
+        }
+#else
         for (auto [eval, transcript_eval] : zip_view(purported_evaluations.get_all(), transcript_evaluations)) {
             eval = transcript_eval;
         }
+#endif
 
         FF full_honk_relation_purported_value = round.compute_full_honk_relation_purported_value(
             purported_evaluations, relation_parameters, pow_univariate, alpha);

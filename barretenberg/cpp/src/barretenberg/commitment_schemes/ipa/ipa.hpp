@@ -458,6 +458,11 @@ template <typename Curve_> class IPA {
         // Step 9.
         // Receive a₀ from the prover
         auto a_zero = transcript->template receive_from_prover<Fr>("IPA:a_0");
+#ifdef DATAFLOW_SANITIZER
+        // a_zero is the last submittted element in the protocol and there are no outputs. This will always fail the
+        // DFSan check, so we need to avoid it
+        dfsan_set_label(0, &a_zero, sizeof(a_zero));
+#endif
 
         // Step 10.
         // Compute C_right

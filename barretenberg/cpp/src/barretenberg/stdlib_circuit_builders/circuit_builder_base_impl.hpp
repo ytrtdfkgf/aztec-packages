@@ -1,10 +1,6 @@
 #pragma once
 #include "barretenberg/serialize/cbind.hpp"
 #include "circuit_builder_base.hpp"
-#ifdef DATAFLOW_SANITIZER
-#include "barretenberg/common/dfsan_constants.hpp"
-#include <sanitizer/dfsan_interface.h>
-#endif
 
 namespace bb {
 template <typename FF_> CircuitBuilderBase<FF_>::CircuitBuilderBase(size_t size_hint)
@@ -81,19 +77,6 @@ std::vector<typename CircuitBuilderBase<FF_>::FF> CircuitBuilderBase<FF_>::get_p
 
 template <typename FF_> uint32_t CircuitBuilderBase<FF_>::add_variable(const FF& in)
 {
-#ifdef DATAFLOW_SANITIZER
-    dfsan_label value_label = dfsan_read_label(&in, sizeof(FF));
-    // dfsan_set_label(0, (void*)&in, sizeof(FF));
-    dfsan_label dangerous_interaction_label_1 =
-        (1 << TRANSCRIPT_SHIFT_IS_CHALLENGE_FIRST_HALF) | (1 << TRANSCRIPT_SHIFT_IS_SUBMITTED_SECOND_HALF);
-    dfsan_label dangerous_interaction_label_2 =
-        dangerous_interaction_label_1 | (1 << TRANSCRIPT_SHIFT_IS_CHALLENGE_SECOND_HALF);
-    if (value_label == dangerous_interaction_label_1 || value_label == dangerous_interaction_label_2) {
-        // dfsan_print_origin_trace(&in, "The trace of the offending variable");
-        abort();
-        // throw_or_abort("Dangerous transcript interaction detected");
-    }
-#endif
     variables.emplace_back(in);
     const uint32_t index = static_cast<uint32_t>(variables.size()) - 1U;
     real_variable_index.emplace_back(index);
@@ -101,14 +84,6 @@ template <typename FF_> uint32_t CircuitBuilderBase<FF_>::add_variable(const FF&
     prev_var_index.emplace_back(FIRST_VARIABLE_IN_CLASS);
     real_variable_tags.emplace_back(DUMMY_TAG);
 
-#ifdef DATAFLOW_SANITIZER
-    dfsan_set_label(0, (void*)&index, 4);
-    dfsan_set_label(0, &real_variable_index[index], 4);
-    dfsan_set_label(0, &next_var_index[index], 4);
-    dfsan_set_label(0, &prev_var_index[index], 4);
-    dfsan_set_label(0, &real_variable_tags[index], 4);
-    // dfsan_set_label(value_label, &variables[index], sizeof(FF));
-#endif
     return index;
 }
 

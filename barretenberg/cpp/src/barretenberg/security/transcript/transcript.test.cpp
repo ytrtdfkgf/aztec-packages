@@ -28,7 +28,6 @@ TEST(TranscriptSecurity, EnsureDFSanWorks)
 
 TEST(TranscriptSecurity, BasicInteraction)
 {
-    using fr_ct = bb::stdlib::field_t<UltraCircuitBuilder>;
     NativeTranscript prover_transcript;
     prover_transcript.send_to_verifier("A", Fr::random_element());
     prover_transcript.get_challenge<Fr>("challenge_0");
@@ -36,17 +35,12 @@ TEST(TranscriptSecurity, BasicInteraction)
     prover_transcript.get_challenge<Fr>("challenge_1");
 
     HonkProof native_proof = prover_transcript.export_proof();
-    auto builder = UltraCircuitBuilder();
-    auto stdlib_proof = bb::convert_proof_to_witness(&builder, native_proof);
-    stdlib::recursion::honk::UltraStdlibTranscript verifier_transcript(stdlib_proof, 0);
-    auto a = verifier_transcript.receive_from_prover<fr_ct>("A");
-    auto challenge_0 = verifier_transcript.get_challenge<fr_ct>("challenge_0");
-    auto b = verifier_transcript.receive_from_prover<fr_ct>("B");
-    auto challenge_1 = verifier_transcript.get_challenge<fr_ct>("challenge_1");
-    auto get_witness_label = [](auto& val) {
-        return static_cast<uint32_t>(
-            bb::stdlib::recursion::honk::StdlibTranscriptParams<UltraCircuitBuilder>::dfsan_get_witness_label(val));
-    };
+    NativeTranscript verifier_transcript(native_proof, /*enable_sanitizer=*/true, /*separation_index=*/0);
+    auto a = verifier_transcript.receive_from_prover<Fr>("A");
+    auto challenge_0 = verifier_transcript.get_challenge<Fr>("challenge_0");
+    auto b = verifier_transcript.receive_from_prover<Fr>("B");
+    auto challenge_1 = verifier_transcript.get_challenge<Fr>("challenge_1");
+    auto get_witness_label = [](auto& val) { return static_cast<uint32_t>(dfsan_read_label(&val, sizeof(val))); };
     info("a: ", get_witness_label(a));
     info("b: ", get_witness_label(b));
     info("challenge_0:", get_witness_label(challenge_0));
@@ -60,5 +54,11 @@ TEST(TranscriptSecurity, BasicInteraction)
     EXPECT_NO_THROW(b * challenge_1);
     auto b1 = b * challenge_1;
     EXPECT_EQ(get_witness_label(b) | get_witness_label(challenge_1), get_witness_label(b1));
-    EXPECT_ANY_THROW(b * challenge_0);
+    ASSERT_DEATH(
+        {
+            auto x = b * challenge_0;
+            info(x);
+        },
+        ".*Dangerous transcript "
+        "interaction detected.*");
 }

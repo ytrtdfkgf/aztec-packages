@@ -4,7 +4,9 @@
 #include "barretenberg/ecc/groups/element.hpp"
 #include "element.hpp"
 #include <cstdint>
-
+#ifdef DATFLOW_SANITIZER
+#include <sanitizer/dfsan_interface.h>
+#endif
 // NOLINTBEGIN(readability-implicit-bool-conversion, cppcoreguidelines-avoid-c-arrays)
 namespace bb::group_elements {
 template <class Fq, class Fr, class T>
@@ -613,6 +615,13 @@ element<Fq, Fr, T> element<Fq, Fr, T>::mul_without_endomorphism(const Fr& scalar
             accumulator += *this;
         }
     }
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        dfsan_set_label(dfsan_read_label(&accumulator, sizeof(accumulator)) | dfsan_read_label(&scalar, sizeof(scalar)),
+                        &accumulator,
+                        sizeof(accumulator));
+    }
+#endif
     return accumulator;
 }
 
@@ -702,7 +711,13 @@ element<Fq, Fr, T> element<Fq, Fr, T>::mul_with_endomorphism(const Fr& scalar) c
     if (wnaf.endo_skew) {
         accumulator += element{ lookup_table[0].x * beta, lookup_table[0].y, lookup_table[0].z };
     }
-
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        dfsan_set_label(dfsan_read_label(&accumulator, sizeof(accumulator)) | dfsan_read_label(&scalar, sizeof(scalar)),
+                        &accumulator,
+                        sizeof(accumulator));
+    }
+#endif
     return accumulator;
 }
 
@@ -1129,7 +1144,14 @@ std::vector<affine_element<Fq, Fr, T>> element<Fq, Fr, T>::batch_mul_with_endomo
         /*group_element_doublings_per_iteration=*/0,
         /*scalar_multiplications_per_iteration=*/0,
         /*sequential_copy_ops_per_iteration=*/1);
-
+#ifdef DATAFLOW_SANITIZER
+    auto scalar_label = dfsan_read_label(&scalar, sizeof(scalar));
+    for (size_t i = 0; i < num_points; i++) {
+        dfsan_set_label(scalar_label | dfsan_read_label(&points[i], sizeof(points[i])),
+                        &work_elements[i],
+                        sizeof(work_elements[i]));
+    }
+#endif
     return work_elements;
 }
 

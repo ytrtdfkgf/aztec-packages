@@ -10,7 +10,7 @@
 #include "barretenberg/honk/proof_system/types/proof.hpp"
 // #define DATAFLOW_SANITIZER
 #ifdef DATAFLOW_SANITIZER
-#include "barretenberg/common/dfsan_constants.hpp"
+#include "barretenberg/common/dfsan_helper.hpp"
 #include <sanitizer/dfsan_interface.h>
 #endif
 #include <concepts>
@@ -115,11 +115,13 @@ template <typename TranscriptParams> class BaseTranscript {
      *
      */
 
-    explicit BaseTranscript(const Proof& proof_data, size_t separation_index)
-        : separation_index(separation_index)
+    explicit BaseTranscript(const Proof& proof_data, bool enable_sanitizer, size_t separation_index)
+        : enable_sanitizer(enable_sanitizer)
+        , separation_index(separation_index)
         , proof_data(proof_data.begin(), proof_data.end())
     {}
 
+    bool enable_sanitizer = false;
     size_t separation_index = 0;
     size_t current_object_set_index = 0;
     bool last_interaction_was_a_challenge = false;
@@ -299,15 +301,16 @@ template <typename TranscriptParams> class BaseTranscript {
             challenges[i] = TranscriptParams::template convert_challenge<ChallengeType>(get_next_challenge_buffer());
 
 #ifdef DATAFLOW_SANITIZER
-            if constexpr (!Native<Fr>) {
-                last_interaction_was_a_challenge = true;
-                dfsan_label current_label = static_cast<dfsan_label>(
-                    1 << (current_object_set_index <= separation_index ? TRANSCRIPT_SHIFT_IS_CHALLENGE_FIRST_HALF
-                                                                       : TRANSCRIPT_SHIFT_IS_CHALLENGE_SECOND_HALF));
+            if constexpr (Native<Fr>) {
+                if (enable_sanitizer) {
+                    last_interaction_was_a_challenge = true;
+                    dfsan_label current_label =
+                        static_cast<dfsan_label>(1 << (current_object_set_index <= separation_index
+                                                           ? TRANSCRIPT_SHIFT_IS_CHALLENGE_FIRST_HALF
+                                                           : TRANSCRIPT_SHIFT_IS_CHALLENGE_SECOND_HALF));
 
-                dfsan_set_label(current_label, &challenges[i], sizeof(challenges[i]));
-
-                TranscriptParams::dfsan_set_witness_label(challenges[i], current_label);
+                    dfsan_set_label(current_label, &challenges[i], sizeof(challenges[i]));
+                }
             }
 #endif
         }
@@ -366,16 +369,17 @@ template <typename TranscriptParams> class BaseTranscript {
 
         auto element = TranscriptParams::template convert_from_bn254_frs<T>(element_frs);
 #ifdef DATAFLOW_SANITIZER
-        if constexpr (!Native<Fr>) {
-            if (last_interaction_was_a_challenge) {
-                current_object_set_index++;
-                last_interaction_was_a_challenge = false;
+        if constexpr (Native<Fr>) {
+            if (enable_sanitizer) {
+                if (last_interaction_was_a_challenge) {
+                    current_object_set_index++;
+                    last_interaction_was_a_challenge = false;
+                }
+                dfsan_label current_label = static_cast<dfsan_label>(
+                    1 << (current_object_set_index <= separation_index ? TRANSCRIPT_SHIFT_IS_SUBMITTED_FIRST_HALF
+                                                                       : TRANSCRIPT_SHIFT_IS_SUBMITTED_SECOND_HALF));
+                dfsan_set_label(current_label, &element, sizeof(element));
             }
-            dfsan_label current_label = static_cast<dfsan_label>(
-                1 << (current_object_set_index <= separation_index ? TRANSCRIPT_SHIFT_IS_SUBMITTED_FIRST_HALF
-                                                                   : TRANSCRIPT_SHIFT_IS_SUBMITTED_SECOND_HALF));
-            dfsan_set_label(current_label, &element, sizeof(element));
-            TranscriptParams::dfsan_set_witness_label(element, current_label);
         }
 #endif
 #ifdef LOG_INTERACTIONS

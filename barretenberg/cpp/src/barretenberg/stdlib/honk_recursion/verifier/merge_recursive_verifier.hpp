@@ -22,11 +22,7 @@ template <typename CircuitBuilder> class MergeRecursiveVerifier_ {
     static constexpr size_t NUM_WIRES = UltraHonkArith<FF>::NUM_WIRES;
 
     explicit MergeRecursiveVerifier_(CircuitBuilder* builder);
-#ifdef DATAFLOW_SANITIZER
-    PairingPoints verify_proof(const HonkProof& proof, size_t separation_index = 0);
-#else
     PairingPoints verify_proof(const HonkProof& proof);
-#endif
 };
 
 } // namespace bb::stdlib::recursion::goblin

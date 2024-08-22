@@ -177,7 +177,7 @@ template <typename Flavor> class RelationUtils {
      */
     template <typename Parameters, size_t relation_idx = 0>
     // TODO(#224)(Cody): Input should be an array?
-    inline static void accumulate_relation_evaluations(PolynomialEvaluations evaluations,
+    inline static void accumulate_relation_evaluations(const PolynomialEvaluations& evaluations,
                                                        RelationEvaluations& relation_evaluations,
                                                        const Parameters& relation_parameters,
                                                        const FF& partial_evaluation_result)

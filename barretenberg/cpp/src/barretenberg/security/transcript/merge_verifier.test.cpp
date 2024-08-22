@@ -17,10 +17,7 @@ namespace bb::stdlib::recursion::goblin {
  *
  * @tparam Builder
  */
-template <class RecursiveBuilder> class TranscriptSecurityRecursiveMergeVerifierTest : public testing::Test {
-
-    // Types for recursive verifier circuit
-    using RecursiveMergeVerifier = MergeRecursiveVerifier_<RecursiveBuilder>;
+template <class RecursiveBuilder> class TranscriptSecurityMergeVerifierTest : public testing::Test {
 
     // Define types relevant for inner circuit
     using InnerFlavor = MegaFlavor;
@@ -43,7 +40,7 @@ template <class RecursiveBuilder> class TranscriptSecurityRecursiveMergeVerifier
      * correctness rather than calling check_circuit since this functionality is incomplete for the Goblin
      * arithmetization
      */
-    static void test_recursive_merge_verification()
+    static void test_merge_verification()
     {
         auto op_queue = std::make_shared<ECCOpQueue>();
         // TODO(https://github.com/AztecProtocol/barretenberg/issues/800) Testing cleanup
@@ -56,14 +53,15 @@ template <class RecursiveBuilder> class TranscriptSecurityRecursiveMergeVerifier
         MergeProver merge_prover{ op_queue };
         auto merge_proof = merge_prover.construct_proof();
 
-        run_loop_in_parallel(3, [&](size_t start, size_t end) {
-            for (size_t i = start; i < end; i++) {
-                // Create a recursive merge verification circuit for the merge proof
-                RecursiveBuilder outer_circuit;
-                RecursiveMergeVerifier verifier{ &outer_circuit };
-                EXPECT_NO_THROW(verifier.verify_proof(merge_proof, /*separation_index=*/i));
-            }
-        });
+        size_t maximum_index = 0;
+        MergeVerifier verifier;
+        EXPECT_NO_THROW(
+            verifier.verify_proof(merge_proof, &maximum_index, /*enable_sanitizer=*/true, /*separation_index=*/0));
+        for (size_t i = 1; i < maximum_index; i++) {
+            MergeVerifier verifier;
+            EXPECT_NO_THROW(
+                verifier.verify_proof(merge_proof, nullptr, /*enable_sanitizer=*/true, /*separation_index=*/1));
+        }
         // Check the recursive merge verifier circuit
     }
 };
@@ -71,13 +69,13 @@ template <class RecursiveBuilder> class TranscriptSecurityRecursiveMergeVerifier
 // Run the recursive verifier tests with Ultra and Mega builders
 // TODO(https://github.com/AztecProtocol/barretenberg/issues/1024): Ultra fails, possibly due to repeated points in
 // batch mul?
-using Builders = testing::Types<MegaCircuitBuilder, UltraCircuitBuilder>;
+using Builders = testing::Types<UltraCircuitBuilder>;
 
-TYPED_TEST_SUITE(TranscriptSecurityRecursiveMergeVerifierTest, Builders);
+TYPED_TEST_SUITE(TranscriptSecurityMergeVerifierTest, Builders);
 
-TYPED_TEST(TranscriptSecurityRecursiveMergeVerifierTest, SingleRecursiveVerification)
+TYPED_TEST(TranscriptSecurityMergeVerifierTest, SingleVerification)
 {
-    TestFixture::test_recursive_merge_verification();
+    TestFixture::test_merge_verification();
 };
 
 } // namespace bb::stdlib::recursion::goblin

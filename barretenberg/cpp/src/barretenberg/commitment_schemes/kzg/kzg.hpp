@@ -59,7 +59,6 @@ template <typename Curve_> class KZG {
     static VerifierAccumulator reduce_verify(const OpeningClaim<Curve>& claim, const auto& verifier_transcript)
     {
         auto quotient_commitment = verifier_transcript->template receive_from_prover<Commitment>("KZG:W");
-
         // Note: The pairing check can be expressed naturally as
         // e(C - v * [1]_1, [1]_2) = e([W]_1, [X - r]_2) where C =[p(X)]_1. This can be rearranged (e.g. see the plonk
         // paper) as e(C + r*[W]_1 - v*[1]_1, [1]_2) * e(-[W]_1, [X]_2) = 1, or e(P_0, [1]_2) * e(P_1, [X]_2) = 1
@@ -75,9 +74,19 @@ template <typename Curve_> class KZG {
             P_0 = GroupElement::batch_mul(commitments, scalars);
 
         } else {
+// KZG:W is the last element and we use and optimisation that breaks the DFSan check, so temprarily remove it
+#ifdef DATAFLOW_SANITIZER
+            dfsan_label quotient_label = dfsan_read_label(&quotient_commitment, sizeof(quotient_commitment));
+            dfsan_set_label(0, &quotient_commitment, sizeof(quotient_commitment));
+#endif
             P_0 = claim.commitment;
             P_0 += quotient_commitment * claim.opening_pair.challenge;
             P_0 -= GroupElement::one() * claim.opening_pair.evaluation;
+#ifdef DATAFLOW_SANITIZER
+            // Restore label just in case
+            dfsan_set_label(quotient_label, &quotient_commitment, sizeof(quotient_commitment));
+            dfsan_set_label(quotient_label | dfsan_read_label(&P_0, sizeof(P_0)) | quotient_label, &P_0, sizeof(P_0));
+#endif
         }
 
         auto P_1 = -quotient_commitment;

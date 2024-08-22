@@ -273,8 +273,8 @@
       },
       "cacheVariables": {
         "HAVE_STD_REGEX": "ON",
-        "CMAKE_CXX_FLAGS": "$env{DFSAN_CFLAGS}",
-        "CMAKE_EXE_LINKER_FLAGS": "$env{DFSAN_LFLAGS}",
+        "CMAKE_CXX_FLAGS": "$env{DFSAN_CFLAGS} -mllvm -dfsan-combine-pointer-labels-on-load=false",
+        "CMAKE_EXE_LINKER_FLAGS": "$env{DFSAN_LFLAGS} -mllvm -dfsan-combine-pointer-labels-on-load=false",
         "DATAFLOW_SANITIZER":"ON",
         "DISABLE_ASM": "ON"
       }

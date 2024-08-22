@@ -434,26 +434,8 @@ bigfield<Builder, T> bigfield<Builder, T>::operator+(const bigfield& other) cons
                 uint32_t xp(prime_basis_limb.witness_index);
                 uint32_t yp(other.prime_basis_limb.witness_index);
                 bb::fr cp(prime_basis_limb.additive_constant + other.prime_basis_limb.additive_constant);
-                info("x0_label: ", (size_t)dfsan_read_label(&x0, sizeof(x0)));
-                info("x1_label: ", (size_t)dfsan_read_label(&x1, sizeof(x0)));
-                info("x2_label: ", (size_t)dfsan_read_label(&x2, sizeof(x0)));
-                info("x3_label: ", (size_t)dfsan_read_label(&x3, sizeof(x0)));
-                info("xp_label: ", (size_t)dfsan_read_label(&xp, sizeof(xp)));
-
-                info("y0_label: ", (size_t)dfsan_read_label(&y0, sizeof(x0)));
-                info("y1_label: ", (size_t)dfsan_read_label(&y1, sizeof(x0)));
-                info("y2_label: ", (size_t)dfsan_read_label(&y2, sizeof(x0)));
-                info("y3_label: ", (size_t)dfsan_read_label(&y3, sizeof(x0)));
-                info("yp_label: ", (size_t)dfsan_read_label(&yp, sizeof(yp)));
-
-                info("c0_label: ", (size_t)dfsan_read_label(&c0, sizeof(c0)));
-                info("c1_label: ", (size_t)dfsan_read_label(&c1, sizeof(c0)));
-                info("c2_label: ", (size_t)dfsan_read_label(&c2, sizeof(c0)));
-                info("c3_label: ", (size_t)dfsan_read_label(&c3, sizeof(c0)));
-                info("cp_label: ", (size_t)dfsan_read_label(&cp, sizeof(cp)));
                 const auto output_witnesses = ctx->evaluate_non_native_field_addition(
                     { x0, y0, c0 }, { x1, y1, c1 }, { x2, y2, c2 }, { x3, y3, c3 }, { xp, yp, cp });
-                info("Went through addition");
                 result.binary_basis_limbs[0].element = field_t<Builder>::from_witness_index(ctx, output_witnesses[0]);
                 result.binary_basis_limbs[1].element = field_t<Builder>::from_witness_index(ctx, output_witnesses[1]);
                 result.binary_basis_limbs[2].element = field_t<Builder>::from_witness_index(ctx, output_witnesses[2]);

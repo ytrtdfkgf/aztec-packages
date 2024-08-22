@@ -929,7 +929,11 @@ class ECCVMFlavor {
         Transcript(const HonkProof& proof)
             : NativeTranscript(proof)
         {}
-
+#ifdef DATAFLOW_SANITIZER
+        Transcript(const HonkProof& proof, bool enable_sanitizer, size_t separation_index)
+            : NativeTranscript(proof, enable_sanitizer, separation_index)
+        {}
+#endif
         void deserialize_full_transcript()
         {
             // take current proof and put them into the struct

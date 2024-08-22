@@ -22,8 +22,14 @@ class ECCVMVerifier {
     explicit ECCVMVerifier(const std::shared_ptr<ECCVMVerifier::ProvingKey>& proving_key)
         : ECCVMVerifier(std::make_shared<ECCVMFlavor::VerificationKey>(proving_key)){};
 
+#ifdef DATAFLOW_SANITIZER
+    bool verify_proof(const HonkProof& proof,
+                      size_t* maximum_index = nullptr,
+                      bool enable_sanitizer = false,
+                      size_t separation_index = 0);
+#else
     bool verify_proof(const HonkProof& proof);
-
+#endif
     std::shared_ptr<VerificationKey> key;
     std::map<std::string, Commitment> commitments;
     std::shared_ptr<Transcript> transcript;

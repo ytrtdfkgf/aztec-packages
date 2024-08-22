@@ -10,7 +10,9 @@
 #include <vector>
 
 #include "./field_declarations.hpp"
-
+#ifdef DATAFLOW_SANITIZER
+#include <sanitizer/dfsan_interface.h>
+#endif
 namespace bb {
 
 // clang-format off
@@ -367,6 +369,7 @@ template <class T> constexpr field<T> field<T>::pow(const uint256_t& exponent) c
 {
     BB_OP_COUNT_TRACK_NAME("fr::pow");
     field accumulator{ data[0], data[1], data[2], data[3] };
+
     field to_mul{ data[0], data[1], data[2], data[3] };
     const uint64_t maximum_set_bit = exponent.get_msb();
 
@@ -381,6 +384,14 @@ template <class T> constexpr field<T> field<T>::pow(const uint256_t& exponent) c
     } else if (*this == zero()) {
         accumulator = zero();
     }
+
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        dfsan_set_label(dfsan_read_label(&data, sizeof(data)) | dfsan_read_label(&exponent, sizeof(exponent)),
+                        &accumulator,
+                        sizeof(accumulator));
+    }
+#endif
     return accumulator;
 }
 

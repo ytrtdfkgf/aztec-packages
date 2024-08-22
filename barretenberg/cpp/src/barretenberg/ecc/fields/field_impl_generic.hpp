@@ -5,12 +5,22 @@
 
 #include "./field_impl.hpp"
 #include "barretenberg/common/op_count.hpp"
-
+#ifdef DATAFLOW_SANITIZER
+#include "barretenberg/common/dfsan_helper.hpp"
+#endif
 namespace bb {
 
 // NOLINTBEGIN(readability-implicit-bool-conversion)
 template <class T> constexpr std::pair<uint64_t, uint64_t> field<T>::mul_wide(uint64_t a, uint64_t b) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+    }
+#endif
+
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     const uint128_t res = (static_cast<uint128_t>(a) * static_cast<uint128_t>(b));
     return { static_cast<uint64_t>(res), static_cast<uint64_t>(res >> 64) };
@@ -24,6 +34,15 @@ template <class T>
 constexpr uint64_t field<T>::mac(
     const uint64_t a, const uint64_t b, const uint64_t c, const uint64_t carry_in, uint64_t& carry_out) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(c);
+        check_tainted_value(carry_in);
+        check_tainted_value(carry_out);
+    }
+#endif
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     const uint128_t res = static_cast<uint128_t>(a) + (static_cast<uint128_t>(b) * static_cast<uint128_t>(c)) +
                           static_cast<uint128_t>(carry_in);
@@ -44,6 +63,16 @@ constexpr void field<T>::mac(const uint64_t a,
                              uint64_t& out,
                              uint64_t& carry_out) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(c);
+        check_tainted_value(carry_in);
+        check_tainted_value(out);
+        check_tainted_value(carry_out);
+    }
+#endif
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     const uint128_t res = static_cast<uint128_t>(a) + (static_cast<uint128_t>(b) * static_cast<uint128_t>(c)) +
                           static_cast<uint128_t>(carry_in);
@@ -62,6 +91,14 @@ constexpr uint64_t field<T>::mac_mini(const uint64_t a,
                                       const uint64_t c,
                                       uint64_t& carry_out) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(c);
+        check_tainted_value(carry_out);
+    }
+#endif
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     const uint128_t res = static_cast<uint128_t>(a) + (static_cast<uint128_t>(b) * static_cast<uint128_t>(c));
     carry_out = static_cast<uint64_t>(res >> 64);
@@ -77,6 +114,15 @@ template <class T>
 constexpr void field<T>::mac_mini(
     const uint64_t a, const uint64_t b, const uint64_t c, uint64_t& out, uint64_t& carry_out) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(c);
+        check_tainted_value(out);
+        check_tainted_value(carry_out);
+    }
+#endif
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     const uint128_t res = static_cast<uint128_t>(a) + (static_cast<uint128_t>(b) * static_cast<uint128_t>(c));
     out = static_cast<uint64_t>(res);
@@ -91,6 +137,13 @@ constexpr void field<T>::mac_mini(
 template <class T>
 constexpr uint64_t field<T>::mac_discard_lo(const uint64_t a, const uint64_t b, const uint64_t c) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(c);
+    }
+#endif
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     const uint128_t res = static_cast<uint128_t>(a) + (static_cast<uint128_t>(b) * static_cast<uint128_t>(c));
     return static_cast<uint64_t>(res >> 64);
@@ -105,6 +158,14 @@ constexpr uint64_t field<T>::addc(const uint64_t a,
                                   const uint64_t carry_in,
                                   uint64_t& carry_out) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(carry_in);
+        check_tainted_value(carry_out);
+    }
+#endif
     BB_OP_COUNT_TRACK();
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     uint128_t res = static_cast<uint128_t>(a) + static_cast<uint128_t>(b) + static_cast<uint128_t>(carry_in);
@@ -125,6 +186,14 @@ constexpr uint64_t field<T>::sbb(const uint64_t a,
                                  const uint64_t borrow_in,
                                  uint64_t& borrow_out) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(borrow_in);
+        check_tainted_value(borrow_out);
+    }
+#endif
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     uint128_t res = static_cast<uint128_t>(a) - (static_cast<uint128_t>(b) + static_cast<uint128_t>(borrow_in >> 63));
     borrow_out = static_cast<uint64_t>(res >> 64);
@@ -148,6 +217,17 @@ constexpr uint64_t field<T>::square_accumulate(const uint64_t a,
                                                uint64_t& carry_lo,
                                                uint64_t& carry_hi) noexcept
 {
+#ifdef DATAFLOW_SANITIZER
+    if (!std::is_constant_evaluated()) {
+        check_tainted_value(a);
+        check_tainted_value(b);
+        check_tainted_value(c);
+        check_tainted_value(carry_in_lo);
+        check_tainted_value(carry_in_hi);
+        check_tainted_value(carry_lo);
+        check_tainted_value(carry_hi);
+    }
+#endif
 #if defined(__SIZEOF_INT128__) && !defined(__wasm__)
     const uint128_t product = static_cast<uint128_t>(b) * static_cast<uint128_t>(c);
     const auto r0 = static_cast<uint64_t>(product);

@@ -240,7 +240,21 @@ template <typename Curve> class ShplonkVerifier_ {
             std::vector<Fr> inverse_vanishing_evals;
             inverse_vanishing_evals.reserve(num_claims);
             for (const auto& claim : claims) {
+#ifdef DATAFLOW_SANITIZER
+                // When we are inspecting transcript security of shplonk, the claim challenges should not be viewed as
+                // challenges but rather as submitted elements, so we need to update their labels
+                auto current_opening_challenge = claim.opening_pair.challenge;
+                auto current_label =
+                    dfsan_read_label(&claim.opening_pair.challenge, sizeof(claim.opening_pair.challenge));
+                if (current_label & (1 << TRANSCRIPT_SHIFT_IS_CHALLENGE_FIRST_HALF)) {
+                    current_label ^= (1 << TRANSCRIPT_SHIFT_IS_CHALLENGE_FIRST_HALF);
+                    current_label |= (1 << TRANSCRIPT_SHIFT_IS_SUBMITTED_FIRST_HALF);
+                    dfsan_set_label(current_label, &current_opening_challenge, sizeof(claim.opening_pair.challenge));
+                }
+                inverse_vanishing_evals.emplace_back(z_challenge - current_opening_challenge);
+#else
                 inverse_vanishing_evals.emplace_back(z_challenge - claim.opening_pair.challenge);
+#endif
             }
             Fr::batch_invert(inverse_vanishing_evals);
 

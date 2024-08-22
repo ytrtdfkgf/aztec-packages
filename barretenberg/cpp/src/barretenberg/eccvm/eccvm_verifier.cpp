@@ -8,14 +8,23 @@ namespace bb {
 /**
  * @brief This function verifies an ECCVM Honk proof for given program settings.
  */
+#ifdef DATAFLOW_SANITIZER
+bool ECCVMVerifier::verify_proof(const HonkProof& proof,
+                                 size_t* maximum_index,
+                                 bool enable_sanitizer,
+                                 size_t separation_index)
+{
+    transcript = std::make_shared<Transcript>(proof, enable_sanitizer, separation_index);
+#else
 bool ECCVMVerifier::verify_proof(const HonkProof& proof)
 {
+    transcript = std::make_shared<Transcript>(proof);
+#endif
     using Curve = typename Flavor::Curve;
     using ZeroMorph = ZeroMorphVerifier_<Curve>;
     using Shplonk = ShplonkVerifier_<Curve>;
 
     RelationParameters<FF> relation_parameters;
-    transcript = std::make_shared<Transcript>(proof);
     VerifierCommitments commitments{ key };
     CommitmentLabels commitment_labels;
 
@@ -51,10 +60,23 @@ bool ECCVMVerifier::verify_proof(const HonkProof& proof)
     for (size_t idx = 0; idx < gate_challenges.size(); idx++) {
         gate_challenges[idx] = transcript->template get_challenge<FF>("Sumcheck:gate_challenge_" + std::to_string(idx));
     }
-
+#ifdef DATAFLOW_SANITIZER
+    Flavor::AllEntities<dfsan_label> labels;
+    for (auto [label, comm] : zip_view(labels.get_unshifted(), commitments.get_unshifted())) {
+        label = dfsan_read_label(&comm, sizeof(comm));
+    }
+    for (auto [label, comm] : zip_view(labels.get_shifted(), commitments.get_to_be_shifted())) {
+        label = dfsan_read_label(&comm, sizeof(comm));
+    }
+    auto sumcheck_evaluation_labeller = [&](FF& element, size_t index) {
+        dfsan_set_label(labels.get_all()[index], &element, sizeof(element));
+    };
+    auto [multivariate_challenge, claimed_evaluations, sumcheck_verified] =
+        sumcheck.verify(relation_parameters, alpha, gate_challenges, sumcheck_evaluation_labeller);
+#else
     auto [multivariate_challenge, claimed_evaluations, sumcheck_verified] =
         sumcheck.verify(relation_parameters, alpha, gate_challenges);
-
+#endif
     // If Sumcheck did not verify, return false
     if (sumcheck_verified.has_value() && !sumcheck_verified.value()) {
         return false;
@@ -112,7 +134,11 @@ bool ECCVMVerifier::verify_proof(const HonkProof& proof)
         Shplonk::reduce_verification(key->pcs_verification_key->get_g1_identity(), opening_claims, transcript);
 
     bool batched_opening_verified = PCS::reduce_verify(key->pcs_verification_key, batched_opening_claim, transcript);
-
+#ifdef DATAFLOW_SANITIZER
+    if (maximum_index != nullptr) {
+        *maximum_index = transcript->current_object_set_index;
+    }
+#endif
     return sumcheck_verified.value() && batched_opening_verified;
 }
 } // namespace bb

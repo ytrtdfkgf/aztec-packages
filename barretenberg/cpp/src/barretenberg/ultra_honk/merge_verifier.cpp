@@ -19,10 +19,19 @@ MergeVerifier_<Flavor>::MergeVerifier_()
  * @tparam Flavor
  * @return bool
  */
+#ifdef DATAFLOW_SANITIZER
+template <typename Flavor>
+bool MergeVerifier_<Flavor>::verify_proof(const HonkProof& proof,
+                                          size_t* maximum_index,
+                                          bool enable_sanitizer,
+                                          size_t separation_index)
+{
+    transcript = std::make_shared<Transcript>(proof, enable_sanitizer, separation_index);
+#else
 template <typename Flavor> bool MergeVerifier_<Flavor>::verify_proof(const HonkProof& proof)
 {
     transcript = std::make_shared<Transcript>(proof);
-
+#endif
     // Receive commitments [t_i^{shift}], [T_{i-1}], and [T_i]
     std::array<Commitment, Flavor::NUM_WIRES> C_T_prev;
     std::array<Commitment, Flavor::NUM_WIRES> C_t_shift;
@@ -77,6 +86,11 @@ template <typename Flavor> bool MergeVerifier_<Flavor>::verify_proof(const HonkP
 
     auto pairing_points = PCS::reduce_verify(batched_claim, transcript);
     auto verified = pcs_verification_key->pairing_check(pairing_points[0], pairing_points[1]);
+#ifdef DATAFLOW_SANITIZER
+    if (maximum_index != nullptr) {
+        *maximum_index = transcript->current_object_set_index;
+    }
+#endif
     return identity_checked && verified;
 }
 

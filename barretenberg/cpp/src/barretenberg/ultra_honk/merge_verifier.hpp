@@ -27,7 +27,14 @@ template <typename Flavor> class MergeVerifier_ {
     std::shared_ptr<Transcript> transcript;
 
     explicit MergeVerifier_();
+#ifdef DATAFLOW_SANITIZER
+    bool verify_proof(const HonkProof& proof,
+                      size_t* p_maximum_index = nullptr,
+                      bool enable_sanitizer = false,
+                      size_t separation_index = 0);
+#else
     bool verify_proof(const HonkProof& proof);
+#endif
 
   private:
     std::shared_ptr<VerifierCommitmentKey> pcs_verification_key;
