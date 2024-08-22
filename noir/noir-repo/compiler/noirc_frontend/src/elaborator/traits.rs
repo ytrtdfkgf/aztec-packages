@@ -8,9 +8,7 @@ use crate::{
         FunctionKind, TraitItem, UnresolvedGeneric, UnresolvedGenerics, UnresolvedTraitConstraint,
     },
     hir::{
-        def_collector::dc_crate::{
-            CollectedItems, CompilationError, UnresolvedTrait, UnresolvedTraitImpl,
-        },
+        def_collector::dc_crate::{CompilationError, UnresolvedTrait, UnresolvedTraitImpl},
         type_check::TypeCheckError,
     },
     hir_def::{
@@ -29,14 +27,10 @@ use crate::{
 use super::Elaborator;
 
 impl<'context> Elaborator<'context> {
-    pub fn collect_traits(
-        &mut self,
-        traits: BTreeMap<TraitId, UnresolvedTrait>,
-        generated_items: &mut CollectedItems,
-    ) {
+    pub fn collect_traits(&mut self, traits: &BTreeMap<TraitId, UnresolvedTrait>) {
         for (trait_id, unresolved_trait) in traits {
             self.recover_generics(|this| {
-                let resolved_generics = this.interner.get_trait(trait_id).generics.clone();
+                let resolved_generics = this.interner.get_trait(*trait_id).generics.clone();
                 this.add_existing_generics(
                     &unresolved_trait.trait_def.generics,
                     &resolved_generics,
@@ -44,28 +38,23 @@ impl<'context> Elaborator<'context> {
 
                 // Resolve order
                 // 1. Trait Types ( Trait constants can have a trait type, therefore types before constants)
-                let _ = this.resolve_trait_types(&unresolved_trait);
+                let _ = this.resolve_trait_types(unresolved_trait);
                 // 2. Trait Constants ( Trait's methods can use trait types & constants, therefore they should be after)
-                let _ = this.resolve_trait_constants(&unresolved_trait);
+                let _ = this.resolve_trait_constants(unresolved_trait);
                 // 3. Trait Methods
-                let methods = this.resolve_trait_methods(trait_id, &unresolved_trait);
+                let methods = this.resolve_trait_methods(*trait_id, unresolved_trait);
 
-                this.interner.update_trait(trait_id, |trait_def| {
+                this.interner.update_trait(*trait_id, |trait_def| {
                     trait_def.set_methods(methods);
                 });
-
-                let attributes = &unresolved_trait.trait_def.attributes;
-                let item = crate::hir::comptime::Value::TraitDefinition(trait_id);
-                let span = unresolved_trait.trait_def.span;
-                this.run_comptime_attributes_on_item(attributes, item, span, generated_items);
             });
 
             // This check needs to be after the trait's methods are set since
             // the interner may set `interner.ordering_type` based on the result type
             // of the Cmp trait, if this is it.
             if self.crate_id.is_stdlib() {
-                self.interner.try_add_infix_operator_trait(trait_id);
-                self.interner.try_add_prefix_operator_trait(trait_id);
+                self.interner.try_add_infix_operator_trait(*trait_id);
+                self.interner.try_add_prefix_operator_trait(*trait_id);
             }
         }
     }
@@ -156,8 +145,9 @@ impl<'context> Elaborator<'context> {
                     };
 
                     let no_environment = Box::new(Type::Unit);
+                    // TODO: unconstrained
                     let function_type =
-                        Type::Function(arguments, Box::new(return_type), no_environment);
+                        Type::Function(arguments, Box::new(return_type), no_environment, false);
 
                     functions.push(TraitFunction {
                         name: name.clone(),
@@ -356,9 +346,15 @@ fn check_function_type_matches_expected_type(
 ) {
     let mut bindings = TypeBindings::new();
     // Shouldn't need to unify envs, they should always be equal since they're both free functions
-    if let (Type::Function(params_a, ret_a, _env_a), Type::Function(params_b, ret_b, _env_b)) =
-        (expected, actual)
+    if let (
+        Type::Function(params_a, ret_a, _env_a, _unconstrained_a),
+        Type::Function(params_b, ret_b, _env_b, _unconstrained_b),
+    ) = (expected, actual)
     {
+        // TODO: we don't yet allow marking a trait function or a trait impl function as unconstrained,
+        // so both values will always be false here. Once we support that, we should check that both
+        // match (adding a test for it).
+
         if params_a.len() == params_b.len() {
             for (i, (a, b)) in params_a.iter().zip(params_b.iter()).enumerate() {
                 if a.try_unify(b, &mut bindings).is_err() {

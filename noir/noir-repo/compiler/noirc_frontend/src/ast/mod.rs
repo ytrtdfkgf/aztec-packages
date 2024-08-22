@@ -40,6 +40,18 @@ pub enum IntegerBitSize {
 }
 
 impl IntegerBitSize {
+    pub fn bit_size(&self) -> u8 {
+        match self {
+            IntegerBitSize::One => 1,
+            IntegerBitSize::Eight => 8,
+            IntegerBitSize::Sixteen => 16,
+            IntegerBitSize::ThirtyTwo => 32,
+            IntegerBitSize::SixtyFour => 64,
+        }
+    }
+}
+
+impl IntegerBitSize {
     pub fn allowed_sizes() -> Vec<Self> {
         vec![Self::One, Self::Eight, Self::ThirtyTwo, Self::SixtyFour]
     }
@@ -115,10 +127,15 @@ pub enum UnresolvedTypeData {
         /*args:*/ Vec<UnresolvedType>,
         /*ret:*/ Box<UnresolvedType>,
         /*env:*/ Box<UnresolvedType>,
+        /*unconstrained:*/ bool,
     ),
 
-    // The type of quoted code for metaprogramming
+    /// The type of quoted code for metaprogramming
     Quoted(crate::QuotedType),
+
+    /// An "as Trait" path leading to an associated type.
+    /// E.g. `<Foo as Trait>::Bar`
+    AsTraitPath(Box<crate::ast::AsTraitPath>),
 
     /// An already resolved type. These can only be parsed if they were present in the token stream
     /// as a result of being spliced into a macro's token stream input.
@@ -131,11 +148,7 @@ pub enum UnresolvedTypeData {
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct UnresolvedType {
     pub typ: UnresolvedTypeData,
-
-    // The span is None in the cases where the User omitted a type:
-    //  fn Foo() {}  --- return type is UnresolvedType::Unit without a span
-    //  let x = 100; --- type is UnresolvedType::Unspecified without a span
-    pub span: Option<Span>,
+    pub span: Span,
 }
 
 /// Type wrapper for a member access
@@ -167,7 +180,7 @@ pub enum UnresolvedTypeExpression {
 
 impl Recoverable for UnresolvedType {
     fn error(span: Span) -> Self {
-        UnresolvedType { typ: UnresolvedTypeData::Error, span: Some(span) }
+        UnresolvedType { typ: UnresolvedTypeData::Error, span }
     }
 }
 
@@ -206,7 +219,11 @@ impl std::fmt::Display for UnresolvedTypeData {
             Bool => write!(f, "bool"),
             String(len) => write!(f, "str<{len}>"),
             FormatString(len, elements) => write!(f, "fmt<{len}, {elements}"),
-            Function(args, ret, env) => {
+            Function(args, ret, env, unconstrained) => {
+                if *unconstrained {
+                    write!(f, "unconstrained ")?;
+                }
+
                 let args = vecmap(args, ToString::to_string).join(", ");
 
                 match &env.as_ref().typ {
@@ -227,6 +244,7 @@ impl std::fmt::Display for UnresolvedTypeData {
             Unspecified => write!(f, "unspecified"),
             Parenthesized(typ) => write!(f, "({typ})"),
             Resolved(_) => write!(f, "(resolved type)"),
+            AsTraitPath(path) => write!(f, "{path}"),
         }
     }
 }
@@ -258,14 +276,6 @@ impl UnresolvedType {
         }
     }
 
-    pub fn without_span(typ: UnresolvedTypeData) -> UnresolvedType {
-        UnresolvedType { typ, span: None }
-    }
-
-    pub fn unspecified() -> UnresolvedType {
-        UnresolvedType { typ: UnresolvedTypeData::Unspecified, span: None }
-    }
-
     pub(crate) fn is_type_expression(&self) -> bool {
         matches!(&self.typ, UnresolvedTypeData::Expression(_))
     }
@@ -287,14 +297,23 @@ impl UnresolvedTypeData {
     }
 
     pub fn with_span(&self, span: Span) -> UnresolvedType {
-        UnresolvedType { typ: self.clone(), span: Some(span) }
+        UnresolvedType { typ: self.clone(), span }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash, PartialOrd, Ord)]
 pub enum Signedness {
     Unsigned,
     Signed,
+}
+
+impl Signedness {
+    pub fn is_signed(&self) -> bool {
+        match self {
+            Signedness::Unsigned => false,
+            Signedness::Signed => true,
+        }
+    }
 }
 
 impl UnresolvedTypeExpression {
@@ -324,7 +343,7 @@ impl UnresolvedTypeExpression {
                 Some(int) => Ok(UnresolvedTypeExpression::Constant(int, expr.span)),
                 None => Err(expr),
             },
-            ExpressionKind::Variable(path, _) => Ok(UnresolvedTypeExpression::Variable(path)),
+            ExpressionKind::Variable(path) => Ok(UnresolvedTypeExpression::Variable(path)),
             ExpressionKind::Prefix(prefix) if prefix.operator == UnaryOp::Minus => {
                 let lhs = Box::new(UnresolvedTypeExpression::Constant(0, expr.span));
                 let rhs = Box::new(UnresolvedTypeExpression::from_expr_helper(prefix.rhs)?);
@@ -390,7 +409,9 @@ pub enum Visibility {
     Private,
     /// DataBus is public input handled as private input. We use the fact that return values are properly computed by the program to avoid having them as public inputs
     /// it is useful for recursion and is handled by the proving system.
-    DataBus,
+    /// The u32 value is used to group inputs having the same value.
+    CallData(u32),
+    ReturnData,
 }
 
 impl std::fmt::Display for Visibility {
@@ -398,7 +419,8 @@ impl std::fmt::Display for Visibility {
         match self {
             Self::Public => write!(f, "pub"),
             Self::Private => write!(f, "priv"),
-            Self::DataBus => write!(f, "databus"),
+            Self::CallData(id) => write!(f, "calldata{id}"),
+            Self::ReturnData => write!(f, "returndata"),
         }
     }
 }

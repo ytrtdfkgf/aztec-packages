@@ -1,22 +1,21 @@
-use crate::common;
+use crate::{
+    components::{
+    previous_kernel_validator::PreviousKernelValidator,
+    public_tail_output_composer::{PublicTailOutputComposer, CombineHints}
+},
+    public_kernel_phase::PublicKernelPhase
+};
 use dep::reset_kernel_lib::{
     NullifierReadRequestHints, NullifierNonExistentReadRequestHints, PublicDataReadRequestHints,
     PublicValidationRequestProcessor
 };
 use dep::types::{
-    abis::{
-    accumulated_data::{CombinedAccumulatedData, CombineHints},
-    kernel_circuit_public_inputs::KernelCircuitPublicInputs, public_kernel_data::PublicKernelData,
-    public_data_update_request::PublicDataUpdateRequest, side_effect::Ordered
-},
+    abis::{kernel_circuit_public_inputs::KernelCircuitPublicInputs, public_kernel_data::PublicKernelData},
     constants::{
-    MAX_NOTE_HASHES_PER_TX, MAX_PUBLIC_DATA_HINTS, MAX_NULLIFIER_READ_REQUESTS_PER_TX,
-    MAX_PUBLIC_DATA_UPDATE_REQUESTS_PER_TX, PUBLIC_KERNEL_SETUP_INDEX, PUBLIC_KERNEL_APP_LOGIC_INDEX,
-    PUBLIC_KERNEL_TEARDOWN_INDEX
+    MAX_PUBLIC_DATA_HINTS, MAX_NULLIFIER_READ_REQUESTS_PER_TX, PUBLIC_KERNEL_SETUP_INDEX,
+    PUBLIC_KERNEL_APP_LOGIC_INDEX, PUBLIC_KERNEL_TEARDOWN_INDEX
 },
-    data::public_data_hint::PublicDataHint,
-    merkle_tree::{conditionally_assert_check_membership, MembershipWitness},
-    partial_state_reference::PartialStateReference, utils::{arrays::array_length}, address::AztecAddress
+    data::public_data_hint::PublicDataHint, partial_state_reference::PartialStateReference
 };
 
 global ALLOWED_PREVIOUS_CIRCUITS = [
@@ -36,72 +35,31 @@ struct PublicKernelTailCircuitPrivateInputs {
 }
 
 impl PublicKernelTailCircuitPrivateInputs {
-    fn validate_inputs(self) {
-        let previous_public_inputs = self.previous_kernel.public_inputs;
-        assert(previous_public_inputs.needs_setup() == false, "Previous kernel needs setup");
-        assert(previous_public_inputs.needs_app_logic() == false, "Previous kernel needs app logic");
-        assert(previous_public_inputs.needs_teardown() == false, "Previous kernel needs teardown");
-        assert_eq(
-            array_length(previous_public_inputs.end.public_call_stack), 0, "Public call stack must be empty when executing the tail circuit"
-        );
-        assert_eq(
-            array_length(previous_public_inputs.end_non_revertible.public_call_stack), 0, "Public call stack must be empty when executing the tail circuit"
-        );
-    }
-
-    fn validate_public_data_hints(self) {
-        let public_data_tree_root = self.start_state.public_data_tree.root;
-        for i in 0..self.public_data_hints.len() {
-            self.public_data_hints[i].validate(public_data_tree_root);
-        }
-    }
-
-    fn propagate_accumulated_data(self) -> CombinedAccumulatedData {
-        let previous_public_inputs = self.previous_kernel.public_inputs;
-        CombinedAccumulatedData::combine(
-            previous_public_inputs.end_non_revertible,
-            previous_public_inputs.end,
-            self.combine_hints
-        )
-    }
-
     pub fn public_kernel_tail(self) -> KernelCircuitPublicInputs {
-        if !dep::std::runtime::is_unconstrained() {
-            // Recursively verify the tube proof or a previous public kernel proof
-            self.previous_kernel.verify();
-            // TODO(#7410) currently stubbed out until tube vk handled
-            // self.previous_kernel.validate_in_vk_tree(ALLOWED_PREVIOUS_CIRCUITS);
-        }
-        self.validate_inputs();
-
-        self.validate_public_data_hints();
+        let previous_kernel_validator = PreviousKernelValidator::new(self.previous_kernel);
+        previous_kernel_validator.validate_phase(PublicKernelPhase.TAIL);
+        previous_kernel_validator.validate_proof(ALLOWED_PREVIOUS_CIRCUITS);
 
         let previous_public_inputs = self.previous_kernel.public_inputs;
-        let request_processor = PublicValidationRequestProcessor::new(
+        PublicValidationRequestProcessor::new(
             previous_public_inputs,
             self.nullifier_read_request_hints,
             self.nullifier_non_existent_read_request_hints,
             self.start_state.nullifier_tree.root,
             self.public_data_read_request_hints,
-            self.public_data_hints
-        );
-        request_processor.validate();
+            self.public_data_hints,
+            self.start_state.public_data_tree.root
+        ).validate();
 
-        let end = self.propagate_accumulated_data();
-
-        KernelCircuitPublicInputs {
-            rollup_validation_requests: previous_public_inputs.validation_requests.for_rollup,
-            end,
-            constants: previous_public_inputs.constants,
-            start_state: self.start_state,
-            revert_code: previous_public_inputs.revert_code,
-            fee_payer: previous_public_inputs.fee_payer
-        }
+        PublicTailOutputComposer::new(previous_public_inputs, self.start_state, self.combine_hints).finish()
     }
 }
 
 mod tests {
-    use crate::public_kernel_tail::{ALLOWED_PREVIOUS_CIRCUITS, PublicKernelTailCircuitPrivateInputs};
+    use crate::{
+        components::public_tail_output_composer::CombineHints,
+        public_kernel_tail::{ALLOWED_PREVIOUS_CIRCUITS, PublicKernelTailCircuitPrivateInputs}
+    };
     use dep::reset_kernel_lib::{
         tests::{
         nullifier_non_existent_read_request_hints_builder::NullifierNonExistentReadRequestHintsBuilder,
@@ -114,9 +72,8 @@ mod tests {
         abis::{
         kernel_circuit_public_inputs::KernelCircuitPublicInputs, public_kernel_data::PublicKernelData,
         nullifier::ScopedNullifier, nullifier_leaf_preimage::NullifierLeafPreimage,
-        accumulated_data::{CombinedAccumulatedData, CombineHints},
-        public_data_update_request::PublicDataUpdateRequest, note_hash::NoteHash,
-        log_hash::{ScopedLogHash, LogHash}
+        accumulated_data::CombinedAccumulatedData, public_data_update_request::PublicDataUpdateRequest,
+        note_hash::ScopedNoteHash, log_hash::{ScopedLogHash, LogHash}
     },
         address::AztecAddress,
         constants::{
@@ -169,7 +126,7 @@ mod tests {
     struct PublicKernelTailCircuitPrivateInputsBuilder {
         previous_kernel: FixtureBuilder,
         previous_revertible: FixtureBuilder,
-        nullifier_read_request_hints_builder: NullifierReadRequestHintsBuilder,
+        nullifier_read_request_hints_builder: NullifierReadRequestHintsBuilder<MAX_NULLIFIER_READ_REQUESTS_PER_TX, MAX_NULLIFIER_READ_REQUESTS_PER_TX>,
         nullifier_non_existent_read_request_hints_builder: NullifierNonExistentReadRequestHintsBuilder,
         public_data_read_request_hints_builder: PublicDataReadRequestHintsBuilder,
         public_data_hints: BoundedVec<PublicDataHint, MAX_PUBLIC_DATA_HINTS>,
@@ -186,7 +143,7 @@ mod tests {
             let mut builder = PublicKernelTailCircuitPrivateInputsBuilder {
                 previous_kernel,
                 previous_revertible,
-                nullifier_read_request_hints_builder: NullifierReadRequestHintsBuilder::new(MAX_NULLIFIER_READ_REQUESTS_PER_TX),
+                nullifier_read_request_hints_builder: NullifierReadRequestHintsBuilder::new(),
                 nullifier_non_existent_read_request_hints_builder,
                 public_data_read_request_hints_builder: PublicDataReadRequestHintsBuilder::new(MAX_PUBLIC_DATA_READS_PER_TX),
                 public_data_hints: BoundedVec::new(),
@@ -319,7 +276,10 @@ mod tests {
                 previous_kernel.public_inputs.end_non_revertible.note_hashes,
                 previous_kernel.public_inputs.end.note_hashes
             );
-            let sorted = sort_get_sorted_hints(merged, |a: NoteHash, b: NoteHash| a.counter() < b.counter());
+            let sorted = sort_get_sorted_hints(
+                merged,
+                |a: ScopedNoteHash, b: ScopedNoteHash| a.counter() < b.counter()
+            );
             let sorted_note_hashes = sorted.sorted_array;
             let sorted_note_hashes_indexes = sorted.sorted_index_hints;
 
@@ -333,6 +293,25 @@ mod tests {
             );
             let sorted_unencrypted_logs_hashes = sorted.sorted_array;
             let sorted_unencrypted_logs_hashes_indexes = sorted.sorted_index_hints;
+
+            let merged = array_merge(
+                previous_kernel.public_inputs.end_non_revertible.encrypted_logs_hashes,
+                previous_kernel.public_inputs.end.encrypted_logs_hashes
+            );
+            let sorted = sort_get_sorted_hints(
+                merged,
+                |a: ScopedLogHash, b: ScopedLogHash| a.counter() < b.counter()
+            );
+            let sorted_encrypted_logs_hashes = sorted.sorted_array;
+            let sorted_encrypted_logs_hashes_indexes = sorted.sorted_index_hints;
+
+            let merged = array_merge(
+                previous_kernel.public_inputs.end_non_revertible.note_encrypted_logs_hashes,
+                previous_kernel.public_inputs.end.note_encrypted_logs_hashes
+            );
+            let sorted = sort_get_sorted_hints(merged, |a: LogHash, b: LogHash| a.counter() < b.counter());
+            let sorted_note_encrypted_logs_hashes = sorted.sorted_array;
+            let sorted_note_encrypted_logs_hashes_indexes = sorted.sorted_index_hints;
 
             let merged = array_merge(
                 previous_kernel.public_inputs.end_non_revertible.public_data_update_requests,
@@ -354,6 +333,10 @@ mod tests {
                 sorted_note_hashes_indexes,
                 sorted_unencrypted_logs_hashes,
                 sorted_unencrypted_logs_hashes_indexes,
+                sorted_encrypted_logs_hashes,
+                sorted_encrypted_logs_hashes_indexes,
+                sorted_note_encrypted_logs_hashes,
+                sorted_note_encrypted_logs_hashes_indexes,
                 sorted_public_data_update_requests: merged,
                 sorted_public_data_update_requests_indexes,
                 deduped_public_data_update_requests: merged,
@@ -390,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn logs_are_handled_as_expected() {
+    fn measuring_of_log_lengths() {
         let mut builder = PublicKernelTailCircuitPrivateInputsBuilder::new();
         // Logs for the previous call stack.
         let prev_encrypted_logs_hash = 80;
@@ -413,10 +396,6 @@ mod tests {
         assert_eq(
             public_inputs.end.unencrypted_log_preimages_length, unencrypted_log_preimages_length + prev_unencrypted_log_preimages_length
         );
-
-        let hash_bytes: [u8; MAX_ENCRYPTED_LOGS_PER_TX * 32] = prev_encrypted_logs_hash.to_be_bytes(32).append(&[0; MAX_ENCRYPTED_LOGS_PER_TX * 32 - 32]).as_array();
-        let expected_encrypted_logs_hash = sha256_to_field(hash_bytes);
-        assert_eq(public_inputs.end.encrypted_logs_hash, expected_encrypted_logs_hash);
 
         assert_eq(
             public_inputs.end.unencrypted_logs_hashes, builder.previous_revertible.unencrypted_logs_hashes.storage

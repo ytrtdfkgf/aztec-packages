@@ -41,13 +41,11 @@ pub const WILDCARD_TYPE: &str = "_";
 
 impl<'context> Elaborator<'context> {
     /// Translates an UnresolvedType to a Type with a `TypeKind::Normal`
-    pub(super) fn resolve_type(&mut self, typ: UnresolvedType) -> Type {
+    pub(crate) fn resolve_type(&mut self, typ: UnresolvedType) -> Type {
         let span = typ.span;
         let resolved_type = self.resolve_type_inner(typ, &Kind::Normal);
         if resolved_type.is_nested_slice() {
-            self.push_err(ResolverError::NestedSlices {
-                span: span.expect("Type should have span"),
-            });
+            self.push_err(ResolverError::NestedSlices { span });
         }
         resolved_type
     }
@@ -61,8 +59,8 @@ impl<'context> Elaborator<'context> {
         let (named_path_span, is_self_type_name, is_synthetic) =
             if let Named(ref named_path, _, synthetic) = typ.typ {
                 (
-                    Some(named_path.last_segment().span()),
-                    named_path.last_segment().is_self_type_name(),
+                    Some(named_path.last_ident().span()),
+                    named_path.last_ident().is_self_type_name(),
                     synthetic,
                 )
             } else {
@@ -125,21 +123,16 @@ impl<'context> Elaborator<'context> {
             Tuple(fields) => {
                 Type::Tuple(vecmap(fields, |field| self.resolve_type_inner(field, kind)))
             }
-            Function(args, ret, env) => {
+            Function(args, ret, env, unconstrained) => {
                 let args = vecmap(args, |arg| self.resolve_type_inner(arg, kind));
                 let ret = Box::new(self.resolve_type_inner(*ret, kind));
-
-                // expect() here is valid, because the only places we don't have a span are omitted types
-                // e.g. a function without return type implicitly has a spanless UnresolvedType::Unit return type
-                // To get an invalid env type, the user must explicitly specify the type, which will have a span
-                let env_span =
-                    env.span.expect("Unexpected missing span for closure environment type");
+                let env_span = env.span;
 
                 let env = Box::new(self.resolve_type_inner(*env, kind));
 
                 match *env {
                     Type::Unit | Type::Tuple(_) | Type::NamedGeneric(_, _, _) => {
-                        Type::Function(args, ret, env)
+                        Type::Function(args, ret, env, unconstrained)
                     }
                     _ => {
                         self.push_err(ResolverError::InvalidClosureEnvironment {
@@ -155,29 +148,29 @@ impl<'context> Elaborator<'context> {
             }
             Parenthesized(typ) => self.resolve_type_inner(*typ, kind),
             Resolved(id) => self.interner.get_quoted_type(id).clone(),
+            AsTraitPath(_) => todo!("Resolve AsTraitPath"),
         };
 
-        if let Some(unresolved_span) = typ.span {
-            let location = Location::new(named_path_span.unwrap_or(unresolved_span), self.file);
+        let unresolved_span = typ.span;
+        let location = Location::new(named_path_span.unwrap_or(unresolved_span), self.file);
 
-            match resolved_type {
-                Type::Struct(ref struct_type, _) => {
-                    // Record the location of the type reference
-                    self.interner.push_type_ref_location(resolved_type.clone(), location);
+        match resolved_type {
+            Type::Struct(ref struct_type, _) => {
+                // Record the location of the type reference
+                self.interner.push_type_ref_location(resolved_type.clone(), location);
 
-                    if !is_synthetic {
-                        self.interner.add_struct_reference(
-                            struct_type.borrow().id,
-                            location,
-                            is_self_type_name,
-                        );
-                    }
+                if !is_synthetic {
+                    self.interner.add_struct_reference(
+                        struct_type.borrow().id,
+                        location,
+                        is_self_type_name,
+                    );
                 }
-                Type::Alias(ref alias_type, _) => {
-                    self.interner.add_alias_reference(alias_type.borrow().id, location);
-                }
-                _ => (),
             }
+            Type::Alias(ref alias_type, _) => {
+                self.interner.add_alias_reference(alias_type.borrow().id, location);
+            }
+            _ => (),
         }
 
         // Check that any types with a type kind match the expected type kind supplied to this function
@@ -195,10 +188,8 @@ impl<'context> Elaborator<'context> {
         // }
         if let Type::NamedGeneric(_, name, resolved_kind) = &resolved_type {
             if matches!(resolved_kind, Kind::Numeric { .. }) && matches!(kind, Kind::Normal) {
-                let expected_typ_err = ResolverError::NumericGenericUsedForType {
-                    name: name.to_string(),
-                    span: span.expect("Type should have span"),
-                };
+                let expected_typ_err =
+                    ResolverError::NumericGenericUsedForType { name: name.to_string(), span };
                 self.push_err(expected_typ_err);
                 return Type::Error;
             }
@@ -221,7 +212,7 @@ impl<'context> Elaborator<'context> {
         // Check if the path is a type variable first. We currently disallow generics on type
         // variables since we do not support higher-kinded types.
         if path.segments.len() == 1 {
-            let name = &path.last_segment().0.contents;
+            let name = path.last_name();
 
             if name == SELF_TYPE_NAME {
                 if let Some(self_type) = self.self_type.clone() {
@@ -239,6 +230,7 @@ impl<'context> Elaborator<'context> {
 
         if let Some(type_alias) = self.lookup_type_alias(path.clone()) {
             let type_alias = type_alias.borrow();
+            let actual_generic_count = args.len();
             let expected_generic_count = type_alias.generics.len();
             let type_alias_string = type_alias.to_string();
             let id = type_alias.id;
@@ -247,9 +239,13 @@ impl<'context> Elaborator<'context> {
                 self.resolve_type_inner(arg, &generic.kind)
             });
 
-            self.verify_generics_count(expected_generic_count, &mut args, span, || {
-                type_alias_string
-            });
+            self.verify_generics_count(
+                expected_generic_count,
+                actual_generic_count,
+                &mut args,
+                span,
+                || type_alias_string,
+            );
 
             if let Some(item) = self.current_item {
                 self.interner.add_type_alias_dependency(item, id);
@@ -279,6 +275,8 @@ impl<'context> Elaborator<'context> {
                 }
 
                 let expected_generic_count = struct_type.borrow().generics.len();
+                let actual_generic_count = args.len();
+
                 if !self.in_contract()
                     && self
                         .interner
@@ -296,9 +294,13 @@ impl<'context> Elaborator<'context> {
                         self.resolve_type_inner(arg, &generic.kind)
                     });
 
-                self.verify_generics_count(expected_generic_count, &mut args, span, || {
-                    struct_type.borrow().to_string()
-                });
+                self.verify_generics_count(
+                    expected_generic_count,
+                    actual_generic_count,
+                    &mut args,
+                    span,
+                    || struct_type.borrow().to_string(),
+                );
 
                 if let Some(current_item) = self.current_item {
                     let dependency_id = struct_type.borrow().id;
@@ -333,15 +335,16 @@ impl<'context> Elaborator<'context> {
     fn verify_generics_count(
         &mut self,
         expected_count: usize,
+        actual_count: usize,
         args: &mut Vec<Type>,
         span: Span,
         type_name: impl FnOnce() -> String,
     ) {
-        if args.len() != expected_count {
+        if actual_count != expected_count {
             self.push_err(ResolverError::IncorrectGenericCount {
                 span,
                 item_name: type_name(),
-                actual: args.len(),
+                actual: actual_count,
                 expected: expected_count,
             });
 
@@ -352,7 +355,7 @@ impl<'context> Elaborator<'context> {
 
     pub fn lookup_generic_or_global_type(&mut self, path: &Path) -> Option<Type> {
         if path.segments.len() == 1 {
-            let name = &path.last_segment().0.contents;
+            let name = path.last_name();
             if let Some(generic) = self.find_generic(name) {
                 let generic = generic.clone();
                 return Some(Type::NamedGeneric(generic.type_var, generic.name, generic.kind));
@@ -391,13 +394,16 @@ impl<'context> Elaborator<'context> {
 
                 match (lhs, rhs) {
                     (Type::Constant(lhs), Type::Constant(rhs)) => {
-                        Type::Constant(op.function()(lhs, rhs))
+                        Type::Constant(op.function(lhs, rhs))
                     }
-                    (lhs, _) => {
-                        let span =
-                            if !matches!(lhs, Type::Constant(_)) { lhs_span } else { rhs_span };
-                        self.push_err(ResolverError::InvalidArrayLengthExpr { span });
-                        Type::Constant(0)
+                    (lhs, rhs) => {
+                        if !self.enable_arithmetic_generics {
+                            let span =
+                                if !matches!(lhs, Type::Constant(_)) { lhs_span } else { rhs_span };
+                            self.push_err(ResolverError::InvalidArrayLengthExpr { span });
+                        }
+
+                        Type::InfixExpr(Box::new(lhs), op, Box::new(rhs)).canonicalize()
                     }
                 }
             }
@@ -412,11 +418,12 @@ impl<'context> Elaborator<'context> {
         &mut self,
         path: &Path,
     ) -> Option<(TraitMethodId, TraitConstraint, bool)> {
-        let trait_id = self.trait_id?;
+        let trait_impl = self.current_trait_impl?;
+        let trait_id = self.interner.try_get_trait_implementation(trait_impl)?.borrow().trait_id;
 
         if path.kind == PathKind::Plain && path.segments.len() == 2 {
-            let name = &path.segments[0].0.contents;
-            let method = &path.segments[1];
+            let name = &path.segments[0].ident.0.contents;
+            let method = &path.segments[1].ident;
 
             if name == SELF_TYPE_NAME {
                 let the_trait = self.interner.get_trait(trait_id);
@@ -449,7 +456,7 @@ impl<'context> Elaborator<'context> {
         let meta = self.interner.function_meta(&func_id);
         let trait_id = meta.trait_id?;
         let the_trait = self.interner.get_trait(trait_id);
-        let method = the_trait.find_method(&path.last_segment().0.contents)?;
+        let method = the_trait.find_method(path.last_name())?;
         let constraint = TraitConstraint {
             typ: Type::TypeVariable(the_trait.self_type_typevar.clone(), TypeVariableKind::Normal),
             trait_generics: Type::from_generics(&vecmap(&the_trait.generics, |generic| {
@@ -477,14 +484,12 @@ impl<'context> Elaborator<'context> {
         for constraint in self.trait_bounds.clone() {
             if let Type::NamedGeneric(_, name, _) = &constraint.typ {
                 // if `path` is `T::method_name`, we're looking for constraint of the form `T: SomeTrait`
-                if path.segments[0].0.contents != name.as_str() {
+                if path.segments[0].ident.0.contents != name.as_str() {
                     continue;
                 }
 
                 let the_trait = self.interner.get_trait(constraint.trait_id);
-                if let Some(method) =
-                    the_trait.find_method(path.segments.last().unwrap().0.contents.as_str())
-                {
+                if let Some(method) = the_trait.find_method(path.last_name()) {
                     return Some((method, constraint, true));
                 }
             }
@@ -626,10 +631,18 @@ impl<'context> Elaborator<'context> {
         actual: &Type,
         expected: &Type,
         expression: ExprId,
+        span: Span,
         make_error: impl FnOnce() -> TypeCheckError,
     ) {
         let mut errors = Vec::new();
-        actual.unify_with_coercions(expected, expression, self.interner, &mut errors, make_error);
+        actual.unify_with_coercions(
+            expected,
+            expression,
+            span,
+            self.interner,
+            &mut errors,
+            make_error,
+        );
         self.errors.extend(errors.into_iter().map(|error| (error.into(), self.file)));
     }
 
@@ -720,11 +733,13 @@ impl<'context> Elaborator<'context> {
             return Type::Error;
         }
 
-        for (param, (arg, _, arg_span)) in fn_params.iter().zip(callsite_args) {
-            self.unify(arg, param, || TypeCheckError::TypeMismatch {
-                expected_typ: param.to_string(),
-                expr_typ: arg.to_string(),
-                expr_span: *arg_span,
+        for (param, (arg, arg_expr_id, arg_span)) in fn_params.iter().zip(callsite_args) {
+            self.unify_with_coercions(arg, param, *arg_expr_id, *arg_span, || {
+                TypeCheckError::TypeMismatch {
+                    expected_typ: param.to_string(),
+                    expr_typ: arg.to_string(),
+                    expr_span: *arg_span,
+                }
             });
         }
 
@@ -748,7 +763,8 @@ impl<'context> Elaborator<'context> {
                 let ret = self.interner.next_type_variable();
                 let args = vecmap(args, |(arg, _, _)| arg);
                 let env_type = self.interner.next_type_variable();
-                let expected = Type::Function(args, Box::new(ret.clone()), Box::new(env_type));
+                let expected =
+                    Type::Function(args, Box::new(ret.clone()), Box::new(env_type), false);
 
                 if let Err(error) = binding.try_bind(expected, span) {
                     self.push_err(error);
@@ -757,7 +773,7 @@ impl<'context> Elaborator<'context> {
             }
             // The closure env is ignored on purpose: call arguments never place
             // constraints on closure environments.
-            Type::Function(parameters, ret, _env) => {
+            Type::Function(parameters, ret, _env, _unconstrained) => {
                 self.bind_function_type_impl(&parameters, &ret, &args, span)
             }
             Type::Error => Type::Error,
@@ -768,7 +784,7 @@ impl<'context> Elaborator<'context> {
         }
     }
 
-    pub(super) fn check_cast(&mut self, from: Type, to: &Type, span: Span) -> Type {
+    pub(super) fn check_cast(&mut self, from: &Type, to: &Type, span: Span) -> Type {
         match from.follow_bindings() {
             Type::Integer(..)
             | Type::FieldElement
@@ -777,8 +793,13 @@ impl<'context> Elaborator<'context> {
             | Type::Bool => (),
 
             Type::TypeVariable(_, _) => {
-                self.push_err(TypeCheckError::TypeAnnotationsNeeded { span });
-                return Type::Error;
+                // NOTE: in reality the expected type can also include bool, but for the compiler's simplicity
+                // we only allow integer types. If a bool is in `from` it will need an explicit type annotation.
+                let expected = Type::polymorphic_integer_or_field(self.interner);
+                self.unify(from, &expected, || TypeCheckError::InvalidCast {
+                    from: from.clone(),
+                    span,
+                });
             }
             Type::Error => return Type::Error,
             from => {
@@ -1108,7 +1129,7 @@ impl<'context> Elaborator<'context> {
         let (method_type, mut bindings) = method.typ.clone().instantiate(self.interner);
 
         match method_type {
-            Type::Function(args, _, _) => {
+            Type::Function(args, _, _, _) => {
                 // We can cheat a bit and match against only the object type here since no operator
                 // overload uses other generic parameters or return types aside from the object type.
                 let expected_object_type = &args[0];
@@ -1211,37 +1232,7 @@ impl<'context> Elaborator<'context> {
                 None
             }
             Type::NamedGeneric(_, _, _) => {
-                let func_id = match self.current_item {
-                    Some(DependencyId::Function(id)) => id,
-                    _ => panic!("unexpected method outside a function"),
-                };
-                let func_meta = self.interner.function_meta(&func_id);
-
-                for constraint in &func_meta.trait_constraints {
-                    if *object_type == constraint.typ {
-                        if let Some(the_trait) = self.interner.try_get_trait(constraint.trait_id) {
-                            for (method_index, method) in the_trait.methods.iter().enumerate() {
-                                if method.name.0.contents == method_name {
-                                    let trait_method = TraitMethodId {
-                                        trait_id: constraint.trait_id,
-                                        method_index,
-                                    };
-                                    return Some(HirMethodReference::TraitMethodId(
-                                        trait_method,
-                                        constraint.trait_generics.clone(),
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                self.push_err(TypeCheckError::UnresolvedMethodCall {
-                    method_name: method_name.to_string(),
-                    object_type: object_type.clone(),
-                    span,
-                });
-                None
+                self.lookup_method_in_trait_constraints(object_type, method_name, span)
             }
             // Mutable references to another type should resolve to methods of their element type.
             // This may be a struct or a primitive type.
@@ -1264,15 +1255,51 @@ impl<'context> Elaborator<'context> {
             other => match self.interner.lookup_primitive_method(&other, method_name) {
                 Some(method_id) => Some(HirMethodReference::FuncId(method_id)),
                 None => {
-                    self.push_err(TypeCheckError::UnresolvedMethodCall {
-                        method_name: method_name.to_string(),
-                        object_type: object_type.clone(),
-                        span,
-                    });
-                    None
+                    // It could be that this type is a composite type that is bound to a trait,
+                    // for example `x: (T, U) ... where (T, U): SomeTrait`
+                    // (so this case is a generalization of the NamedGeneric case)
+                    self.lookup_method_in_trait_constraints(object_type, method_name, span)
                 }
             },
         }
+    }
+
+    fn lookup_method_in_trait_constraints(
+        &mut self,
+        object_type: &Type,
+        method_name: &str,
+        span: Span,
+    ) -> Option<HirMethodReference> {
+        let func_id = match self.current_item {
+            Some(DependencyId::Function(id)) => id,
+            _ => panic!("unexpected method outside a function"),
+        };
+        let func_meta = self.interner.function_meta(&func_id);
+
+        for constraint in &func_meta.trait_constraints {
+            if *object_type == constraint.typ {
+                if let Some(the_trait) = self.interner.try_get_trait(constraint.trait_id) {
+                    for (method_index, method) in the_trait.methods.iter().enumerate() {
+                        if method.name.0.contents == method_name {
+                            let trait_method =
+                                TraitMethodId { trait_id: constraint.trait_id, method_index };
+                            return Some(HirMethodReference::TraitMethodId(
+                                trait_method,
+                                constraint.trait_generics.clone(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        self.push_err(TypeCheckError::UnresolvedMethodCall {
+            method_name: method_name.to_string(),
+            object_type: object_type.clone(),
+            span,
+        });
+
+        None
     }
 
     pub(super) fn type_check_call(
@@ -1288,22 +1315,33 @@ impl<'context> Elaborator<'context> {
 
         let is_current_func_constrained = self.in_constrained_function();
 
-        let is_unconstrained_call = self.is_unconstrained_call(call.func);
+        let func_type_is_unconstrained =
+            if let Type::Function(_args, _ret, _env, unconstrained) = &func_type {
+                *unconstrained
+            } else {
+                false
+            };
+
+        let is_unconstrained_call =
+            func_type_is_unconstrained || self.is_unconstrained_call(call.func);
         let crossing_runtime_boundary = is_current_func_constrained && is_unconstrained_call;
         if crossing_runtime_boundary {
-            let called_func_id = self
-                .interner
-                .lookup_function_from_expr(&call.func)
-                .expect("Called function should exist");
-            self.run_lint(|elaborator| {
-                lints::oracle_called_from_constrained_function(
-                    elaborator.interner,
-                    &called_func_id,
-                    is_current_func_constrained,
-                    span,
-                )
-                .map(Into::into)
-            });
+            if !self.in_unsafe_block {
+                self.push_err(TypeCheckError::Unsafe { span });
+            }
+
+            if let Some(called_func_id) = self.interner.lookup_function_from_expr(&call.func) {
+                self.run_lint(|elaborator| {
+                    lints::oracle_called_from_constrained_function(
+                        elaborator.interner,
+                        &called_func_id,
+                        is_current_func_constrained,
+                        span,
+                    )
+                    .map(Into::into)
+                });
+            }
+
             let errors = lints::unconstrained_function_args(&args);
             for error in errors {
                 self.push_err(error);
@@ -1347,9 +1385,9 @@ impl<'context> Elaborator<'context> {
         object: &mut ExprId,
     ) {
         let expected_object_type = match function_type {
-            Type::Function(args, _, _) => args.first(),
+            Type::Function(args, _, _, _) => args.first(),
             Type::Forall(_, typ) => match typ.as_ref() {
-                Type::Function(args, _, _) => args.first(),
+                Type::Function(args, _, _, _) => args.first(),
                 typ => unreachable!("Unexpected type for function: {typ}"),
             },
             typ => unreachable!("Unexpected type for function: {typ}"),
@@ -1411,7 +1449,7 @@ impl<'context> Elaborator<'context> {
                 });
             }
         } else {
-            self.unify_with_coercions(&body_type, declared_return_type, body_id, || {
+            self.unify_with_coercions(&body_type, declared_return_type, body_id, func_span, || {
                 let mut error = TypeCheckError::TypeMismatchWithSource {
                     expected: declared_return_type.clone(),
                     actual: body_type.clone(),
@@ -1551,7 +1589,7 @@ impl<'context> Elaborator<'context> {
                 }
             }
 
-            Type::Function(parameters, return_type, _env) => {
+            Type::Function(parameters, return_type, _env, _unconstrained) => {
                 for parameter in parameters {
                     Self::find_numeric_generics_in_type(parameter, found);
                 }
@@ -1592,6 +1630,10 @@ impl<'context> Elaborator<'context> {
                 }
                 Self::find_numeric_generics_in_type(fields, found);
             }
+            Type::InfixExpr(lhs, _op, rhs) => {
+                Self::find_numeric_generics_in_type(lhs, found);
+                Self::find_numeric_generics_in_type(rhs, found);
+            }
         }
     }
 
@@ -1609,6 +1651,19 @@ impl<'context> Elaborator<'context> {
         let context = self.function_context.last_mut();
         let context = context.expect("The function_context stack should always be non-empty");
         context.trait_constraints.push((constraint, expr_id));
+    }
+
+    pub fn check_unsupported_turbofish_usage(&mut self, path: &Path, exclude_last_segment: bool) {
+        for (index, segment) in path.segments.iter().enumerate() {
+            if exclude_last_segment && index == path.segments.len() - 1 {
+                continue;
+            }
+
+            if segment.generics.is_some() {
+                let span = segment.turbofish_span();
+                self.push_err(TypeCheckError::UnsupportedTurbofishUsage { span });
+            }
+        }
     }
 }
 

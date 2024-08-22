@@ -11,11 +11,17 @@ import {
   type HttpTransport,
   type PublicClient,
   type WalletClient,
+  concatHex,
   createPublicClient,
   createWalletClient,
+  encodeDeployData,
   getAddress,
   getContract,
+  getContractAddress,
   http,
+  numberToHex,
+  padHex,
+  zeroAddress,
 } from 'viem';
 import { type HDAccount, type PrivateKeyAccount, mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
@@ -79,13 +85,13 @@ export interface L1ContractArtifactsForDeployment {
    */
   rollup: ContractArtifacts;
   /**
-   * The token to pay for gas. This will be bridged to L2 via the gasPortal below
+   * The token to pay for gas. This will be bridged to L2 via the feeJuicePortal below
    */
-  gasToken: ContractArtifacts;
+  feeJuice: ContractArtifacts;
   /**
    * Gas portal contract artifacts. Optional for now as gas is not strictly enforced
    */
-  gasPortal: ContractArtifacts;
+  feeJuicePortal: ContractArtifacts;
 }
 
 export type L1Clients = {
@@ -141,58 +147,103 @@ export const deployL1Contracts = async (
   chain: Chain,
   logger: DebugLogger,
   contractsToDeploy: L1ContractArtifactsForDeployment,
-  args: { l2GasTokenAddress: AztecAddress; vkTreeRoot: Fr },
+  args: { l2FeeJuiceAddress: AztecAddress; vkTreeRoot: Fr; assumeProvenUntil?: number; salt: number | undefined },
 ): Promise<DeployL1Contracts> => {
-  logger.debug('Deploying contracts...');
+  // We are assuming that you are running this on a local anvil node which have 1s block times
+  // To align better with actual deployment, we update the block interval to 12s
+  // The code is same as `setBlockInterval` in `cheat_codes.ts`
+  const rpcCall = async (rpcUrl: string, method: string, params: any[]) => {
+    const paramsString = JSON.stringify(params);
+    const content = {
+      body: `{"jsonrpc":"2.0", "method": "${method}", "params": ${paramsString}, "id": 1}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    };
+    return await (await fetch(rpcUrl, content)).json();
+  };
+  const interval = 12;
+  const res = await rpcCall(rpcUrl, 'anvil_setBlockTimestampInterval', [interval]);
+  if (res.error) {
+    throw new Error(`Error setting block interval: ${res.error.message}`);
+  }
+  logger.info(`Set block interval to ${interval}`);
 
-  const walletClient = createWalletClient({
-    account,
-    chain,
-    transport: http(rpcUrl),
-  });
-  const publicClient = createPublicClient({
-    chain,
-    transport: http(rpcUrl),
-  });
+  logger.info(`Deploying contracts from ${account.address.toString()}...`);
 
-  const registryAddress = await deployL1Contract(
-    walletClient,
-    publicClient,
-    contractsToDeploy.registry.contractAbi,
-    contractsToDeploy.registry.contractBytecode,
-  );
+  const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) });
+  const publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
+  const deployer = new L1Deployer(walletClient, publicClient, args.salt, logger);
+
+  const registryAddress = await deployer.deploy(contractsToDeploy.registry, [account.address.toString()]);
   logger.info(`Deployed Registry at ${registryAddress}`);
 
-  const availabilityOracleAddress = await deployL1Contract(
-    walletClient,
-    publicClient,
-    contractsToDeploy.availabilityOracle.contractAbi,
-    contractsToDeploy.availabilityOracle.contractBytecode,
-  );
+  const availabilityOracleAddress = await deployer.deploy(contractsToDeploy.availabilityOracle);
   logger.info(`Deployed AvailabilityOracle at ${availabilityOracleAddress}`);
 
-  const gasTokenAddress = await deployL1Contract(
-    walletClient,
-    publicClient,
-    contractsToDeploy.gasToken.contractAbi,
-    contractsToDeploy.gasToken.contractBytecode,
+  const feeJuiceAddress = await deployer.deploy(contractsToDeploy.feeJuice);
+
+  logger.info(`Deployed Fee Juice at ${feeJuiceAddress}`);
+
+  const feeJuicePortalAddress = await deployer.deploy(contractsToDeploy.feeJuicePortal, [account.address.toString()]);
+
+  logger.info(`Deployed Gas Portal at ${feeJuicePortalAddress}`);
+
+  const feeJuicePortal = getContract({
+    address: feeJuicePortalAddress.toString(),
+    abi: contractsToDeploy.feeJuicePortal.contractAbi,
+    client: walletClient,
+  });
+
+  // fund the portal contract with Fee Juice
+  const feeJuice = getContract({
+    address: feeJuiceAddress.toString(),
+    abi: contractsToDeploy.feeJuice.contractAbi,
+    client: walletClient,
+  });
+
+  // @note  This value MUST match what is in `constants.nr`. It is currently specified here instead of just importing
+  //        because there is circular dependency hell. This is a temporary solution. #3342
+  const FEE_JUICE_INITIAL_MINT = 20000000000;
+  const receipt = await feeJuice.write.mint([feeJuicePortalAddress.toString(), FEE_JUICE_INITIAL_MINT], {} as any);
+  await publicClient.waitForTransactionReceipt({ hash: receipt });
+  logger.info(`Funded fee juice portal contract with Fee Juice`);
+
+  if ((await feeJuicePortal.read.registry([])) === zeroAddress) {
+    await publicClient.waitForTransactionReceipt({
+      hash: await feeJuicePortal.write.initialize([
+        registryAddress.toString(),
+        feeJuiceAddress.toString(),
+        args.l2FeeJuiceAddress.toString(),
+      ]),
+    });
+    logger.verbose(`Fee juice portal initialized with registry ${registryAddress.toString()}`);
+  } else {
+    logger.verbose(`Fee juice portal is already initialized`);
+  }
+
+  logger.info(
+    `Initialized Gas Portal at ${feeJuicePortalAddress} to bridge between L1 ${feeJuiceAddress} to L2 ${args.l2FeeJuiceAddress}`,
   );
 
-  logger.info(`Deployed Gas Token at ${gasTokenAddress}`);
-
-  const rollupAddress = await deployL1Contract(
-    walletClient,
-    publicClient,
-    contractsToDeploy.rollup.contractAbi,
-    contractsToDeploy.rollup.contractBytecode,
-    [
-      getAddress(registryAddress.toString()),
-      getAddress(availabilityOracleAddress.toString()),
-      getAddress(gasTokenAddress.toString()),
-      args.vkTreeRoot.toString(),
-    ],
-  );
+  const rollupAddress = await deployer.deploy(contractsToDeploy.rollup, [
+    getAddress(registryAddress.toString()),
+    getAddress(availabilityOracleAddress.toString()),
+    getAddress(feeJuicePortalAddress.toString()),
+    args.vkTreeRoot.toString(),
+    account.address.toString(),
+  ]);
   logger.info(`Deployed Rollup at ${rollupAddress}`);
+
+  // Set initial blocks as proven if requested
+  if (args.assumeProvenUntil && args.assumeProvenUntil > 0) {
+    const rollup = getContract({
+      address: getAddress(rollupAddress.toString()),
+      abi: contractsToDeploy.rollup.contractAbi,
+      client: walletClient,
+    });
+    await rollup.write.setAssumeProvenUntilBlockNumber([BigInt(args.assumeProvenUntil)], { account });
+    logger.info(`Set Rollup assumedProvenUntil to ${args.assumeProvenUntil}`);
+  }
 
   // Inbox and Outbox are immutable and are deployed from Rollup's constructor so we just fetch them from the contract.
   let inboxAddress!: EthAddress;
@@ -223,48 +274,12 @@ export const deployL1Contracts = async (
     abi: contractsToDeploy.registry.contractAbi,
     client: walletClient,
   });
-  await registryContract.write.upgrade(
-    [getAddress(rollupAddress.toString()), getAddress(inboxAddress.toString()), getAddress(outboxAddress.toString())],
-    { account },
-  );
-
-  // this contract remains uninitialized because at this point we don't know the address of the gas token on L2
-  const gasPortalAddress = await deployL1Contract(
-    walletClient,
-    publicClient,
-    contractsToDeploy.gasPortal.contractAbi,
-    contractsToDeploy.gasPortal.contractBytecode,
-  );
-
-  logger.info(`Deployed Gas Portal at ${gasPortalAddress}`);
-
-  const gasPortal = getContract({
-    address: gasPortalAddress.toString(),
-    abi: contractsToDeploy.gasPortal.contractAbi,
-    client: walletClient,
-  });
-
-  await publicClient.waitForTransactionReceipt({
-    hash: await gasPortal.write.initialize([
-      registryAddress.toString(),
-      gasTokenAddress.toString(),
-      args.l2GasTokenAddress.toString(),
-    ]),
-  });
-
-  logger.info(
-    `Initialized Gas Portal at ${gasPortalAddress} to bridge between L1 ${gasTokenAddress} to L2 ${args.l2GasTokenAddress}`,
-  );
-
-  // fund the rollup contract with gas tokens
-  const gasToken = getContract({
-    address: gasTokenAddress.toString(),
-    abi: contractsToDeploy.gasToken.contractAbi,
-    client: walletClient,
-  });
-  const receipt = await gasToken.write.mint([rollupAddress.toString(), 100000000000000000000n], {} as any);
-  await publicClient.waitForTransactionReceipt({ hash: receipt });
-  logger.info(`Funded rollup contract with gas tokens`);
+  if (!(await registryContract.read.isRollupRegistered([getAddress(rollupAddress.toString())]))) {
+    await registryContract.write.upgrade([getAddress(rollupAddress.toString())], { account });
+    logger.verbose(`Upgraded registry contract at ${registryAddress} to rollup ${rollupAddress}`);
+  } else {
+    logger.verbose(`Registry ${registryAddress} has already registered rollup ${rollupAddress}`);
+  }
 
   const l1Contracts: L1ContractAddresses = {
     availabilityOracleAddress,
@@ -272,8 +287,8 @@ export const deployL1Contracts = async (
     registryAddress,
     inboxAddress,
     outboxAddress,
-    gasTokenAddress,
-    gasPortalAddress,
+    feeJuiceAddress,
+    feeJuicePortalAddress,
   };
 
   return {
@@ -282,6 +297,33 @@ export const deployL1Contracts = async (
     l1ContractAddresses: l1Contracts,
   };
 };
+
+class L1Deployer {
+  private salt: Hex | undefined;
+  constructor(
+    private walletClient: WalletClient<HttpTransport, Chain, Account>,
+    private publicClient: PublicClient<HttpTransport, Chain>,
+    maybeSalt: number | undefined,
+    private logger: DebugLogger,
+  ) {
+    this.salt = maybeSalt ? padHex(numberToHex(maybeSalt), { size: 32 }) : undefined;
+  }
+
+  deploy(
+    params: { contractAbi: Narrow<Abi | readonly unknown[]>; contractBytecode: Hex },
+    args: readonly unknown[] = [],
+  ): Promise<EthAddress> {
+    return deployL1Contract(
+      this.walletClient,
+      this.publicClient,
+      params.contractAbi,
+      params.contractBytecode,
+      args,
+      this.salt,
+      this.logger,
+    );
+  }
+}
 
 // docs:start:deployL1Contract
 /**
@@ -299,23 +341,40 @@ export async function deployL1Contract(
   abi: Narrow<Abi | readonly unknown[]>,
   bytecode: Hex,
   args: readonly unknown[] = [],
+  maybeSalt?: Hex,
+  logger?: DebugLogger,
 ): Promise<EthAddress> {
-  const hash = await walletClient.deployContract({
-    abi,
-    bytecode,
-    args,
-  });
+  if (maybeSalt) {
+    const salt = padHex(maybeSalt, { size: 32 });
+    const deployer: Hex = '0x4e59b44847b379578588920cA78FbF26c0B4956C';
+    const calldata = encodeDeployData({ abi, bytecode, args });
+    const address = getContractAddress({ from: deployer, salt, bytecode: calldata, opcode: 'CREATE2' });
+    const existing = await publicClient.getBytecode({ address });
 
-  const receipt = await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 100 });
-  const contractAddress = receipt.contractAddress;
-  if (!contractAddress) {
-    throw new Error(
-      `No contract address found in receipt: ${JSON.stringify(receipt, (_, val) =>
-        typeof val === 'bigint' ? String(val) : val,
-      )}`,
-    );
+    if (existing === undefined || existing === '0x') {
+      const hash = await walletClient.sendTransaction({
+        to: deployer,
+        data: concatHex([salt, calldata]),
+      });
+      logger?.verbose(`Deploying contract with salt ${salt} to address ${address} in tx ${hash}`);
+      await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 100 });
+    } else {
+      logger?.verbose(`Skipping existing deployment of contract with salt ${salt} to address ${address}`);
+    }
+    return EthAddress.fromString(address);
+  } else {
+    const hash = await walletClient.deployContract({ abi, bytecode, args });
+    logger?.verbose(`Deploying contract in tx ${hash}`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 100 });
+    const contractAddress = receipt.contractAddress;
+    if (!contractAddress) {
+      throw new Error(
+        `No contract address found in receipt: ${JSON.stringify(receipt, (_, val) =>
+          typeof val === 'bigint' ? String(val) : val,
+        )}`,
+      );
+    }
+    return EthAddress.fromString(contractAddress);
   }
-
-  return EthAddress.fromString(receipt.contractAddress!);
 }
 // docs:end:deployL1Contract

@@ -14,6 +14,8 @@
 #include "barretenberg/relations/elliptic_relation.hpp"
 #include "barretenberg/relations/logderiv_lookup_relation.hpp"
 #include "barretenberg/relations/permutation_relation.hpp"
+#include "barretenberg/relations/poseidon2_external_relation.hpp"
+#include "barretenberg/relations/poseidon2_internal_relation.hpp"
 #include "barretenberg/relations/relation_parameters.hpp"
 #include "barretenberg/relations/ultra_arithmetic_relation.hpp"
 #include "barretenberg/stdlib_circuit_builders/ultra_circuit_builder.hpp"
@@ -33,15 +35,19 @@ class UltraFlavor {
     using CommitmentKey = bb::CommitmentKey<Curve>;
     using VerifierCommitmentKey = bb::VerifierCommitmentKey<Curve>;
 
+    // Indicates that this flavor runs with non-ZK Sumcheck.
+    static constexpr bool HasZK = false;
     static constexpr size_t NUM_WIRES = CircuitBuilder::NUM_WIRES;
     // The number of multivariate polynomials on which a sumcheck prover sumcheck operates (including shifts). We often
     // need containers of this size to hold related data, so we choose a name more agnostic than `NUM_POLYNOMIALS`.
-    static constexpr size_t NUM_ALL_ENTITIES = 42;
+    static constexpr size_t NUM_ALL_ENTITIES = 44;
     // The number of polynomials precomputed to describe a circuit and to aid a prover in constructing a satisfying
     // assignment of witnesses. We again choose a neutral name.
-    static constexpr size_t NUM_PRECOMPUTED_ENTITIES = 25;
+    static constexpr size_t NUM_PRECOMPUTED_ENTITIES = 27;
     // The total number of witness entities not including shifts.
     static constexpr size_t NUM_WITNESS_ENTITIES = 8;
+    // The total number of witnesses including shifts and derived entities.
+    static constexpr size_t NUM_ALL_WITNESS_ENTITIES = 13;
     // Total number of folded polynomials, which is just all polynomials except the shifts
     static constexpr size_t NUM_FOLDED_ENTITIES = NUM_PRECOMPUTED_ENTITIES + NUM_WITNESS_ENTITIES;
 
@@ -49,16 +55,20 @@ class UltraFlavor {
     // define the tuple of Relations that comprise the Sumcheck relation
     // Note: made generic for use in MegaRecursive.
     template <typename FF>
+
     using Relations_ = std::tuple<bb::UltraArithmeticRelation<FF>,
                                   bb::UltraPermutationRelation<FF>,
-                                  bb::LogDerivLookupRelation<FF>,
                                   bb::DeltaRangeConstraintRelation<FF>,
                                   bb::EllipticRelation<FF>,
-                                  bb::AuxiliaryRelation<FF>>;
+                                  bb::AuxiliaryRelation<FF>,
+                                  bb::LogDerivLookupRelation<FF>,
+                                  bb::Poseidon2ExternalRelation<FF>,
+                                  bb::Poseidon2InternalRelation<FF>>;
+
     using Relations = Relations_<FF>;
 
     static constexpr size_t MAX_PARTIAL_RELATION_LENGTH = compute_max_partial_relation_length<Relations>();
-    static_assert(MAX_PARTIAL_RELATION_LENGTH == 6);
+    static_assert(MAX_PARTIAL_RELATION_LENGTH == 7);
     static constexpr size_t MAX_TOTAL_RELATION_LENGTH = compute_max_total_relation_length<Relations>();
     static_assert(MAX_TOTAL_RELATION_LENGTH == 11);
     static constexpr size_t NUM_SUBRELATIONS = compute_number_of_subrelations<Relations>();
@@ -98,41 +108,54 @@ class UltraFlavor {
       public:
         using DataType = DataType_;
         DEFINE_FLAVOR_MEMBERS(DataType,
-                              q_m,            // column 0
-                              q_c,            // column 1
-                              q_l,            // column 2
-                              q_r,            // column 3
-                              q_o,            // column 4
-                              q_4,            // column 5
-                              q_arith,        // column 6
-                              q_delta_range,  // column 7
-                              q_elliptic,     // column 8
-                              q_aux,          // column 9
-                              q_lookup,       // column 10
-                              sigma_1,        // column 11
-                              sigma_2,        // column 12
-                              sigma_3,        // column 13
-                              sigma_4,        // column 14
-                              id_1,           // column 15
-                              id_2,           // column 16
-                              id_3,           // column 17
-                              id_4,           // column 18
-                              table_1,        // column 19
-                              table_2,        // column 20
-                              table_3,        // column 21
-                              table_4,        // column 22
-                              lagrange_first, // column 23
-                              lagrange_last)  // column 24
+                              q_m,                  // column 0
+                              q_c,                  // column 1
+                              q_l,                  // column 2
+                              q_r,                  // column 3
+                              q_o,                  // column 4
+                              q_4,                  // column 5
+                              q_arith,              // column 6
+                              q_delta_range,        // column 7
+                              q_elliptic,           // column 8
+                              q_aux,                // column 9
+                              q_lookup,             // column 10
+                              q_poseidon2_external, // column 11
+                              q_poseidon2_internal, // column 12
+                              sigma_1,              // column 13
+                              sigma_2,              // column 14
+                              sigma_3,              // column 15
+                              sigma_4,              // column 16
+                              id_1,                 // column 17
+                              id_2,                 // column 18
+                              id_3,                 // column 19
+                              id_4,                 // column 20
+                              table_1,              // column 21
+                              table_2,              // column 22
+                              table_3,              // column 23
+                              table_4,              // column 24
+                              lagrange_first,       // column 25
+                              lagrange_last)        // column 26
 
         static constexpr CircuitType CIRCUIT_TYPE = CircuitBuilder::CIRCUIT_TYPE;
 
         auto get_selectors()
         {
-            return RefArray{ q_m, q_c, q_l, q_r, q_o, q_4, q_arith, q_delta_range, q_elliptic, q_aux, q_lookup };
+            return RefArray{ q_m,
+                             q_c,
+                             q_l,
+                             q_r,
+                             q_o,
+                             q_4,
+                             q_arith,
+                             q_delta_range,
+                             q_elliptic,
+                             q_aux,
+                             q_lookup,
+                             q_poseidon2_external,
+                             q_poseidon2_internal };
         };
         auto get_sigma_polynomials() { return RefArray{ sigma_1, sigma_2, sigma_3, sigma_4 }; };
         auto get_id_polynomials() { return RefArray{ id_1, id_2, id_3, id_4 }; };
-
         auto get_table_polynomials() { return RefArray{ table_1, table_2, table_3, table_4 }; };
     };
 
@@ -153,31 +176,49 @@ class UltraFlavor {
                               lookup_read_tags)   // column 7
 
         auto get_wires() { return RefArray{ w_l, w_r, w_o, w_4 }; };
+        auto get_to_be_shifted() { return RefArray{ z_perm }; };
 
         MSGPACK_FIELDS(w_l, w_r, w_o, w_4, z_perm, lookup_inverses, lookup_read_counts, lookup_read_tags);
     };
 
     /**
+     * @brief Class for ShiftedWitnessEntities, containing only shifted witness polynomials.
+     */
+    template <typename DataType> class ShiftedWitnessEntities {
+      public:
+        DEFINE_FLAVOR_MEMBERS(DataType,
+                              w_l_shift,    // column 0
+                              w_r_shift,    // column 1
+                              w_o_shift,    // column 2
+                              w_4_shift,    // column 3
+                              z_perm_shift) // column 4
+
+        auto get_shifted_witnesses() { return RefArray{ w_l_shift, w_r_shift, w_o_shift, w_4_shift, z_perm_shift }; };
+    };
+
+    /**
      * @brief Class for ShiftedEntities, containing shifted witness and table polynomials.
      */
-    template <typename DataType> class ShiftedEntities {
+    template <typename DataType> class ShiftedTables {
       public:
         DEFINE_FLAVOR_MEMBERS(DataType,
                               table_1_shift, // column 0
                               table_2_shift, // column 1
                               table_3_shift, // column 2
-                              table_4_shift, // column 3
-                              w_l_shift,     // column 4
-                              w_r_shift,     // column 5
-                              w_o_shift,     // column 6
-                              w_4_shift,     // column 7
-                              z_perm_shift)  // column 10
+                              table_4_shift  // column 3
+        )
+    };
 
-        auto get_shifted()
-        {
-            return RefArray{ table_1_shift, table_2_shift, table_3_shift, table_4_shift, w_l_shift,
-                             w_r_shift,     w_o_shift,     w_4_shift,     z_perm_shift };
-        };
+    /**
+     * @brief Class for ShiftedEntities, containing shifted witness and table polynomials.
+     */
+    template <typename DataType>
+    class ShiftedEntities : public ShiftedTables<DataType>, public ShiftedWitnessEntities<DataType> {
+      public:
+        DEFINE_COMPOUND_GET_ALL(ShiftedTables<DataType>, ShiftedWitnessEntities<DataType>)
+
+        auto get_shifted_witnesses() { return ShiftedWitnessEntities<DataType>::get_all(); };
+        auto get_shifted_tables() { return ShiftedTables<DataType>::get_all(); };
     };
 
     /**
@@ -196,26 +237,41 @@ class UltraFlavor {
       public:
         DEFINE_COMPOUND_GET_ALL(PrecomputedEntities<DataType>, WitnessEntities<DataType>, ShiftedEntities<DataType>)
 
-        auto get_wires() { return RefArray{ this->w_l, this->w_r, this->w_o, this->w_4 }; };
+        auto get_wires() { return WitnessEntities<DataType>::get_wires(); };
         auto get_selectors() { return PrecomputedEntities<DataType>::get_selectors(); }
-        auto get_sigmas() { return RefArray{ this->sigma_1, this->sigma_2, this->sigma_3, this->sigma_4 }; };
-        auto get_ids() { return RefArray{ this->id_1, this->id_2, this->id_3, this->id_4 }; };
-        auto get_tables() { return RefArray{ this->table_1, this->table_2, this->table_3, this->table_4 }; };
+        auto get_sigmas() { return PrecomputedEntities<DataType>::get_sigma_polynomials(); };
+        auto get_ids() { return PrecomputedEntities<DataType>::get_id_polynomials(); };
+        auto get_tables() { return PrecomputedEntities<DataType>::get_table_polynomials(); };
         auto get_unshifted()
         {
             return concatenate(PrecomputedEntities<DataType>::get_all(), WitnessEntities<DataType>::get_all());
         };
-
         auto get_precomputed() { return PrecomputedEntities<DataType>::get_all(); }
-
         auto get_witness() { return WitnessEntities<DataType>::get_all(); };
         auto get_to_be_shifted()
         {
-            return RefArray{ this->table_1, this->table_2, this->table_3, this->table_4, this->w_l,
-                             this->w_r,     this->w_o,     this->w_4,     this->z_perm };
+            return concatenate(PrecomputedEntities<DataType>::get_table_polynomials(),
+                               WitnessEntities<DataType>::get_wires(),
+                               WitnessEntities<DataType>::get_to_be_shifted());
         };
+
         auto get_shifted() { return ShiftedEntities<DataType>::get_all(); };
-        // Because of how Gemini is written, is importat to put the polynomials out in this order.
+        // getter for shifted witnesses
+        auto get_shifted_witnesses() { return ShiftedEntities<DataType>::get_shifted_witnesses(); };
+        // getter for shifted tables
+        auto get_shifted_tables() { return ShiftedEntities<DataType>::get_shifted_tables(); };
+        // getter for all witnesses including shifted ones
+        auto get_all_witnesses()
+        {
+            return concatenate(WitnessEntities<DataType>::get_all(),
+                               ShiftedEntities<DataType>::get_shifted_witnesses());
+        };
+        // getter for the complement of all witnesses inside all entities
+        auto get_non_witnesses()
+        {
+            return concatenate(PrecomputedEntities<DataType>::get_all(),
+                               ShiftedEntities<DataType>::get_shifted_tables());
+        };
     };
 
   public:
@@ -240,6 +296,7 @@ class UltraFlavor {
         ProverPolynomials(size_t circuit_size)
         { // Initialize all unshifted polynomials to the zero polynomial and initialize the
           // shifted polys
+            ZoneScopedN("creating empty prover polys");
             for (auto& poly : get_unshifted()) {
                 poly = Polynomial{ circuit_size };
             }
@@ -352,7 +409,7 @@ class UltraFlavor {
     };
 
     /**
-     * @brief The verification key is responsible for storing the the commitments to the precomputed (non-witnessk)
+     * @brief The verification key is responsible for storing the commitments to the precomputed (non-witnessk)
      * polynomials used by the verifier.
      *
      * @note Note the discrepancy with what sort of data is stored here vs in the proving key. We may want to resolve
@@ -397,6 +454,8 @@ class UltraFlavor {
                         const Commitment& q_elliptic,
                         const Commitment& q_aux,
                         const Commitment& q_lookup,
+                        const Commitment& q_poseidon2_external,
+                        const Commitment& q_poseidon2_internal,
                         const Commitment& sigma_1,
                         const Commitment& sigma_2,
                         const Commitment& sigma_3,
@@ -429,6 +488,8 @@ class UltraFlavor {
             this->q_elliptic = q_elliptic;
             this->q_aux = q_aux;
             this->q_lookup = q_lookup;
+            this->q_poseidon2_external = q_poseidon2_external;
+            this->q_poseidon2_internal = q_poseidon2_internal;
             this->sigma_1 = sigma_1;
             this->sigma_2 = sigma_2;
             this->sigma_3 = sigma_3;
@@ -463,6 +524,8 @@ class UltraFlavor {
                        q_elliptic,
                        q_aux,
                        q_lookup,
+                       q_poseidon2_external,
+                       q_poseidon2_internal,
                        sigma_1,
                        sigma_2,
                        sigma_3,
@@ -548,6 +611,8 @@ class UltraFlavor {
             q_elliptic = "Q_ELLIPTIC";
             q_aux = "Q_AUX";
             q_lookup = "Q_LOOKUP";
+            q_poseidon2_external = "Q_POSEIDON2_EXTERNAL";
+            q_poseidon2_internal = "Q_POSEIDON2_INTERNAL";
             sigma_1 = "SIGMA_1";
             sigma_2 = "SIGMA_2";
             sigma_3 = "SIGMA_3";
@@ -574,7 +639,7 @@ class UltraFlavor {
     class VerifierCommitments_ : public AllEntities<Commitment> {
       public:
         VerifierCommitments_(const std::shared_ptr<VerificationKey>& verification_key,
-                             const std::optional<WitnessCommitments>& witness_commitments = std::nullopt)
+                             const std::optional<WitnessEntities<Commitment>>& witness_commitments = std::nullopt)
         {
             this->q_m = verification_key->q_m;
             this->q_c = verification_key->q_c;
@@ -587,6 +652,8 @@ class UltraFlavor {
             this->q_elliptic = verification_key->q_elliptic;
             this->q_aux = verification_key->q_aux;
             this->q_lookup = verification_key->q_lookup;
+            this->q_poseidon2_external = verification_key->q_poseidon2_external;
+            this->q_poseidon2_internal = verification_key->q_poseidon2_internal;
             this->sigma_1 = verification_key->sigma_1;
             this->sigma_2 = verification_key->sigma_2;
             this->sigma_3 = verification_key->sigma_3;
