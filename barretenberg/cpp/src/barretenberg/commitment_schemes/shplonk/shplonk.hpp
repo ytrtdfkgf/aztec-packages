@@ -312,13 +312,17 @@ polynomials.
         const Fr z_challenge = transcript->template get_challenge<Fr>("Shplonk:z");
         // accumulate the scalars that will be multiplied by [1]_1
         auto constant_term_accumulator = Fr(0);
-        auto builder = shplonk_batching_challenge.get_context();
         // to be populated as follows (Q, f_0,..., f_{k-1}, g_0,..., g_{m-1}, com(A_1),..., com(A_{d-1}), [1]_1)
         std::vector<Commitment> commitments;
         // see explicit formulas in the description of the method
-        std::vector<Fr> scalars;
         commitments.emplace_back(Q_commitment);
-        scalars.emplace_back(Fr(builder, 1)); // Fr(1)
+        std::vector<Fr> scalars;
+        if constexpr (Curve::is_stdlib_type) {
+            auto builder = shplonk_batching_challenge.get_context();
+            scalars.emplace_back(Fr(builder, 1)); // Fr(1)
+        } else {
+            scalars.emplace_back(Fr(1));
+        }
         // compute denominators 1/(z - r), 1/(z+r), 1/(z+r^2),..., 1/(z+r^{2^{d-1}})
         std::vector<Fr> inverse_vanishing_evals;
         inverse_vanishing_evals.reserve(num_claims + 2);
@@ -379,7 +383,13 @@ polynomials.
         scalars.emplace_back(constant_term_accumulator);
         info("commitments Shplonk size ", commitments.size());
         GroupElement G_commitment;
-        G_commitment = GroupElement::batch_mul(commitments, scalars, /*max_num_bits=*/0, /*with_edgecases=*/true);
+        if constexpr (Curve::is_stdlib_type) {
+            G_commitment = GroupElement::batch_mul(commitments, scalars, /*max_num_bits=*/0, /*with_edgecases=*/true);
+        } else {
+            for (size_t idx = 0; idx < commitments.size(); ++idx) {
+                G_commitment += commitments[idx] * scalars[idx];
+            }
+        }
 
         // Return opening pair (z, 0) and commitment [G]
         return { { z_challenge, Fr(0) }, G_commitment };

@@ -44,7 +44,8 @@ UltraRecursiveVerifier_<Flavor>::AggregationObject UltraRecursiveVerifier_<Flavo
     using Sumcheck = ::bb::SumcheckVerifier<Flavor>;
     using PCS = typename Flavor::PCS;
     using Curve = typename Flavor::Curve;
-    using ZeroMorph = ::bb::ZeroMorphVerifier_<Curve>;
+    using Shplonk = ShplonkVerifier_<Curve>;
+    using Gemini = GeminiVerifier_<Curve>;
     using VerifierCommitments = typename Flavor::VerifierCommitments;
     using CommitmentLabels = typename Flavor::CommitmentLabels;
     using RelationParams = ::bb::RelationParameters<FF>;
@@ -193,7 +194,7 @@ UltraRecursiveVerifier_<Flavor>::AggregationObject UltraRecursiveVerifier_<Flavo
     info("Shplonk: num gates = ", builder->num_gates - prev_num_gates, ", (total = ", builder->num_gates, ")");
     prev_num_gates = builder->num_gates;
 
-    auto pairing_points = PCS::reduce_verify(opening_claim, transcript);
+    auto pairing_points = PCS::reduce_verify(shplemini_claim, transcript);
 
     pairing_points[0] = pairing_points[0].normalize();
     pairing_points[1] = pairing_points[1].normalize();

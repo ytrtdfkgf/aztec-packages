@@ -48,7 +48,7 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
      * @param public_inputs
      * @param log_num_gates
      */
-    static InnerBuilder create_inner_circuit(size_t log_num_gates = 10)
+    static InnerBuilder create_inner_circuit(size_t log_num_gates = 15)
     {
         using fr = typename InnerCurve::ScalarFieldNative;
 
@@ -57,11 +57,11 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
         // Create 2^log_n many add gates based on input log num gates
         const size_t num_gates = (1 << log_num_gates);
         for (size_t i = 0; i < num_gates; ++i) {
-            fr a = fr::random_element();
+            fr a = fr(12);
             uint32_t a_idx = builder.add_variable(a);
 
-            fr b = fr::random_element();
-            fr c = fr::random_element();
+            fr b = fr(44);
+            fr c = fr(444);
             fr d = a + b + c;
             uint32_t b_idx = builder.add_variable(b);
             uint32_t c_idx = builder.add_variable(c);
@@ -210,6 +210,7 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
         InnerProver inner_prover(instance);
         auto verification_key = std::make_shared<typename InnerFlavor::VerificationKey>(instance->proving_key);
         auto inner_proof = inner_prover.construct_proof();
+        info("instance log size ", verification_key->log_circuit_size);
 
         // Create a recursive verification circuit for the proof of the inner circuit
         OuterBuilder outer_circuit;
@@ -229,7 +230,9 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
         // Check 1: Perform native verification then perform the pairing on the outputs of the recursive
         // verifier and check that the result agrees.
         InnerVerifier native_verifier(verification_key);
+        info("fine until now? ");
         auto native_result = native_verifier.verify_proof(inner_proof);
+        info("native failing? ");
         using VerifierCommitmentKey = typename InnerFlavor::VerifierCommitmentKey;
         auto pcs_verification_key = std::make_shared<VerifierCommitmentKey>();
         bool result = pcs_verification_key->pairing_check(pairing_points.P0.get_value(), pairing_points.P1.get_value());

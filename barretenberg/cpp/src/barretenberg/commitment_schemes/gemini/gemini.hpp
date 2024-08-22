@@ -165,6 +165,7 @@ template <typename Curve> class GeminiVerifier_ {
                                                                 auto& transcript)
     {
         const size_t num_variables = mle_opening_point.size();
+        info("num variables ", num_variables);
 
         // Get polynomials Fold_i, i = 1,...,m-1 from transcript
         std::vector<Commitment> commitments;
