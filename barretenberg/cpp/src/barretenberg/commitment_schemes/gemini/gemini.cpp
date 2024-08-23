@@ -118,7 +118,6 @@ std::vector<typename GeminiProver_<Curve>::Polynomial> GeminiProver_<Curve>::com
                 auto idx = static_cast<ptrdiff_t>(j);
                 auto idx_to_2 = static_cast<ptrdiff_t>(j << 1);
                 A_l_fold[idx] = A_l[idx_to_2] + u_l * (A_l[idx_to_2 + 1] - A_l[idx_to_2]);
-                // info("chunk", j);
             };
         });
         // set Aₗ₊₁ = Aₗ for the next iteration

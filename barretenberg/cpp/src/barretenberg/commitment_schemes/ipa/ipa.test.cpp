@@ -238,6 +238,7 @@ TEST_F(IPATest, GeminiShplonkIPAWithShift)
     using ShplonkVerifier = ShplonkVerifier_<Curve>;
     using GeminiProver = GeminiProver_<Curve>;
     using GeminiVerifier = GeminiVerifier_<Curve>;
+    using Commitment = typename Curve::AffineElement;
 
     const size_t n = 8;
     const size_t log_n = 3;
@@ -246,13 +247,15 @@ TEST_F(IPATest, GeminiShplonkIPAWithShift)
 
     // Generate multilinear polynomials, their commitments (genuine and mocked) and evaluations (genuine) at a random
     // point.
-    const auto mle_opening_point = this->random_evaluation_point(log_n); // sometimes denoted 'u'
+    auto mle_opening_point = this->random_evaluation_point(log_n); // sometimes denoted 'u'
     auto poly1 = this->random_polynomial(n);
     auto poly2 = this->random_polynomial(n);
     poly2[0] = Fr::zero(); // this property is required of polynomials whose shift is used
 
-    GroupElement commitment1 = this->commit(poly1);
-    GroupElement commitment2 = this->commit(poly2);
+    Commitment commitment1 = this->commit(poly1);
+    Commitment commitment2 = this->commit(poly2);
+    std::vector<Commitment> unshifted_commitments = { commitment1, commitment2 };
+    std::vector<Commitment> shifted_commitments = { commitment2 };
 
     auto eval1 = poly1.evaluate_mle(mle_opening_point);
     auto eval2 = poly2.evaluate_mle(mle_opening_point);
@@ -308,15 +311,20 @@ TEST_F(IPATest, GeminiShplonkIPAWithShift)
     IPA::compute_opening_proof(this->ck(), opening_claim, prover_transcript);
 
     auto verifier_transcript = NativeTranscript::verifier_init_empty(prover_transcript);
+    Fr gemini_challenge;
 
-    auto gemini_verifier_claim = GeminiVerifier::reduce_verification(mle_opening_point,
-                                                                     batched_evaluation,
-                                                                     batched_commitment_unshifted,
-                                                                     batched_commitment_to_be_shifted,
-                                                                     verifier_transcript);
+    auto gemini_verifier_claim =
+        GeminiVerifier::reduce_efficient_verification(mle_opening_point.size(), gemini_challenge, verifier_transcript);
 
-    const auto shplonk_verifier_claim =
-        ShplonkVerifier::reduce_verification(this->vk()->get_g1_identity(), gemini_verifier_claim, verifier_transcript);
+    const auto shplonk_verifier_claim = ShplonkVerifier::verify_gemini(this->vk()->get_g1_identity(),
+                                                                       RefVector(unshifted_commitments),
+                                                                       RefVector(shifted_commitments),
+                                                                       multilinear_evaluations,
+                                                                       mle_opening_point,
+                                                                       rho,
+                                                                       gemini_challenge,
+                                                                       gemini_verifier_claim,
+                                                                       verifier_transcript);
     auto result = IPA::reduce_verify(this->vk(), shplonk_verifier_claim, verifier_transcript);
 
     EXPECT_EQ(result, true);

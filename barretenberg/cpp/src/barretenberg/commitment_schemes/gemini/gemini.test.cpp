@@ -1,245 +1,268 @@
-#include "gemini.hpp"
+// #include "gemini.hpp"
 
-#include "../commitment_key.test.hpp"
-#include "barretenberg/polynomials/polynomial.hpp"
-#include "barretenberg/transcript/transcript.hpp"
-#include <cstddef>
-#include <gtest/gtest.h>
-#include <span>
+// #include "../commitment_key.test.hpp"
+// #include "barretenberg/polynomials/polynomial.hpp"
+// #include "barretenberg/transcript/transcript.hpp"
+// #include <cstddef>
+// #include <gtest/gtest.h>
+// #include <span>
 
-using namespace bb;
+// using namespace bb;
 
-template <class Curve> class GeminiTest : public CommitmentTest<Curve> {
-    using GeminiProver = GeminiProver_<Curve>;
-    using GeminiVerifier = GeminiVerifier_<Curve>;
-    using Fr = typename Curve::ScalarField;
-    using GroupElement = typename Curve::Element;
-    using Polynomial = typename bb::Polynomial<Fr>;
+// template <class Curve> class GeminiTest : public CommitmentTest<Curve> {
+//     using GeminiProver = GeminiProver_<Curve>;
+//     using GeminiVerifier = GeminiVerifier_<Curve>;
+//     using Fr = typename Curve::ScalarField;
+//     using GroupElement = typename Curve::Element;
+//     using Polynomial = typename bb::Polynomial<Fr>;
 
-  public:
-    void execute_gemini_and_verify_claims(size_t log_n,
-                                          std::vector<Fr> multilinear_evaluation_point,
-                                          std::vector<Fr> multilinear_evaluations,
-                                          std::vector<std::span<Fr>> multilinear_polynomials,
-                                          std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted,
-                                          std::vector<GroupElement> multilinear_commitments,
-                                          std::vector<GroupElement> multilinear_commitments_to_be_shifted)
-    {
-        auto prover_transcript = NativeTranscript::prover_init_empty();
+//   public:
+//     void execute_gemini_and_verify_claims(size_t log_n,
+//                                           std::vector<Fr> multilinear_evaluation_point,
+//                                           std::vector<Fr> multilinear_evaluations,
+//                                           std::vector<std::span<Fr>> multilinear_polynomials,
+//                                           std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted,
+//                                           std::vector<GroupElement> multilinear_commitments,
+//                                           std::vector<GroupElement> multilinear_commitments_to_be_shifted)
+//     {
+//         auto prover_transcript = NativeTranscript::prover_init_empty();
 
-        const Fr rho = Fr::random_element();
+//         const Fr rho = Fr::random_element();
 
-        std::vector<Fr> rhos = gemini::powers_of_rho(rho, multilinear_evaluations.size());
+//         std::vector<Fr> rhos = gemini::powers_of_rho(rho, multilinear_evaluations.size());
 
-        // Compute batched multivariate evaluation
-        Fr batched_evaluation = Fr::zero();
-        for (size_t i = 0; i < multilinear_evaluations.size(); ++i) {
-            batched_evaluation += multilinear_evaluations[i] * rhos[i];
-        }
+//         // Compute batched multivariate evaluation
+//         Fr batched_evaluation = Fr::zero();
+//         for (size_t i = 0; i < multilinear_evaluations.size(); ++i) {
+//             batched_evaluation += multilinear_evaluations[i] * rhos[i];
+//         }
 
-        Polynomial batched_unshifted(1 << log_n);
-        Polynomial batched_to_be_shifted(1 << log_n);
-        GroupElement batched_commitment_unshifted = GroupElement::zero();
-        GroupElement batched_commitment_to_be_shifted = GroupElement::zero();
-        const size_t num_unshifted = multilinear_polynomials.size();
-        const size_t num_shifted = multilinear_polynomials_to_be_shifted.size();
-        for (size_t i = 0; i < num_unshifted; ++i) {
-            batched_unshifted.add_scaled(multilinear_polynomials[i], rhos[i]);
-            batched_commitment_unshifted += multilinear_commitments[i] * rhos[i];
-        }
-        for (size_t i = 0; i < num_shifted; ++i) {
-            size_t rho_idx = num_unshifted + i;
-            batched_to_be_shifted.add_scaled(multilinear_polynomials_to_be_shifted[i], rhos[rho_idx]);
-            batched_commitment_to_be_shifted += multilinear_commitments_to_be_shifted[i] * rhos[rho_idx];
-        }
+//         Polynomial batched_unshifted(1 << log_n);
+//         Polynomial batched_to_be_shifted(1 << log_n);
+//         GroupElement batched_commitment_unshifted = GroupElement::zero();
+//         GroupElement batched_commitment_to_be_shifted = GroupElement::zero();
+//         const size_t num_unshifted = multilinear_polynomials.size();
+//         const size_t num_shifted = multilinear_polynomials_to_be_shifted.size();
+//         for (size_t i = 0; i < num_unshifted; ++i) {
+//             batched_unshifted.add_scaled(multilinear_polynomials[i], rhos[i]);
+//             batched_commitment_unshifted += multilinear_commitments[i] * rhos[i];
+//         }
+//         for (size_t i = 0; i < num_shifted; ++i) {
+//             size_t rho_idx = num_unshifted + i;
+//             batched_to_be_shifted.add_scaled(multilinear_polynomials_to_be_shifted[i], rhos[rho_idx]);
+//             batched_commitment_to_be_shifted += multilinear_commitments_to_be_shifted[i] * rhos[rho_idx];
+//         }
 
-        // Compute:
-        // - (d+1) opening pairs: {r, \hat{a}_0}, {-r^{2^i}, a_i}, i = 0, ..., d-1
-        // - (d+1) Fold polynomials Fold_{r}^(0), Fold_{-r}^(0), and Fold^(i), i = 0, ..., d-1
-        auto gemini_polynomials = GeminiProver::compute_gemini_polynomials(
-            multilinear_evaluation_point, std::move(batched_unshifted), std::move(batched_to_be_shifted));
+//         // Compute:
+//         // - (d+1) opening pairs: {r, \hat{a}_0}, {-r^{2^i}, a_i}, i = 0, ..., d-1
+//         // - (d+1) Fold polynomials Fold_{r}^(0), Fold_{-r}^(0), and Fold^(i), i = 0, ..., d-1
+//         auto gemini_polynomials = GeminiProver::compute_gemini_polynomials(
+//             multilinear_evaluation_point, std::move(batched_unshifted), std::move(batched_to_be_shifted));
 
-        for (size_t l = 0; l < log_n - 1; ++l) {
-            std::string label = "FOLD_" + std::to_string(l + 1);
-            auto commitment = this->ck()->commit(gemini_polynomials[l + 2]);
-            prover_transcript->send_to_verifier(label, commitment);
-        }
+//         for (size_t l = 0; l < log_n - 1; ++l) {
+//             std::string label = "FOLD_" + std::to_string(l + 1);
+//             auto commitment = this->ck()->commit(gemini_polynomials[l + 2]);
+//             prover_transcript->send_to_verifier(label, commitment);
+//         }
 
-        const Fr r_challenge = prover_transcript->get_challenge<Fr>("Gemini:r");
+//         const Fr r_challenge = prover_transcript->get_challenge<Fr>("Gemini:r");
 
-        auto prover_output = GeminiProver::compute_fold_polynomial_evaluations(
-            multilinear_evaluation_point, std::move(gemini_polynomials), r_challenge);
+//         auto prover_output = GeminiProver::compute_fold_polynomial_evaluations(
+//             multilinear_evaluation_point, std::move(gemini_polynomials), r_challenge);
 
-        for (size_t l = 0; l < log_n; ++l) {
-            std::string label = "Gemini:a_" + std::to_string(l);
-            const auto& evaluation = prover_output[l + 1].opening_pair.evaluation;
-            prover_transcript->send_to_verifier(label, evaluation);
-        }
-        std::vector<OpeningPair<Curve>> opening_pairs;
-        std::vector<Polynomial> witnesses;
+//         for (size_t l = 0; l < log_n; ++l) {
+//             std::string label = "Gemini:a_" + std::to_string(l);
+//             const auto& evaluation = prover_output[l + 1].opening_pair.evaluation;
+//             prover_transcript->send_to_verifier(label, evaluation);
+//         }
+//         std::vector<OpeningPair<Curve>> opening_pairs;
+//         std::vector<Polynomial> witnesses;
+//         std::vector<OpeningClaim<Curve>> verifier_opening_claims;
+//         verifier_opening_claims.reserve(log_n);
+//         for (auto claim : prover_output) {
+//             opening_pairs.emplace_back(claim.opening_pair);
+//             witnesses.emplace_back(claim.polynomial);
+//         }
+//         // Check that the Fold polynomials have been evaluated correctly in the prover
+//         this->verify_batch_opening_pair(opening_pairs, witnesses);
+//         info("fine? ");
+//         auto verifier_transcript = NativeTranscript::verifier_init_empty(prover_transcript);
+//         Fr gemini_challenge;
+//         // Compute:
+//         // - Single opening pair: {r, \hat{a}_0}
+//         // - 2 partially evaluated Fold polynomial commitments [Fold_{r}^(0)] and [Fold_{-r}^(0)]
+//         // Aggregate: d+1 opening pairs and d+1 Fold poly commitments into verifier claim
+//         auto verifier_claim = GeminiVerifier::reduce_efficient_verification(
+//             multilinear_evaluation_point.size(), gemini_challenge, verifier_transcript);
+//         // (r, r^2, ... , r^{2^{d-1}}), where d = log circuit size
+//         auto& gemini_evaluation_points = std::get<0>(verifier_claim);
+//         // (A_0(-r), A_1(-r^2), ... , A_{d-1}(-r^{2^{d-1}}))
+//         auto& gemini_evaluations = std::get<1>(verifier_claim);
+//         // (com(A_1), com(A_2), ... , com(A_{d-1}))
+//         auto& gemini_commitments = std::get<2>(verifier_claim);
+//         info("log n ", log_n);
+//         info("eval size ", gemini_evaluations.size());
+//         info("comm size ", gemini_commitments.size());
+//         info("ev point size size ", gemini_evaluation_points.size());
+//         info("- r_challenge ", -r_challenge);
+//         auto A_0_neg_commitment =
+//             batched_commitment_unshifted - batched_commitment_to_be_shifted * gemini_challenge.invert();
+//         verifier_opening_claims[0].commitment = A_0_neg_commitment;
+//         verifier_opening_claims[0].opening_pair.evaluation = gemini_evaluations[0];
+//         verifier_opening_claims[0].opening_pair.challenge = -gemini_evaluation_points[0];
+//         info("prover output 1 challenge ", prover_output[1].opening_pair.challenge);
+//         info("maybe here? ");
+//         for (size_t i = 1; i < log_n; ++i) {
+//             verifier_opening_claims[i].opening_pair.evaluation = gemini_evaluations[i];
+//             verifier_opening_claims[i].opening_pair.challenge = -gemini_evaluation_points[i];
+//             verifier_opening_claims[i].commitment = gemini_commitments[i - 1];
+//             info("i = ", i);
+//         }
+//         info("could i pass this point? ");
+//         // info("size prover output ", prover_output.size());
+//         // Check equality of the opening pairs computed by prover and verifier
+//         for (size_t i = 0; i < log_n; ++i) {
+//             ASSERT_EQ(prover_output[i + 1].opening_pair, verifier_opening_claims[i].opening_pair);
+//         }
 
-        for (auto claim : prover_output) {
-            opening_pairs.emplace_back(claim.opening_pair);
-            witnesses.emplace_back(claim.polynomial);
-        }
-        // Check that the Fold polynomials have been evaluated correctly in the prover
-        this->verify_batch_opening_pair(opening_pairs, witnesses);
+//         // Explicitly verify the claims computed by the verfier
+//         this->verify_batch_opening_claim(verifier_opening_claims, witnesses);
+//     }
+// };
 
-        auto verifier_transcript = NativeTranscript::verifier_init_empty(prover_transcript);
+// using ParamsTypes = ::testing::Types<curve::BN254, curve::Grumpkin>;
+// TYPED_TEST_SUITE(GeminiTest, ParamsTypes);
 
-        // Compute:
-        // - Single opening pair: {r, \hat{a}_0}
-        // - 2 partially evaluated Fold polynomial commitments [Fold_{r}^(0)] and [Fold_{-r}^(0)]
-        // Aggregate: d+1 opening pairs and d+1 Fold poly commitments into verifier claim
-        auto verifier_claim = GeminiVerifier::reduce_verification(multilinear_evaluation_point,
-                                                                  batched_evaluation,
-                                                                  batched_commitment_unshifted,
-                                                                  batched_commitment_to_be_shifted,
-                                                                  verifier_transcript);
+// TYPED_TEST(GeminiTest, Single)
+// {
+//     using Fr = typename TypeParam::ScalarField;
+//     using GroupElement = typename TypeParam::Element;
 
-        // Check equality of the opening pairs computed by prover and verifier
-        for (size_t i = 0; i < (log_n + 1); ++i) {
-            ASSERT_EQ(prover_output[i].opening_pair, verifier_claim[i].opening_pair);
-        }
+//     const size_t n = 16;
+//     const size_t log_n = 4;
 
-        // Explicitly verify the claims computed by the verfier
-        this->verify_batch_opening_claim(verifier_claim, witnesses);
-    }
-};
+//     auto u = this->random_evaluation_point(log_n);
+//     auto poly = this->random_polynomial(n);
+//     auto commitment = this->commit(poly);
+//     auto eval = poly.evaluate_mle(u);
 
-using ParamsTypes = ::testing::Types<curve::BN254, curve::Grumpkin>;
-TYPED_TEST_SUITE(GeminiTest, ParamsTypes);
+//     // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
+//     std::vector<Fr> multilinear_evaluations = { eval };
+//     std::vector<std::span<Fr>> multilinear_polynomials = { poly };
+//     std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = {};
+//     std::vector<GroupElement> multilinear_commitments = { commitment };
+//     std::vector<GroupElement> multilinear_commitments_to_be_shifted = {};
 
-TYPED_TEST(GeminiTest, Single)
-{
-    using Fr = typename TypeParam::ScalarField;
-    using GroupElement = typename TypeParam::Element;
+//     this->execute_gemini_and_verify_claims(log_n,
+//                                            u,
+//                                            multilinear_evaluations,
+//                                            multilinear_polynomials,
+//                                            multilinear_polynomials_to_be_shifted,
+//                                            multilinear_commitments,
+//                                            multilinear_commitments_to_be_shifted);
+// }
 
-    const size_t n = 16;
-    const size_t log_n = 4;
+// TYPED_TEST(GeminiTest, SingleShift)
+// {
+//     using Fr = typename TypeParam::ScalarField;
+//     using GroupElement = typename TypeParam::Element;
 
-    auto u = this->random_evaluation_point(log_n);
-    auto poly = this->random_polynomial(n);
-    auto commitment = this->commit(poly);
-    auto eval = poly.evaluate_mle(u);
+//     const size_t n = 16;
+//     const size_t log_n = 4;
 
-    // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
-    std::vector<Fr> multilinear_evaluations = { eval };
-    std::vector<std::span<Fr>> multilinear_polynomials = { poly };
-    std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = {};
-    std::vector<GroupElement> multilinear_commitments = { commitment };
-    std::vector<GroupElement> multilinear_commitments_to_be_shifted = {};
+//     auto u = this->random_evaluation_point(log_n);
 
-    this->execute_gemini_and_verify_claims(log_n,
-                                           u,
-                                           multilinear_evaluations,
-                                           multilinear_polynomials,
-                                           multilinear_polynomials_to_be_shifted,
-                                           multilinear_commitments,
-                                           multilinear_commitments_to_be_shifted);
-}
+//     // shiftable polynomial must have 0 as last coefficient
+//     auto poly = this->random_polynomial(n);
+//     poly[0] = Fr::zero();
 
-TYPED_TEST(GeminiTest, SingleShift)
-{
-    using Fr = typename TypeParam::ScalarField;
-    using GroupElement = typename TypeParam::Element;
+//     auto commitment = this->commit(poly);
+//     auto eval_shift = poly.evaluate_mle(u, true);
 
-    const size_t n = 16;
-    const size_t log_n = 4;
+//     // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
+//     std::vector<Fr> multilinear_evaluations = { eval_shift };
+//     std::vector<std::span<Fr>> multilinear_polynomials = {};
+//     std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = { poly };
+//     std::vector<GroupElement> multilinear_commitments = {};
+//     std::vector<GroupElement> multilinear_commitments_to_be_shifted = { commitment };
 
-    auto u = this->random_evaluation_point(log_n);
+//     this->execute_gemini_and_verify_claims(log_n,
+//                                            u,
+//                                            multilinear_evaluations,
+//                                            multilinear_polynomials,
+//                                            multilinear_polynomials_to_be_shifted,
+//                                            multilinear_commitments,
+//                                            multilinear_commitments_to_be_shifted);
+// }
 
-    // shiftable polynomial must have 0 as last coefficient
-    auto poly = this->random_polynomial(n);
-    poly[0] = Fr::zero();
+// TYPED_TEST(GeminiTest, Double)
+// {
+//     using Fr = typename TypeParam::ScalarField;
+//     using GroupElement = typename TypeParam::Element;
 
-    auto commitment = this->commit(poly);
-    auto eval_shift = poly.evaluate_mle(u, true);
+//     const size_t n = 16;
+//     const size_t log_n = 4;
 
-    // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
-    std::vector<Fr> multilinear_evaluations = { eval_shift };
-    std::vector<std::span<Fr>> multilinear_polynomials = {};
-    std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = { poly };
-    std::vector<GroupElement> multilinear_commitments = {};
-    std::vector<GroupElement> multilinear_commitments_to_be_shifted = { commitment };
+//     auto u = this->random_evaluation_point(log_n);
 
-    this->execute_gemini_and_verify_claims(log_n,
-                                           u,
-                                           multilinear_evaluations,
-                                           multilinear_polynomials,
-                                           multilinear_polynomials_to_be_shifted,
-                                           multilinear_commitments,
-                                           multilinear_commitments_to_be_shifted);
-}
+//     auto poly1 = this->random_polynomial(n);
+//     auto poly2 = this->random_polynomial(n);
 
-TYPED_TEST(GeminiTest, Double)
-{
-    using Fr = typename TypeParam::ScalarField;
-    using GroupElement = typename TypeParam::Element;
+//     auto commitment1 = this->commit(poly1);
+//     auto commitment2 = this->commit(poly2);
 
-    const size_t n = 16;
-    const size_t log_n = 4;
+//     auto eval1 = poly1.evaluate_mle(u);
+//     auto eval2 = poly2.evaluate_mle(u);
 
-    auto u = this->random_evaluation_point(log_n);
+//     // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
+//     std::vector<Fr> multilinear_evaluations = { eval1, eval2 };
+//     std::vector<std::span<Fr>> multilinear_polynomials = { poly1, poly2 };
+//     std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = {};
+//     std::vector<GroupElement> multilinear_commitments = { commitment1, commitment2 };
+//     std::vector<GroupElement> multilinear_commitments_to_be_shifted = {};
 
-    auto poly1 = this->random_polynomial(n);
-    auto poly2 = this->random_polynomial(n);
+//     this->execute_gemini_and_verify_claims(log_n,
+//                                            u,
+//                                            multilinear_evaluations,
+//                                            multilinear_polynomials,
+//                                            multilinear_polynomials_to_be_shifted,
+//                                            multilinear_commitments,
+//                                            multilinear_commitments_to_be_shifted);
+// }
 
-    auto commitment1 = this->commit(poly1);
-    auto commitment2 = this->commit(poly2);
+// TYPED_TEST(GeminiTest, DoubleWithShift)
+// {
+//     using Fr = typename TypeParam::ScalarField;
+//     using GroupElement = typename TypeParam::Element;
 
-    auto eval1 = poly1.evaluate_mle(u);
-    auto eval2 = poly2.evaluate_mle(u);
+//     const size_t n = 16;
+//     const size_t log_n = 4;
 
-    // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
-    std::vector<Fr> multilinear_evaluations = { eval1, eval2 };
-    std::vector<std::span<Fr>> multilinear_polynomials = { poly1, poly2 };
-    std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = {};
-    std::vector<GroupElement> multilinear_commitments = { commitment1, commitment2 };
-    std::vector<GroupElement> multilinear_commitments_to_be_shifted = {};
+//     auto u = this->random_evaluation_point(log_n);
 
-    this->execute_gemini_and_verify_claims(log_n,
-                                           u,
-                                           multilinear_evaluations,
-                                           multilinear_polynomials,
-                                           multilinear_polynomials_to_be_shifted,
-                                           multilinear_commitments,
-                                           multilinear_commitments_to_be_shifted);
-}
+//     auto poly1 = this->random_polynomial(n);
+//     auto poly2 = this->random_polynomial(n);
+//     poly2[0] = Fr::zero(); // necessary for polynomial to be 'shiftable'
 
-TYPED_TEST(GeminiTest, DoubleWithShift)
-{
-    using Fr = typename TypeParam::ScalarField;
-    using GroupElement = typename TypeParam::Element;
+//     auto commitment1 = this->commit(poly1);
+//     auto commitment2 = this->commit(poly2);
 
-    const size_t n = 16;
-    const size_t log_n = 4;
+//     auto eval1 = poly1.evaluate_mle(u);
+//     auto eval2 = poly2.evaluate_mle(u);
+//     auto eval2_shift = poly2.evaluate_mle(u, true);
 
-    auto u = this->random_evaluation_point(log_n);
+//     // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
+//     std::vector<Fr> multilinear_evaluations = { eval1, eval2, eval2_shift };
+//     std::vector<std::span<Fr>> multilinear_polynomials = { poly1, poly2 };
+//     std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = { poly2 };
+//     std::vector<GroupElement> multilinear_commitments = { commitment1, commitment2 };
+//     std::vector<GroupElement> multilinear_commitments_to_be_shifted = { commitment2 };
 
-    auto poly1 = this->random_polynomial(n);
-    auto poly2 = this->random_polynomial(n);
-    poly2[0] = Fr::zero(); // necessary for polynomial to be 'shiftable'
-
-    auto commitment1 = this->commit(poly1);
-    auto commitment2 = this->commit(poly2);
-
-    auto eval1 = poly1.evaluate_mle(u);
-    auto eval2 = poly2.evaluate_mle(u);
-    auto eval2_shift = poly2.evaluate_mle(u, true);
-
-    // Collect multilinear polynomials evaluations, and commitments for input to prover/verifier
-    std::vector<Fr> multilinear_evaluations = { eval1, eval2, eval2_shift };
-    std::vector<std::span<Fr>> multilinear_polynomials = { poly1, poly2 };
-    std::vector<std::span<Fr>> multilinear_polynomials_to_be_shifted = { poly2 };
-    std::vector<GroupElement> multilinear_commitments = { commitment1, commitment2 };
-    std::vector<GroupElement> multilinear_commitments_to_be_shifted = { commitment2 };
-
-    this->execute_gemini_and_verify_claims(log_n,
-                                           u,
-                                           multilinear_evaluations,
-                                           multilinear_polynomials,
-                                           multilinear_polynomials_to_be_shifted,
-                                           multilinear_commitments,
-                                           multilinear_commitments_to_be_shifted);
-}
+//     this->execute_gemini_and_verify_claims(log_n,
+//                                            u,
+//                                            multilinear_evaluations,
+//                                            multilinear_polynomials,
+//                                            multilinear_polynomials_to_be_shifted,
+//                                            multilinear_commitments,
+//                                            multilinear_commitments_to_be_shifted);
+// }

@@ -48,7 +48,7 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
      * @param public_inputs
      * @param log_num_gates
      */
-    static InnerBuilder create_inner_circuit(size_t log_num_gates = 15)
+    static InnerBuilder create_inner_circuit(size_t log_num_gates = 20)
     {
         using fr = typename InnerCurve::ScalarFieldNative;
 
@@ -277,16 +277,16 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
         auto instance = std::make_shared<InnerProverInstance>(inner_circuit);
         InnerProver inner_prover(instance);
         auto inner_proof = inner_prover.construct_proof();
-
+        info("before deserialize? ");
         // Arbitrarily tamper with the proof to be verified
         inner_prover.transcript->deserialize_full_transcript();
-        inner_prover.transcript->z_perm_comm = InnerCommitment::one() * InnerFF::random_element();
+        inner_prover.transcript->z_perm_comm = InnerCommitment::one();
         inner_prover.transcript->serialize_full_transcript();
         inner_proof = inner_prover.export_proof();
-
+        info("before deserialize? ");
         // Generate the corresponding inner verification key
         auto inner_verification_key = std::make_shared<typename InnerFlavor::VerificationKey>(instance->proving_key);
-
+        info("inner verification key created");
         // Create a recursive verification circuit for the proof of the inner circuit
         OuterBuilder outer_circuit;
         RecursiveVerifier verifier{ &outer_circuit, inner_verification_key };
