@@ -48,7 +48,7 @@ template <typename RecursiveFlavor> class RecursiveVerifierTest : public testing
      * @param public_inputs
      * @param log_num_gates
      */
-    static InnerBuilder create_inner_circuit(size_t log_num_gates = 20)
+    static InnerBuilder create_inner_circuit(size_t log_num_gates = 24)
     {
         using fr = typename InnerCurve::ScalarFieldNative;
 

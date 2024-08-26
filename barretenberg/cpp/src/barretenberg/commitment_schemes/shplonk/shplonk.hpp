@@ -364,6 +364,7 @@ template <typename Curve> class ShplonkVerifier_ {
         // finalize the vector of scalars
         scalars.emplace_back(constant_term_accumulator);
         GroupElement G_commitment;
+        info("batch mul size", scalars.size());
         if constexpr (Curve::is_stdlib_type) {
             G_commitment = GroupElement::batch_mul(commitments, scalars, /*max_num_bits=*/0, /*with_edgecases=*/true);
         } else {

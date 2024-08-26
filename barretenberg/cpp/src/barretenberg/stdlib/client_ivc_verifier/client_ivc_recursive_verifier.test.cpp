@@ -81,6 +81,7 @@ TEST_F(ClientIVCRecursionTests, Basic)
     // Generate a genuine ClientIVC prover output
     ClientIVC ivc;
     auto [proof, verifier_input] = construct_client_ivc_prover_output(ivc);
+    info("prover output constructed");
 
     // Construct the ClientIVC recursive verifier
     auto builder = std::make_shared<Builder>();
