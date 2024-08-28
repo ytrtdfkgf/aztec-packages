@@ -8,11 +8,12 @@ use crate::context::gas::GasOpts;
 
 struct PublicContext {
     inputs: PublicContextInputs,
+    args_hash: Field,
 }
 
 impl PublicContext {
-    pub fn new(inputs: PublicContextInputs) -> Self {
-        PublicContext { inputs }
+    pub fn new(inputs: PublicContextInputs, args_hash: Field) -> Self {
+        PublicContext { inputs, args_hash }
     }
 
     pub fn emit_unencrypted_log<T, let N: u32>(_self: &mut Self, log: T) where T: Serialize<N> {
@@ -131,7 +132,7 @@ impl PublicContext {
         FunctionSelector::from_u32(function_selector())
     }
     fn get_args_hash(self) -> Field {
-        self.inputs.args_hash
+        self.args_hash
     }
     fn transaction_fee(_self: Self) -> Field {
         transaction_fee()
@@ -282,7 +283,7 @@ unconstrained fn storage_write<let N: u32>(storage_slot: Field, values: [Field; 
 
 impl Empty for PublicContext {
     fn empty() -> Self {
-        PublicContext::new(PublicContextInputs::empty())
+        PublicContext::new(PublicContextInputs::empty(), 0)
     }
 }
 

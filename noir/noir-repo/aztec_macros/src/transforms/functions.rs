@@ -77,7 +77,7 @@ pub fn transform_function(
     let create_context = if is_private {
         create_context_private(&context_name, &func.def.parameters)?
     } else {
-        create_context_public()?
+        create_context_public(&context_name, &func.def.parameters)?
     };
     func.def.body.statements.splice(0..0, (create_context).iter().cloned());
 
@@ -501,30 +501,88 @@ fn create_context_private(ty: &str, params: &[Param]) -> Result<Vec<Statement>, 
 ///     let mut context = PublicContext::new(inputs);
 /// }
 /// ```
-fn create_context_public() -> Result<Vec<Statement>, AztecMacroError> {
-    let mut injected_expressions: Vec<Statement> = vec![];
+fn create_context_public(ty: &str, params: &[Param]) -> Result<Vec<Statement>, AztecMacroError> {
+    let mut injected_statements: Vec<Statement> = vec![];
+
+    let hasher_name = "args_hasher";
+
+    // `let mut args_hasher = Hasher::new();`
+    let let_hasher = mutable_assignment(
+        hasher_name, // Assigned to
+        call(
+            variable_path(chained_dep!("aztec", "hash", "ArgsHasher", "new")), // Path
+            vec![],                                                            // args
+        ),
+    );
+
+    // Completes: `let mut args_hasher = Hasher::new();`
+    injected_statements.push(let_hasher);
+
+    // Iterate over each of the function parameters, adding to them to the hasher
+    for Param { pattern, typ, span, .. } in params {
+        match pattern {
+            Pattern::Identifier(identifier) => {
+                // Match the type to determine the padding to do
+                let unresolved_type = &typ.typ;
+                injected_statements.extend(
+                    serialize_to_hasher(identifier, unresolved_type, hasher_name).ok_or_else(
+                        || AztecMacroError::UnsupportedFunctionArgumentType {
+                            typ: unresolved_type.clone(),
+                            span: *span,
+                        },
+                    )?,
+                );
+            }
+            _ => todo!(), // Maybe unreachable?
+        }
+    }
 
     // Create the inputs to the context
     let inputs_expression = variable("inputs");
+    // `args_hasher.hash()`
+    let hash_call = method_call(
+        variable(hasher_name), // variable
+        "hash",                // method name
+        vec![],                // args
+    );
+
+    let path_snippet = ty.to_case(Case::Snake); // e.g. private_context
 
     // let mut context = {ty}::new(inputs, hash);
     let let_context = mutable_assignment(
         "context", // Assigned to
         call(
-            variable_path(chained_dep!(
-                "aztec",
-                "context",
-                "public_context",
-                "PublicContext",
-                "new"
-            )), // Path
-            vec![inputs_expression], // args
+            variable_path(chained_dep!("aztec", "context", &path_snippet, ty, "new")), // Path
+            vec![inputs_expression, hash_call],                                        // args
         ),
     );
-    injected_expressions.push(let_context);
+    injected_statements.push(let_context);
 
     // Return all expressions that will be injected by the hasher
-    Ok(injected_expressions)
+    Ok(injected_statements)
+    // let mut injected_expressions: Vec<Statement> = vec![];
+
+    // // Create the inputs to the context
+    // let inputs_expression = variable("inputs");
+
+    // // let mut context = {ty}::new(inputs, hash);
+    // let let_context = mutable_assignment(
+    //     "context", // Assigned to
+    //     call(
+    //         variable_path(chained_dep!(
+    //             "aztec",
+    //             "context",
+    //             "public_context",
+    //             "PublicContext",
+    //             "new"
+    //         )), // Path
+    //         vec![inputs_expression], // args
+    //     ),
+    // );
+    // injected_expressions.push(let_context);
+
+    // // Return all expressions that will be injected by the hasher
+    // Ok(injected_expressions)
 }
 
 /// Abstract Return Type
