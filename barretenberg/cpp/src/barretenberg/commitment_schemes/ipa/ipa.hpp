@@ -350,7 +350,7 @@ template <typename Curve_> class IPA {
         // Step 5.
         // Compute C₀ = C' + ∑_{j ∈ [k]} u_j^{-1}L_j + ∑_{j ∈ [k]} u_jR_j
         GroupElement LR_sums = bb::scalar_multiplication::pippenger_without_endomorphism_basis_points<Curve>(
-            {&msm_scalars[0], /*size*/ pippenger_size}, {&msm_elements[0], /*size*/ pippenger_size}, vk->pippenger_runtime_state);
+            {&msm_scalars[0], /*size*/ pippenger_size}, {&msm_elements[0], /*size*/ pippenger_size}, vk->get_pippenger_runtime_state(pippenger_size));
         GroupElement C_zero = C_prime + LR_sums;
 
         //  Step 6.
@@ -382,7 +382,7 @@ template <typename Curve_> class IPA {
                 }
             }, thread_heuristics::FF_MULTIPLICATION_COST * log_poly_degree);
 
-        std::span<const Commitment> srs_elements = vk->get_monomial_points();
+        std::span<const Commitment> srs_elements = vk->get_monomial_points(poly_length);
         if (poly_length * 2 > srs_elements.size()) {
             throw_or_abort("potential bug: Not enough SRS points for IPA!");
         }
@@ -401,7 +401,7 @@ template <typename Curve_> class IPA {
         // Step 8.
         // Compute G₀
         Commitment G_zero = bb::scalar_multiplication::pippenger_without_endomorphism_basis_points<Curve>(
-            {&s_vec[0], /*size*/ poly_length}, {&G_vec_local[0], /*size*/ poly_length}, vk->pippenger_runtime_state);
+            {&s_vec[0], /*size*/ poly_length}, {&G_vec_local[0], /*size*/ poly_length}, vk->get_pippenger_runtime_state(poly_length));
 
         // Step 9.
         // Receive a₀ from the prover
@@ -517,7 +517,7 @@ template <typename Curve_> class IPA {
             s_vec[i] = s_vec_scalar;
         }
 
-        auto srs_elements = vk->get_monomial_points();
+        auto srs_elements = vk->get_monomial_points(poly_length * 2);
 
         // TODO(https://github.com/AztecProtocol/barretenberg/issues/1023): Unify the two batch_muls
 

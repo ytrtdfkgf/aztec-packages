@@ -58,6 +58,7 @@ std::shared_ptr<bb::srs::factories::ProverCrs<Curve>> FileCrsFactory<Curve>::get
     if (degree_ < degree || !prover_crs_) {
         prover_crs_ = std::make_shared<FileProverCrs<Curve>>(degree, path_);
         degree_ = degree;
+        info("Initializing ", Curve::name," prover CRS from file of size ", degree);
     }
     return prover_crs_;
 }
@@ -68,6 +69,7 @@ std::shared_ptr<bb::srs::factories::VerifierCrs<Curve>> FileCrsFactory<Curve>::g
     if (degree_ < degree || !verifier_crs_) {
         verifier_crs_ = std::make_shared<FileVerifierCrs<Curve>>(path_, degree);
         degree_ = degree;
+        info("Initializing ", Curve::name, " verifier CRS from file of size ", degree);
     }
     return verifier_crs_;
 }

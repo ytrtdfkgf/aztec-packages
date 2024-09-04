@@ -35,7 +35,6 @@ template <> class VerifierCommitmentKey<curve::BN254> {
 
     VerifierCommitmentKey()
     {
-        srs::init_crs_factory("../srs_db/ignition");
         srs = srs::get_crs_factory<Curve>()->get_verifier_crs();
     };
 
@@ -74,32 +73,34 @@ template <> class VerifierCommitmentKey<curve::Grumpkin> {
     using Commitment = typename Curve::AffineElement;
 
     /**
-     * @brief Construct a new IPA Verification Key object from existing SRS
-     *
-     *
-     * @param num_points specifies the length of the SRS
-     * @param path is the location to the SRS file
+     * @brief Construct a new IPA Verification Key object from an SRS strategy (factory)
      */
-    VerifierCommitmentKey(size_t num_points, const std::shared_ptr<bb::srs::factories::CrsFactory<Curve>>& crs_factory)
-        : pippenger_runtime_state(num_points)
-        , srs(crs_factory->get_verifier_crs(num_points))
+    VerifierCommitmentKey(const std::shared_ptr<bb::srs::factories::CrsFactory<curve::Grumpkin>>& crs_factory) : crs_factory(crs_factory)
     {}
+    // Use the default SRS strategy (factory)
+    VerifierCommitmentKey() : VerifierCommitmentKey(srs::get_grumpkin_crs_factory()) {}
 
-    VerifierCommitmentKey(size_t num_points)
-        : pippenger_runtime_state(num_points)
+    Commitment get_g1_identity() { return crs_factory->get_verifier_crs()->get_g1_identity(); }
+
+    std::span<const Commitment> get_monomial_points(size_t num_required)
     {
-        srs::init_grumpkin_crs_factory("../srs_db/grumpkin");
-        srs = srs::get_crs_factory<Curve>()->get_verifier_crs(num_points);
+        std::span<const Commitment> points = crs_factory->get_verifier_crs(num_required)->get_monomial_points();
+        ASSERT(points.size() >= num_required);
+        return points;
     }
 
-    Commitment get_g1_identity() { return srs->get_g1_identity(); }
-
-    std::span<const Commitment> get_monomial_points() { return srs->get_monomial_points(); }
-
-    bb::scalar_multiplication::pippenger_runtime_state<Curve> pippenger_runtime_state;
+    scalar_multiplication::pippenger_runtime_state<Curve>& get_pippenger_runtime_state(size_t num_required)
+    {
+        // Require an exact pippenger_runtime_state
+        if (pippenger_runtime_state.num_points != num_required * 2) {
+            pippenger_runtime_state = scalar_multiplication::pippenger_runtime_state<Curve>{num_required};
+        }
+        return pippenger_runtime_state;
+    }
 
   private:
-    std::shared_ptr<bb::srs::factories::VerifierCrs<Curve>> srs;
+    scalar_multiplication::pippenger_runtime_state<Curve> pippenger_runtime_state{0};
+    std::shared_ptr<bb::srs::factories::CrsFactory<curve::Grumpkin>> crs_factory;
 };
 
 } // namespace bb

@@ -47,7 +47,7 @@ inline std::shared_ptr<VerifierCommitmentKey<curve::Grumpkin>> CreateVerifierCom
 {
     auto crs_factory = std::make_shared<srs::factories::FileCrsFactory<curve::Grumpkin>>("../srs_db/grumpkin",
                                                                                          COMMITMENT_TEST_NUM_POINTS);
-    return std::make_shared<VerifierCommitmentKey<curve::Grumpkin>>(COMMITMENT_TEST_NUM_POINTS, crs_factory);
+    return std::make_shared<VerifierCommitmentKey<curve::Grumpkin>>(crs_factory);
 }
 template <typename VK> inline std::shared_ptr<VK> CreateVerifierCommitmentKey()
 // requires std::default_initializable<VK>
