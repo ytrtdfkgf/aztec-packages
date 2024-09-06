@@ -149,9 +149,6 @@ e2e-card-game:
 e2e-cheat-codes:
   DO +E2E_TEST --test=./src/e2e_cheat_codes.test.ts
 
-e2e-counter-contract:
-  DO +E2E_TEST --test=./src/e2e_counter_contract.test.ts
-
 e2e-cross-chain-messaging:
   DO +E2E_TEST --test=./src/e2e_cross_chain_messaging.test.ts
 
