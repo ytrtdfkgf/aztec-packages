@@ -191,7 +191,7 @@ jobs:
               echo "bot_l2_gas_limit=1000000000" >> $GITHUB_OUTPUT
               echo "bot_da_gas_limit=1000000000" >> $GITHUB_OUTPUT
               echo "bot_count=1" >> $GITHUB_OUTPUT
-          elif [ "$BRANCH_NAME" = "adamnet" ]
+          elif [ "$BRANCH_NAME" = "ad/adamnet" ]
           then
               echo "deploy_tag=adamnet" >> $GITHUB_OUTPUT
               echo "branch_name=adamnet" >> $GITHUB_OUTPUT
