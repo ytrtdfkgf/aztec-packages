@@ -193,7 +193,7 @@ jobs:
               echo "bot_count=1" >> $GITHUB_OUTPUT
           elif [ "$BRANCH_NAME" = "ad/adamnet" ]
           then
-              echo "deploy_tag=provernet" >> $GITHUB_OUTPUT
+              echo "deploy_tag=devnet" >> $GITHUB_OUTPUT
               echo "branch_name=ad/adamnet" >> $GITHUB_OUTPUT
               echo "network_api_key=adamnet_API_KEY" >> $GITHUB_OUTPUT
               echo "network_fork_admin_api_key=adamnet_API_KEY" >> $GITHUB_OUTPUT
