@@ -2,7 +2,7 @@ import {
   type EpochProverManager,
   type L1ToL2MessageSource,
   type L2BlockSource,
-  type MerkleTreeAdminOperations,
+  type MerkleTreeWriteOperations,
   type ProverCoordination,
   WorldStateRunningState,
   type WorldStateSynchronizer,
@@ -33,7 +33,7 @@ describe('prover-node', () => {
   let jobs: {
     job: MockProxy<EpochProvingJob>;
     cleanUp: (job: EpochProvingJob) => Promise<void>;
-    db: MerkleTreeAdminOperations;
+    db: MerkleTreeWriteOperations;
   }[];
 
   beforeEach(() => {
@@ -48,7 +48,7 @@ describe('prover-node', () => {
     const telemetryClient = new NoopTelemetryClient();
 
     // World state returns a new mock db every time it is asked to fork
-    worldState.syncImmediateAndFork.mockImplementation(() => Promise.resolve(mock<MerkleTreeAdminOperations>()));
+    worldState.syncImmediateAndFork.mockImplementation(() => Promise.resolve(mock<MerkleTreeWriteOperations>()));
 
     jobs = [];
     proverNode = new TestProverNode(
@@ -128,7 +128,7 @@ describe('prover-node', () => {
     // Clean up the first job
     await jobs[0].cleanUp(jobs[0].job);
     expect(proverNode.getJobs().length).toEqual(2);
-    expect(jobs[0].db.delete).toHaveBeenCalled();
+    expect(jobs[0].db.close).toHaveBeenCalled();
 
     // Request another job to run and ensure it gets pushed
     await proverNode.work();
@@ -157,7 +157,7 @@ describe('prover-node', () => {
 
   class TestProverNode extends ProverNode {
     protected override doCreateEpochProvingJob(
-      db: MerkleTreeAdminOperations,
+      db: MerkleTreeWriteOperations,
       _publicProcessorFactory: PublicProcessorFactory,
       cleanUp: (job: EpochProvingJob) => Promise<void>,
     ): EpochProvingJob {

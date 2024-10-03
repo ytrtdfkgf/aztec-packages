@@ -3,7 +3,7 @@ import {
   type EpochProverManager,
   type L1ToL2MessageSource,
   type L2BlockSource,
-  type MerkleTreeOperations,
+  type MerkleTreeWriteOperations,
   type ProverCoordination,
   type WorldStateSynchronizer,
 } from '@aztec/circuit-types';
@@ -185,18 +185,17 @@ export class ProverNode {
 
     // Fast forward world state to right before the target block and get a fork
     this.log.verbose(`Creating proving job for block ${fromBlock}`);
-    const db = await this.worldState.syncImmediateAndFork(fromBlock - 1, true);
+    const db = await this.worldState.syncImmediateAndFork(fromBlock - 1);
 
     // Create a processor using the forked world state
     const publicProcessorFactory = new PublicProcessorFactory(
-      db,
       this.contractDataSource,
       this.simulator,
       this.telemetryClient,
     );
 
     const cleanUp = async () => {
-      await db.delete();
+      await db.close();
       this.jobs.delete(job.getId());
     };
 
@@ -207,11 +206,12 @@ export class ProverNode {
 
   /** Extracted for testing purposes. */
   protected doCreateEpochProvingJob(
-    db: MerkleTreeOperations,
+    db: MerkleTreeWriteOperations,
     publicProcessorFactory: PublicProcessorFactory,
     cleanUp: () => Promise<void>,
   ) {
     return new EpochProvingJob(
+      db,
       this.prover.createEpochProver(db),
       publicProcessorFactory,
       this.publisher,
