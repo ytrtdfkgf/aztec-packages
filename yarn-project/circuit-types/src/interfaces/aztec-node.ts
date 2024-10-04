@@ -308,7 +308,7 @@ export interface AztecNode {
    * Returns the currently committed block header.
    * @returns The current committed block header.
    */
-  getHeader(): Promise<Header>;
+  getHeader(blockNumber?: L2BlockNumber): Promise<Header>;
 
   /**
    * Simulates the public part of a transaction with the current state.
