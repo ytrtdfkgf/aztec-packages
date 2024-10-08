@@ -215,8 +215,8 @@ describe('NativeWorldState', () => {
       await tempFork.close();
 
       for (let i = 0; i < numBlocks; i++) {
-        const [_nativeMs] = await elapsed(nativeWS.handleL2BlockAndMessages(blocks[i], messagesArray[i]));
         const [_legacyMs] = await elapsed(legacyWS.handleL2BlockAndMessages(blocks[i], messagesArray[i]));
+        const [_nativeMs] = await elapsed(nativeWS.handleL2BlockAndMessages(blocks[i], messagesArray[i]));
         // eslint-disable-next-line no-console
         console.log(`Native: ${_nativeMs} ms, Legacy: ${_legacyMs} ms.`);
       }
