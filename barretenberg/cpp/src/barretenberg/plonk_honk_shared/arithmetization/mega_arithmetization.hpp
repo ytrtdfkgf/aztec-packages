@@ -70,16 +70,16 @@ template <typename FF_> class MegaArith {
     struct ClientIvcBenchStructuredBlockSizes : public MegaTraceBlocks<uint32_t> {
         ClientIvcBenchStructuredBlockSizes()
         {
-            this->ecc_op = 1 << 10;
-            this->pub_inputs = 1 << 7;
-            this->arithmetic = 201000;
-            this->delta_range = 90000;
-            this->elliptic = 9000;
-            this->aux = 137000;
-            this->lookup = 72000;
-            this->busread = 1 << 7;
-            this->poseidon2_external = 2500;
-            this->poseidon2_internal = 11500;
+            this->ecc_op = 728;
+            this->pub_inputs = 32;
+            this->arithmetic = 92370;
+            this->delta_range = 41710;
+            this->elliptic = 8262;
+            this->aux = 58887;
+            this->lookup = 31558;
+            this->busread = 3;
+            this->poseidon2_external = 1912;
+            this->poseidon2_internal = 10889;
         }
     };
 

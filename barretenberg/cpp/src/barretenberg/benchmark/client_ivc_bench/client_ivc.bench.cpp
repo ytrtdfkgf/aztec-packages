@@ -19,7 +19,7 @@ namespace {
 class ClientIVCBench : public benchmark::Fixture {
   public:
     // Number of function circuits to accumulate (based on Zac's target numbers)
-    static constexpr size_t NUM_ITERATIONS_MEDIUM_COMPLEXITY = 6;
+    static constexpr size_t NUM_ITERATIONS_MEDIUM_COMPLEXITY = 8;
 
     void SetUp([[maybe_unused]] const ::benchmark::State& state) override
     {
