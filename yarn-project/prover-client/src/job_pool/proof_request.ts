@@ -1,5 +1,5 @@
 import { type ProofAndVerificationKey, type PublicInputsAndRecursiveProof } from '@aztec/circuit-types';
-import type {
+import {
   AvmCircuitInputs,
   BaseOrMergeRollupPublicInputs,
   BaseParityInputs,
@@ -47,26 +47,30 @@ export enum ProofType {
   RootParityProof = 'RootParityProof',
 }
 
+export const ProofInputClasses = {
+  [ProofType.AvmProof]: AvmCircuitInputs,
+
+  [ProofType.TubeProof]: TubeInputs,
+  [ProofType.EmptyTubeProof]: PrivateKernelEmptyInputs,
+
+  [ProofType.PublicKernelSetupProof]: PublicKernelCircuitPrivateInputs,
+  [ProofType.PublicKernelAppLogicProof]: PublicKernelCircuitPrivateInputs,
+  [ProofType.PublicKernelTeardownProof]: PublicKernelCircuitPrivateInputs,
+  [ProofType.PublicKernelTailProof]: PublicKernelTailCircuitPrivateInputs,
+
+  [ProofType.BaseRollupProof]: BaseRollupInputs,
+  [ProofType.MergeRollupProof]: MergeRollupInputs,
+  [ProofType.RootRollupProof]: RootRollupInputs,
+
+  [ProofType.BlockMergeRollupProof]: BlockMergeRollupInputs,
+  [ProofType.BlockRootRollupProof]: BlockRootRollupInputs,
+
+  [ProofType.BaseParityProof]: BaseParityInputs,
+  [ProofType.RootParityProof]: RootParityInputs,
+};
+
 export type ProofInputs = {
-  AvmProof: AvmCircuitInputs;
-
-  TubeProof: TubeInputs;
-  EmptyTubeProof: PrivateKernelEmptyInputs;
-
-  PublicKernelSetupProof: PublicKernelCircuitPrivateInputs;
-  PublicKernelAppLogicProof: PublicKernelCircuitPrivateInputs;
-  PublicKernelTeardownProof: PublicKernelCircuitPrivateInputs;
-  PublicKernelTailProof: PublicKernelTailCircuitPrivateInputs;
-
-  BaseRollupProof: BaseRollupInputs;
-  MergeRollupProof: MergeRollupInputs;
-  RootRollupProof: RootRollupInputs;
-
-  BlockRootRollupProof: BlockRootRollupInputs;
-  BlockMergeRollupProof: BlockMergeRollupInputs;
-
-  BaseParityProof: BaseParityInputs;
-  RootParityProof: RootParityInputs;
+  [K in keyof typeof ProofInputClasses]: InstanceType<(typeof ProofInputClasses)[K]>;
 };
 
 export type ProofOutputs = {
@@ -96,6 +100,10 @@ export type ProofRequestId = string & { readonly __brand: unique symbol };
 export function makeProofRequestId(): ProofRequestId {
   return Math.random().toString(36).slice(2) as ProofRequestId;
 }
+
+export type ProofInputsUri = string & {
+  readonly __brand: unique symbol;
+};
 
 export interface ProofRequest<T extends ProofType> {
   readonly id: ProofRequestId;
