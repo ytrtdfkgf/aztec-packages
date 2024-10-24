@@ -128,9 +128,14 @@ template <typename Flavor> void ECCVMRecursiveVerifier_<Flavor>::verify_proof(co
     const OpeningClaim batch_opening_claim =
         Shplonk::reduce_verification(key->pcs_verification_key->get_g1_identity(), opening_claims, transcript);
 
+    auto start = std::chrono::steady_clock::now();
+    info("pre-finalized size before IPA opening: ", builder->num_gates);
     const auto batched_opening_verified =
         PCS::reduce_verify(key->pcs_verification_key, batch_opening_claim, transcript);
-
+    info("pre-finalized size after IPA opening: ", builder->num_gates);
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::milliseconds diff = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    info("time to construct IPA opening proof witnesses: ", diff);
     ASSERT(sumcheck_verified && batched_opening_verified);
 }
 
