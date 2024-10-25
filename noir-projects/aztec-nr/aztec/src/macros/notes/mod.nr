@@ -325,7 +325,7 @@ comptime fn generate_multi_scalar_mul(
 
             generators_list = generators_list.push_back(
                 quote {
-                aztec::protocol_types::point::Point { x: $generator_x, y: $generator_y, is_infinite: false }
+                l aztec::protocol_types::point::Point { x: $generator_x, y: $generator_y, is_infinite: false }
                 },
             );
             scalars_list =
