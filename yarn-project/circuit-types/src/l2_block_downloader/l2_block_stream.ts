@@ -47,14 +47,17 @@ export class L2BlockStream {
       const localTips = await this.localData.getL2Tips();
       this.log.debug(`Running L2 block stream`, {
         sourceLatest: sourceTips.latest.number,
-        localLatest: localTips.latest,
+        localLatest: localTips.latest.number,
         sourceFinalized: sourceTips.finalized.number,
-        localFinalized: localTips.finalized,
+        localFinalized: localTips.finalized.number,
         sourceProven: sourceTips.proven.number,
-        localProven: localTips.proven,
+        localProven: localTips.proven.number,
         sourceLatestHash: sourceTips.latest.hash,
+        localLatestHash: localTips.latest.hash,
         sourceProvenHash: sourceTips.proven.hash,
+        localProvenHash: localTips.proven.hash,
         sourceFinalizedHash: sourceTips.finalized.hash,
+        localFinalizedHash: localTips.finalized.hash,
       });
 
       // Check if there was a reorg and emit a chain-pruned event if so.
@@ -71,7 +74,7 @@ export class L2BlockStream {
       while (latestBlockNumber < sourceTips.latest.number) {
         const from = latestBlockNumber + 1;
         const limit = Math.min(this.opts.batchSize ?? 20, sourceTips.latest.number - from + 1);
-        this.log.debug(`Requesting blocks from ${from} limit ${limit}`);
+        this.log.debug(`Requesting blocks from ${from} limit ${limit} proven=${this.opts.proven}`);
         const blocks = await this.l2BlockSource.getBlocks(from, limit, this.opts.proven);
         if (blocks.length === 0) {
           break;
