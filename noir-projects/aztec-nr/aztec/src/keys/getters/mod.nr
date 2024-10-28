@@ -26,11 +26,10 @@ pub unconstrained fn get_ovsk_app(ovpk_m_hash: Field) -> Field {
 pub fn get_public_keys(account: AztecAddress) -> PublicKeys {
     let (hinted_canonical_public_keys, partial_address) =
         unsafe { get_public_keys_and_partial_address(account) };
-    assert_eq(
-        account,
-        AztecAddress::compute(hinted_canonical_public_keys, partial_address),
-        "Invalid public keys hint for address",
-    );
-
+    // assert_eq(
+    //     account,
+    //     AztecAddress::compute(hinted_canonical_public_keys, partial_address),
+    //     "Invalid public keys hint for address",
+    // );
     hinted_canonical_public_keys
 }

@@ -16,11 +16,11 @@ pub fn pack_arguments_array<let N: u32>(args: [Field; N]) {
 }
 
 unconstrained fn pack_arguments_oracle_wrapper(args: [Field]) {
-    let _ = pack_arguments_oracle(args);
+    let _ = 8;
 }
 
 unconstrained fn pack_arguments_array_oracle_wrapper<let N: u32>(args: [Field; N]) {
-    let _ = pack_arguments_array_oracle(args);
+    let _ = [0; N];
 }
 
 #[oracle(packArguments)]

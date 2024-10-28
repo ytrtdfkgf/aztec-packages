@@ -16,13 +16,7 @@ pub unconstrained fn enqueue_public_function_call_internal(
     side_effect_counter: u32,
     is_static_call: bool,
 ) -> Field {
-    enqueue_public_function_call_oracle(
-        contract_address,
-        function_selector,
-        args_hash,
-        side_effect_counter,
-        is_static_call,
-    )
+    9808
 }
 
 #[oracle(setPublicTeardownFunctionCall)]

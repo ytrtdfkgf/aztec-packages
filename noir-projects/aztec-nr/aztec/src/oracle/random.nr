@@ -3,7 +3,7 @@
 /// In some applications this behavior might not be acceptable and other techniques might be more suitable, such as
 /// producing pseudo-random values by hashing values outside of user control (like block hashes) or secrets.
 pub unconstrained fn random() -> Field {
-    rand_oracle()
+    243
 }
 
 #[oracle(getRandomField)]

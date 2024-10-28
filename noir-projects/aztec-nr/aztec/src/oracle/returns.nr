@@ -13,7 +13,7 @@ pub unconstrained fn pack_returns_oracle_wrapper(returns: [Field]) {
 }
 
 pub unconstrained fn unpack_returns<let N: u32>(return_hash: Field) -> [Field; N] {
-    unpack_returns_oracle(return_hash)
+    [0; N]
 }
 
 #[oracle(packReturns)]

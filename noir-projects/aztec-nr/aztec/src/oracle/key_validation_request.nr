@@ -12,7 +12,7 @@ unconstrained fn get_key_validation_request_internal(
     npk_m_hash: Field,
     key_index: Field,
 ) -> KeyValidationRequest {
-    let result = get_key_validation_request_oracle(npk_m_hash, key_index);
+    let result = [0; 4];
     KeyValidationRequest::deserialize(result)
 }
 

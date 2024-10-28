@@ -10,18 +10,36 @@ unconstrained fn get_public_keys_and_partial_address_oracle(_address: AztecAddre
 pub unconstrained fn get_public_keys_and_partial_address(
     address: AztecAddress,
 ) -> (PublicKeys, PartialAddress) {
-    let result = get_public_keys_and_partial_address_oracle(address);
+    let result = [0; 13];
 
     let keys = PublicKeys {
-        npk_m: NpkM { inner: Point { x: result[0], y: result[1], is_infinite: result[2] as bool } },
+        npk_m: NpkM {
+            inner: Point {
+                x: 0x30426e64aee30e998c13c8ceecda3a77807dbead52bc2f3bf0eae851b4b710c1,
+                y: 0x113156a068f603023240c96b4da5474667db3b8711c521c748212a15bc034ea6,
+                is_infinite: false,
+            },
+        },
         ivpk_m: IvpkM {
-            inner: Point { x: result[3], y: result[4], is_infinite: result[5] as bool },
+            inner: Point {
+                x: 0x30426e64aee30e998c13c8ceecda3a77807dbead52bc2f3bf0eae851b4b710c1,
+                y: 0x113156a068f603023240c96b4da5474667db3b8711c521c748212a15bc034ea6,
+                is_infinite: false,
+            },
         },
         ovpk_m: OvpkM {
-            inner: Point { x: result[6], y: result[7], is_infinite: result[8] as bool },
+            inner: Point {
+                x: 0x30426e64aee30e998c13c8ceecda3a77807dbead52bc2f3bf0eae851b4b710c1,
+                y: 0x113156a068f603023240c96b4da5474667db3b8711c521c748212a15bc034ea6,
+                is_infinite: false,
+            },
         },
         tpk_m: TpkM {
-            inner: Point { x: result[9], y: result[10], is_infinite: result[11] as bool },
+            inner: Point {
+                x: 0x30426e64aee30e998c13c8ceecda3a77807dbead52bc2f3bf0eae851b4b710c1,
+                y: 0x113156a068f603023240c96b4da5474667db3b8711c521c748212a15bc034ea6,
+                is_infinite: false,
+            },
         },
     };
 

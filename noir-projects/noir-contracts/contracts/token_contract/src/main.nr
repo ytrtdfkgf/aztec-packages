@@ -325,7 +325,7 @@ contract Token {
         // TODO: constrain encryption below - we are using unconstrained here only becuase of the following Noir issue
         // https://github.com/noir-lang/noir/issues/5771
         storage.balances.at(from).sub(from_keys.npk_m, U128::from_integer(amount)).emit(
-            encode_and_encrypt_note_unconstrained(&mut context, from_keys.ovpk_m, from),
+            encode_and_encrypt_note(&mut context, from_keys.ovpk_m, from),
         );
         Token::at(context.this_address())._increase_public_balance(to, amount).enqueue(&mut context);
     }
@@ -352,12 +352,16 @@ contract Token {
             amount,
             INITIAL_TRANSFER_CALL_MAX_NOTES,
         );
-        storage.balances.at(from).add(from_keys.npk_m, change).emit(
-            encode_and_encrypt_note_unconstrained(&mut context, from_keys.ovpk_m, from),
-        );
-        storage.balances.at(to).add(to_keys.npk_m, amount).emit(
-            encode_and_encrypt_note_unconstrained(&mut context, from_keys.ovpk_m, to),
-        );
+        storage.balances.at(from).add(from_keys.npk_m, change).emit(encode_and_encrypt_note(
+            &mut context,
+            from_keys.ovpk_m,
+            from,
+        ));
+        storage.balances.at(to).add(to_keys.npk_m, amount).emit(encode_and_encrypt_note(
+            &mut context,
+            from_keys.ovpk_m,
+            to,
+        ));
         // We don't constrain encryption of the note log in `transfer` (unlike in `transfer_from`) because the transfer
         // function is only designed to be used in situations where the event is not strictly necessary (e.g. payment to
         // another person where the payment is considered to be successful when the other party successfully decrypts a
@@ -457,9 +461,12 @@ contract Token {
         );
     }
     // docs:end:transfer_from
+
     // docs:start:burn
     #[private]
     fn burn(from: AztecAddress, amount: Field, nonce: Field) {
+        assert(context.this_address().to_field() != 0, "this assert should not be triggered");
+
         if (!from.eq(context.msg_sender())) {
             assert_current_call_valid_authwit(&mut context, from);
         } else {
@@ -469,7 +476,12 @@ contract Token {
         // TODO: constrain encryption below - we are using unconstrained here only becuase of the following Noir issue
         // https://github.com/noir-lang/noir/issues/5771
         storage.balances.at(from).sub(from_keys.npk_m, U128::from_integer(amount)).emit(
-            encode_and_encrypt_note_unconstrained(&mut context, from_keys.ovpk_m, from),
+            encode_and_encrypt_note(&mut context, from_keys.ovpk_m, from),
+        );
+
+        assert(
+            context.this_address().to_field() != 0,
+            "this assert is triggered if test reproduction suceeded",
         );
         Token::at(context.this_address())._reduce_total_supply(amount).enqueue(&mut context);
     }
@@ -521,9 +533,11 @@ contract Token {
             U128::from_integer(funded_amount),
             INITIAL_TRANSFER_CALL_MAX_NOTES,
         );
-        storage.balances.at(user).add(user_keys.npk_m, change).emit(
-            encode_and_encrypt_note_unconstrained(&mut context, user_keys.ovpk_m, user),
-        );
+        storage.balances.at(user).add(user_keys.npk_m, change).emit(encode_and_encrypt_note(
+            &mut context,
+            user_keys.ovpk_m,
+            user,
+        ));
 
         // 4. Now we get the partial payloads
         // TODO(#7775): Manually fetching the randomness here is not great. If we decide to include randomness in all
@@ -663,3 +677,13 @@ contract Token {
 }
 
 // docs:end:token_all
+
+fn main(
+    inputs: dep::aztec::context::inputs::PrivateContextInputs,
+    owner: dep::aztec::prelude::AztecAddress,
+    // owner_ivpk_m: dep::aztec::keys::public_keys::IvpkM,
+    // outgoing_viewer_ovpk_m: dep::aztec::keys::public_keys::OvpkM
+) -> pub Field {
+    Token::burn(inputs, owner, 1, 8679976);
+    0
+}

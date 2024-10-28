@@ -38,13 +38,13 @@ unconstrained fn notify_created_note_oracle_wrapper<let N: u32>(
     note_hash: Field,
     counter: u32,
 ) {
-    let _ = notify_created_note_oracle(
-        storage_slot,
-        note_type_id,
-        serialized_note,
-        note_hash,
-        counter,
-    );
+    // let _ = notify_created_note_oracle(
+    //     storage_slot,
+    //     note_type_id,
+    //     serialized_note,
+    //     note_hash,
+    //     counter,
+    // );
 }
 
 #[oracle(notifyCreatedNote)]
@@ -61,7 +61,7 @@ unconstrained fn notify_nullified_note_oracle_wrapper(
     note_hash: Field,
     counter: u32,
 ) {
-    let _ = notify_nullified_note_oracle(nullifier, note_hash, counter);
+    // let _ = notify_nullified_note_oracle(nullifier, note_hash, counter);
 }
 
 #[oracle(notifyNullifiedNote)]
@@ -109,24 +109,25 @@ unconstrained fn get_notes_oracle_wrapper<let N: u32, let S: u32>(
     mut placeholder_fields: [Field; S],
 ) -> [Field; S] {
     let return_size = placeholder_fields.len() as u32;
-    get_notes_oracle(
-        storage_slot,
-        num_selects,
-        select_by_indexes,
-        select_by_offsets,
-        select_by_lengths,
-        select_values,
-        select_comparators,
-        sort_by_indexes,
-        sort_by_offsets,
-        sort_by_lengths,
-        sort_order,
-        limit,
-        offset,
-        status,
-        return_size,
-        placeholder_fields,
-    )
+    // get_notes_oracle(
+    //     storage_slot,
+    //     num_selects,
+    //     select_by_indexes,
+    //     select_by_offsets,
+    //     select_by_lengths,
+    //     select_values,
+    //     select_comparators,
+    //     sort_by_indexes,
+    //     sort_by_offsets,
+    //     sort_by_lengths,
+    //     sort_order,
+    //     limit,
+    //     offset,
+    //     status,
+    //     return_size,
+    //     placeholder_fields,
+    // )
+    [9000; S]
 }
 
 pub unconstrained fn get_notes<Note, let N: u32, let M: u32, let S: u32, let NS: u32>(

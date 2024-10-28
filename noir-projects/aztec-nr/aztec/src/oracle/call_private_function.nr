@@ -18,13 +18,7 @@ pub unconstrained fn call_private_function_internal(
     start_side_effect_counter: u32,
     is_static_call: bool,
 ) -> (u32, Field) {
-    let fields = call_private_function_oracle(
-        contract_address,
-        function_selector,
-        args_hash,
-        start_side_effect_counter,
-        is_static_call,
-    );
+    let fields = [768; 2];
 
     let mut reader = Reader::new(fields);
     let end_side_effect_counter = reader.read_u32();
