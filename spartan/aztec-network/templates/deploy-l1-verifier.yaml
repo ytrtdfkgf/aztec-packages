@@ -24,30 +24,25 @@ spec:
 
               [ $ENABLE = "true" ] || exit 0
 
-              until curl -s -X POST -H 'Content-Type: application/json' \
-                -d '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":67}' \
-                "$ETHEREUM_HOST" | grep -q anvil; do
-                echo "Waiting for Ethereum node..."
+              until curl -s -X GET "$AZTEC_NODE_URL/status"; do
+                echo "Waiting for Aztec node $AZTEC_NODE_URL..."
                 sleep 5
               done
-              echo "Ethereum node is ready!"
+              echo "Boot node is ready!"
 
-              until curl -s -X POST -H 'content-type: application/json' \
-                -d '{"jsonrpc":"2.0","method":"pxe_getNodeInfo","params":[],"id":67}' \
-                "$PXE_URL" | grep -q '"enr:-'; do
-                echo "Waiting for PXE service..."
-                sleep 5
-              done
-              echo "PXE service is ready!"
+              export ROLLUP_CONTRACT_ADDRESS=$(curl -X POST -H 'Content-Type: application/json' \
+                  -d '{"jsonrpc":"2.0","method":"node_getL1ContractAddresses","params":[],"id":1}' \
+                  "$AZTEC_NODE_URL" \
+                  | jq -r '.result.rollupContractAddress')
 
-              node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js deploy-l1-verifier \
-                --l1-chain-id "$L1_CHAIN_ID" \
-                --verifier real
-
+              echo "Rollup contract address: $ROLLUP_CONTRACT_ADDRESS"
+              node /usr/src/yarn-project/aztec/dest/bin/index.js deploy-l1-verifier --verifier real
               echo "L1 verifier deployed"
           env:
-            - name: PXE_URL
-              value: {{ include "aztec-network.pxeUrl" . | quote }}
+            - name: ENABLE
+              value: {{ .Values.proverNode.realProofs | quote }}
+            - name: NODE_NO_WARNINGS
+              value: "1"
             - name: DEBUG
               value: "aztec:*"
             - name: LOG_LEVEL
@@ -58,6 +53,6 @@ spec:
               value: {{ .Values.ethereum.chainId | quote }}
             - name: PRIVATE_KEY
               value: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-            - name: ENABLE
-              value: {{ .Values.proverNode.realProofs | quote }}
+            - name: AZTEC_NODE_URL
+              value: {{ include "aztec-network.bootNodeUrl" . | quote }}
 {{ end }}

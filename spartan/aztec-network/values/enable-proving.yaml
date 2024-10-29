@@ -8,5 +8,7 @@ bot:
   pxeProverEnabled: true
 
 jobs:
-  setupL2Contracts: false
-  deployL1Verifier: true
+  setupL2Contracts:
+    enable: false
+  deployL1Verifier:
+    enable: true
