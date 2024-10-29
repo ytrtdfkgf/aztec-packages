@@ -90,7 +90,7 @@ proverNode:
   logLevel: "debug"
   debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
   realProofs: false
-  proverAgentEnabled: true
+  proverAgentEnabled: false
   resources:
     requests:
       memory: "2Gi"
@@ -177,6 +177,13 @@ ethereum:
       memory: "2Gi"
       cpu: "200m"
   storage: "8Gi"
+
+proverAgent:
+  enabled: true
+  replicas: 1
+  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
+  realProofs: false
+  concurrency: 1
 
 jobs:
   setupL2Contracts:
