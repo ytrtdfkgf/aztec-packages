@@ -1,0 +1,12 @@
+proverNode:
+  realProofs: true
+
+pxe:
+  proverEnabled: true
+
+bot:
+  pxeProverEnabled: true
+
+jobs:
+  setupL2Contracts: false
+  deployL1Verifier: true
