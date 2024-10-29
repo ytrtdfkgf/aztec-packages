@@ -234,7 +234,7 @@ export function injectCommands(program: Command, log: LogFn, debugLogger: DebugL
       const { deployMockVerifier, deployUltraHonkVerifier } = await import('./deploy_l1_verifier.js');
       if (options.verifier === 'mock') {
         await deployMockVerifier(
-          options.rollupAddress,
+          options.rollupAddress?.toString(),
           options.l1RpcUrl,
           options.l1ChainId,
           options.l1PrivateKey,
@@ -245,7 +245,7 @@ export function injectCommands(program: Command, log: LogFn, debugLogger: DebugL
         );
       } else {
         await deployUltraHonkVerifier(
-          options.rollupAddress,
+          options.rollupAddress?.toString(),
           options.l1RpcUrl,
           options.l1ChainId,
           options.l1PrivateKey,
