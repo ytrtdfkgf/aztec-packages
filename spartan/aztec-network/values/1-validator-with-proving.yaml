@@ -18,11 +18,12 @@ pxe:
   proverEnabled: true
 
 bot:
-  enabled: false
+  enabled: true
   pxeProverEnabled: true
+  txIntervalSeconds: 100
 
 jobs:
   setupL2Contracts:
-    enable: false
+    enable: true
   deployL1Verifier:
     enable: true

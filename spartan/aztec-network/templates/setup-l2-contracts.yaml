@@ -20,6 +20,7 @@ spec:
             - /bin/bash
             - -c
             - |
+              echo "Running setup-l2-contracts job: ENABLE=$ENABLE"
               [ "$ENABLE" = "true" ] || exit 0
               until curl -s -X POST -H 'content-type: application/json' \
                 -d '{"jsonrpc":"2.0","method":"pxe_getNodeInfo","params":[],"id":67}' \
@@ -39,5 +40,5 @@ spec:
             - name: LOG_LEVEL
               value: "debug"
             - name: ENABLE
-              value: {{ .Values.jobs.setupL2Contracts | quote }}
+              value: {{ .Values.jobs.setupL2Contracts.enable | quote }}
 {{ end }}

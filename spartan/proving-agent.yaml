@@ -1,0 +1,58 @@
+{{- if not .Values.provingAgent.external }}
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: {{ include "aztec-network.fullname" . }}-proving-agent
+  labels:
+    {{- include "aztec-network.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.provingAgent.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aztec-network.selectorLabels" . | nindent 6 }}
+      app: proving-agent
+  template:
+    metadata:
+      labels:
+        {{- include "aztec-network.selectorLabels" . | nindent 8 }}
+        app: proving-agent
+    spec:
+      initContainers:
+        - name: wait-for-proving-node
+          image: {{ .Values.images.curl.image }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until curl -s -X POST "$AZTEC_NODE_URL/status"; do
+                echo "Waiting for Prover node..."
+                sleep 5
+              done
+              echo "Prover node is ready!"
+              {{- if .Values.telemetry.enabled }}
+              until curl --head --silent {{ include "aztec-network.otelCollectorMetricsEndpoint" . }} > /dev/null; do
+                echo "Waiting for OpenTelemetry collector..."
+                sleep 5
+              done
+              echo "OpenTelemetry collector is ready!"
+              {{- end }}
+      containers:
+        - name: proving-agent
+          image: "{{ .Values.images.aztec.image }}"
+          imagePullPolicy: {{ .Values.images.aztec.pullPolicy }}
+          command:
+            - "/bin/bash"
+            - "-c"
+            - "node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js start --prover"
+          env:
+            - name: LOG_LEVEL
+              value: "{{ .Values.provingAgent.logLevel }}"
+            - name: LOG_JSON
+              value: "1"
+            - name: DEBUG
+              value: "{{ .Values.provingAgent.debug }}"
+            - name: PROVER_REAL_PROOFS
+              value: "{{ .Values.proverNode.realProofs }}"
+            - name: PROVER_JOB_SOURCE_URL
+              value: "http://$(POD_DNS_NAME):{{ .Values.proverNode.service.nodePort }}"
+{{ end }}

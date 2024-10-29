@@ -40,7 +40,7 @@ spec:
               echo "L1 verifier deployed"
           env:
             - name: ENABLE
-              value: {{ .Values.proverNode.realProofs | quote }}
+              value: {{ .Values.jobs.deployL1Verifier.enable | quote }}
             - name: NODE_NO_WARNINGS
               value: "1"
             - name: DEBUG
