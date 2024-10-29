@@ -423,7 +423,7 @@ bool verify_client_ivc(const std::filesystem::path& proof_path,
                        const std::filesystem::path& translator_vk_path)
 {
     init_bn254_crs(1);
-    init_grumpkin_crs(1 << 16);
+    init_grumpkin_crs(1 << 18);
 
     const auto proof = from_buffer<ClientIVC::Proof>(read_file(proof_path));
     const auto accumulator = read_to_shared_ptr<ClientIVC::DeciderVerificationKey>(accumulator_path);
@@ -496,7 +496,7 @@ void client_ivc_prove_output_all(const std::string& bytecodePath,
     using DeciderVK = ClientIVC::DeciderVerificationKey;
 
     init_bn254_crs(1 << 22);
-    init_grumpkin_crs(1 << 16);
+    init_grumpkin_crs(1 << 18);
 
     // TODO(https://github.com/AztecProtocol/barretenberg/issues/1101): remove use of auto_verify_mode
     ClientIVC ivc;
