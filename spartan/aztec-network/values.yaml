@@ -30,7 +30,7 @@ bootNode:
     p2pUdpPort: 40400
     nodePort: 8080
   logLevel: "debug"
-  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*"
+  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
   coinbaseAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   sequencer:
     maxSecondsBetweenBlocks: 0
@@ -67,7 +67,7 @@ validator:
     p2pUdpPort: 40400
     nodePort: 8080
   logLevel: "debug"
-  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*"
+  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
   sequencer:
     maxSecondsBetweenBlocks: 0
     minTxsPerBlock: 1
@@ -88,7 +88,7 @@ proverNode:
   service:
     nodePort: 8080
   logLevel: "debug"
-  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*"
+  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
   realProofs: false
   proverAgentEnabled: true
   resources:
@@ -102,6 +102,7 @@ pxe:
   externalHost: ""
   logLevel: "debug"
   debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*"
+  proverEnable: false
   replicas: 1
   service:
     port: 8080
@@ -176,3 +177,9 @@ ethereum:
       memory: "2Gi"
       cpu: "200m"
   storage: "8Gi"
+
+jobs:
+  setupL2Contracts:
+    enable: true
+  deployL1Verifier:
+    enable: false

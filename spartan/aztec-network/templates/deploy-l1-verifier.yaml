@@ -1,0 +1,63 @@
+{{- if .Values.network.setupL2Contracts }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aztec-network.fullname" . }}-deploy-l1-verifier
+  labels:
+    {{- include "aztec-network.labels" . | nindent 4 }}
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "aztec-network.selectorLabels" . | nindent 8 }}
+        app: deploy-l1-verifier
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: deploy-l1-verifier
+          image: {{ .Values.images.aztec.image }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              [ $ENABLE = "true" ] || exit 0
+
+              until curl -s -X POST -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":67}' \
+                "$ETHEREUM_HOST" | grep -q anvil; do
+                echo "Waiting for Ethereum node..."
+                sleep 5
+              done
+              echo "Ethereum node is ready!"
+
+              until curl -s -X POST -H 'content-type: application/json' \
+                -d '{"jsonrpc":"2.0","method":"pxe_getNodeInfo","params":[],"id":67}' \
+                "$PXE_URL" | grep -q '"enr:-'; do
+                echo "Waiting for PXE service..."
+                sleep 5
+              done
+              echo "PXE service is ready!"
+
+              node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js deploy-l1-verifier \
+                --l1-chain-id "$L1_CHAIN_ID" \
+                --verifier real
+
+              echo "L1 verifier deployed"
+          env:
+            - name: PXE_URL
+              value: {{ include "aztec-network.pxeUrl" . | quote }}
+            - name: DEBUG
+              value: "aztec:*"
+            - name: LOG_LEVEL
+              value: "debug"
+            - name: ETHEREUM_HOST
+              value: {{ include "aztec-network.ethereumHost" . | quote }}
+            - name: L1_CHAIN_ID
+              value: {{ .Values.ethereum.chainId | quote }}
+            - name: PRIVATE_KEY
+              value: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+            - name: ENABLE
+              value: {{ .Values.proverNode.realProofs | quote }}
+{{ end }}

@@ -30,6 +30,7 @@ INSTALL_CHAOS_MESH="${INSTALL_CHAOS_MESH:-}"
 CHAOS_VALUES="${CHAOS_VALUES:-}"
 FRESH_INSTALL="${FRESH_INSTALL:-false}"
 AZTEC_DOCKER_TAG=${AZTEC_DOCKER_TAG:-$(git rev-parse HEAD)}
+ENABLE_PROVING=${ENABLE_PROVING:-false}
 
 # Check required environment variable
 if [ -z "${NAMESPACE:-}" ]; then
@@ -118,6 +119,19 @@ helm upgrade --install spartan "$REPO/spartan/aztec-network/" \
       --timeout=30m
 
 kubectl wait pod -l app==pxe --for=condition=Ready -n "$NAMESPACE" --timeout=10m
+
+if [[ "$ENABLE_PROVING" == "true" ]]; then
+  kubectl delete job --namespace "$NAMESPACE" \
+        spartan-aztec-network-deploy-l1-verifier \
+        spartan-aztec-network-setup-l2-contracts
+
+  helm upgrade spartan "$REPO/spartan/aztec-network/" \
+        --namespace "$NAMESPACE" \
+        --values "$REPO/spartan/aztec-network/values/enable-proving.yaml" \
+        --wait \
+        --wait-for-jobs=true \
+        --timeout=30m
+fi
 
 # Find two free ports between 9000 and 10000
 FREE_PORTS=$(comm -23 <(seq 9000 10000 | sort) <(ss -Htan | awk '{print $4}' | cut -d':' -f2 | sort -u) | shuf | head -n 2)

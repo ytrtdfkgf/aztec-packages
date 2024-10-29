@@ -20,6 +20,7 @@ spec:
             - /bin/bash
             - -c
             - |
+              [ "$ENABLE" = "true" ] || exit 0
               until curl -s -X POST -H 'content-type: application/json' \
                 -d '{"jsonrpc":"2.0","method":"pxe_getNodeInfo","params":[],"id":67}' \
                 {{ include "aztec-network.pxeUrl" . }} | grep -q '"enr:-'; do
@@ -37,4 +38,6 @@ spec:
               value: "aztec:*"
             - name: LOG_LEVEL
               value: "debug"
+            - name: ENABLE
+              value: {{ .Values.jobs.setupL2Contracts | quote }}
 {{ end }}
