@@ -336,7 +336,7 @@ void client_ivc_prove_output_all_msgpack(const std::string& bytecodePath,
     using namespace acir_format;
 
     init_bn254_crs(1 << 24);
-    init_grumpkin_crs(1 << 15);
+    init_grumpkin_crs(1 << 16);
 
     auto gzipped_bincodes = unpack_from_file<std::vector<std::string>>(bytecodePath);
     auto witness_data = unpack_from_file<std::vector<std::string>>(witnessPath);
@@ -423,7 +423,7 @@ bool verify_client_ivc(const std::filesystem::path& proof_path,
                        const std::filesystem::path& translator_vk_path)
 {
     init_bn254_crs(1);
-    init_grumpkin_crs(1 << 15);
+    init_grumpkin_crs(1 << 16);
 
     const auto proof = from_buffer<ClientIVC::Proof>(read_file(proof_path));
     const auto accumulator = read_to_shared_ptr<ClientIVC::DeciderVerificationKey>(accumulator_path);
