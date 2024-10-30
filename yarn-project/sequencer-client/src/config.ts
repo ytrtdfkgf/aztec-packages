@@ -42,7 +42,7 @@ export const sequencerConfigMappings: ConfigMappingsType<SequencerConfig> = {
   maxTxsPerBlock: {
     env: 'SEQ_MAX_TX_PER_BLOCK',
     description: 'The maximum number of txs to include in a block.',
-    ...numberConfigHelper(32),
+    ...numberConfigHelper(36),
   },
   minTxsPerBlock: {
     env: 'SEQ_MIN_TX_PER_BLOCK',
