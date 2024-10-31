@@ -78,61 +78,61 @@ contract AMM {
         amount1_min: Field,
         nonce: Field,
     ) {
-        // TODO(#8271): Type the args as U128 and nuke these ugly casts
-        let amount0_desired = U128::from_integer(amount0_desired);
-        let amount1_desired = U128::from_integer(amount1_desired);
+        // // TODO(#8271): Type the args as U128 and nuke these ugly casts
+        // let amount0_desired = U128::from_integer(amount0_desired);
+        // let amount1_desired = U128::from_integer(amount1_desired);
 
-        assert(
-            amount0_desired > U128::zero() & amount1_desired > U128::zero(),
-            "INSUFFICIENT_INPUT_AMOUNTS",
-        );
+        // assert(
+        //     amount0_desired > U128::zero() & amount1_desired > U128::zero(),
+        //     "INSUFFICIENT_INPUT_AMOUNTS",
+        // );
 
-        let state = storage.state.read_private();
+        // let state = storage.state.read_private();
 
-        let token0 = Token::at(state.token0);
-        let token1 = Token::at(state.token1);
-        let liquidity_token = Token::at(state.liquidity_token);
+        // let token0 = Token::at(state.token0);
+        // let token1 = Token::at(state.token1);
+        // let liquidity_token = Token::at(state.liquidity_token);
 
-        // We transfer the desired amounts of tokens to this contract.
-        token0
-            .transfer_to_public(
-                context.msg_sender(),
-                context.this_address(),
-                amount0_desired.to_integer(),
-                nonce,
-            )
-            .call(&mut context);
-        token1
-            .transfer_to_public(
-                context.msg_sender(),
-                context.this_address(),
-                amount1_desired.to_integer(),
-                nonce,
-            )
-            .call(&mut context);
+        // // We transfer the desired amounts of tokens to this contract.
+        // token0
+        //     .transfer_to_public(
+        //         context.msg_sender(),
+        //         context.this_address(),
+        //         amount0_desired.to_integer(),
+        //         nonce,
+        //     )
+        //     .call(&mut context);
+        // token1
+        //     .transfer_to_public(
+        //         context.msg_sender(),
+        //         context.this_address(),
+        //         amount1_desired.to_integer(),
+        //         nonce,
+        //     )
+        //     .call(&mut context);
 
-        // We may need to return some token amounts depending on public state (i.e. if the desired amounts do
-        // not have the same ratio as the live reserves), so we prepare partial notes for the refunds.
-        let refund_token0_hiding_point_slot =
-            token0.prepare_transfer_to_private(context.msg_sender()).call(&mut context);
-        let refund_token1_hiding_point_slot =
-            token1.prepare_transfer_to_private(context.msg_sender()).call(&mut context);
-        // We prepare a partial note for the liquidity tokens.
-        let liquidity_hiding_point_slot =
-            liquidity_token.prepare_transfer_to_private(context.msg_sender()).call(&mut context);
+        // // We may need to return some token amounts depending on public state (i.e. if the desired amounts do
+        // // not have the same ratio as the live reserves), so we prepare partial notes for the refunds.
+        // let refund_token0_hiding_point_slot =
+        //     token0.prepare_transfer_to_private(context.msg_sender()).call(&mut context);
+        // let refund_token1_hiding_point_slot =
+        //     token1.prepare_transfer_to_private(context.msg_sender()).call(&mut context);
+        // // We prepare a partial note for the liquidity tokens.
+        // let liquidity_hiding_point_slot =
+        //     liquidity_token.prepare_transfer_to_private(context.msg_sender()).call(&mut context);
 
-        AMM::at(context.this_address())
-            ._add_liquidity(
-                state,
-                refund_token0_hiding_point_slot,
-                refund_token1_hiding_point_slot,
-                liquidity_hiding_point_slot,
-                amount0_desired.to_integer(),
-                amount1_desired.to_integer(),
-                amount0_min,
-                amount1_min,
-            )
-            .enqueue(&mut context);
+        // AMM::at(context.this_address())
+        //     ._add_liquidity(
+        //         state,
+        //         refund_token0_hiding_point_slot,
+        //         refund_token1_hiding_point_slot,
+        //         liquidity_hiding_point_slot,
+        //         amount0_desired.to_integer(),
+        //         amount1_desired.to_integer(),
+        //         amount0_min,
+        //         amount1_min,
+        //     )
+        //     .enqueue(&mut context);
     }
 
     #[public]

@@ -65,6 +65,8 @@ pub unconstrained fn setup() -> (&mut TestEnvironment, AztecAddress, AztecAddres
         ))
         .to_address();
 
+    std::println(amm_address);
+
     // Now we mint both tokens to the liquidity provider and token0 to swapper
     let lp_balance_0 = 20000;
     let lp_balance_1 = 10000;
