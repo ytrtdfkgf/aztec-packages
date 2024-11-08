@@ -35,6 +35,14 @@ template <typename FF_> class MegaArith {
         T poseidon2_internal;
         T lookup;
 
+        std::vector<std::string_view> get_labels()
+        {
+            return { "ecc_op",     "pub_inputs",         "busread",
+                     "arithmetic", "delta_range",        "elliptic",
+                     "aux",        "poseidon2_external", "poseidon2_internal",
+                     "lookup" };
+        }
+
         auto get()
         {
             return RefArray{ ecc_op,     pub_inputs,         busread,
@@ -42,6 +50,7 @@ template <typename FF_> class MegaArith {
                              aux,        poseidon2_external, poseidon2_internal,
                              lookup };
         }
+
         auto get() const
         {
             return RefArray{ ecc_op,     pub_inputs,         busread,
