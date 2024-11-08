@@ -35,7 +35,7 @@ template <typename FF_> class MegaArith {
         T poseidon2_internal;
         T lookup;
 
-        std::vector<std::string_view> get_labels()
+        std::vector<std::string_view> get_labels() const
         {
             return { "ecc_op",     "pub_inputs",         "busread",
                      "arithmetic", "delta_range",        "elliptic",
