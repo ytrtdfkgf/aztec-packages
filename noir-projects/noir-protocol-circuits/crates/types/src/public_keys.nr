@@ -213,8 +213,7 @@ unconstrained fn compute_public_keys_hash() {
     };
 
     let actual = keys.hash();
-    let expected_public_keys_hash =
-        0x0fecd9a32db731fec1fded1b9ff957a1625c069245a3613a2538bd527068b0ad;
+    let expected_public_keys_hash = 0x0fecd9a32db731fec1fded1b9ff957a1625c069245a3613a2538bd527068b0ad;
 
     assert(actual.to_field() == expected_public_keys_hash);
 }

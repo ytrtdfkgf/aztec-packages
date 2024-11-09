@@ -46,6 +46,10 @@ export class BaseOrMergeRollupPublicInputs {
      * The summed `transaction_fee` of the constituent transactions.
      */
     public accumulatedFees: Fr,
+    /**
+     * The summed `mana_used` of the constituent transactions.
+     */
+    public accumulatedManaUsed: Fr,
   ) {}
 
   /** Returns an empty instance. */
@@ -80,6 +84,7 @@ export class BaseOrMergeRollupPublicInputs {
       Fr.fromBuffer(reader),
       Fr.fromBuffer(reader),
       Fr.fromBuffer(reader),
+      Fr.fromBuffer(reader),
     );
   }
 
@@ -100,6 +105,7 @@ export class BaseOrMergeRollupPublicInputs {
       this.outHash,
 
       this.accumulatedFees,
+      this.accumulatedManaUsed,
     );
   }
 

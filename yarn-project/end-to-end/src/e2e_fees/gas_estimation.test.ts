@@ -66,11 +66,20 @@ describe('e2e_fees gas_estimation', () => {
 
   it('estimates gas with Fee Juice payment method', async () => {
     const paymentMethod = new FeeJuicePaymentMethod(aliceAddress);
-    const estimatedGas = await makeTransferRequest().estimateGas({ fee: { gasSettings, paymentMethod } });
+    const estimatedGas = await makeTransferRequest().estimateGas({
+      fee: { gasSettings, paymentMethod },
+      estimatedGasPad: 0,
+    });
     logGasEstimate(estimatedGas);
 
     const [withEstimate, withoutEstimate] = await sendTransfers(paymentMethod);
     const actualFee = withEstimate.transactionFee!;
+
+    const block = await t.pxe.getBlock(withEstimate.blockNumber!);
+
+    // Note that there is NO mana spent on the teardown in any, even though the user will pay for it in
+    // the transaction that does not have estimateGas on.
+    expect(block!.header.totalManaUsed.toNumber()).toBe(estimatedGas.gasLimits.l2Gas * 2);
 
     // Estimation should yield that teardown has no cost, so should send the tx with zero for teardown
     expect(actualFee + teardownFixedFee).toEqual(withoutEstimate.transactionFee!);

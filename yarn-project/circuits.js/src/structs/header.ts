@@ -26,6 +26,8 @@ export class Header {
     public globalVariables: GlobalVariables,
     /** Total fees in the block, computed by the root rollup circuit */
     public totalFees: Fr,
+    /** Total mana used in the block, computed by the root rollup circuit */
+    public totalManaUsed: Fr,
   ) {}
 
   static get schema() {
@@ -58,6 +60,7 @@ export class Header {
       fields.state,
       fields.globalVariables,
       fields.totalFees,
+      fields.totalManaUsed,
     ] as const;
   }
 
@@ -71,7 +74,8 @@ export class Header {
       this.contentCommitment.getSize() +
       this.state.getSize() +
       this.globalVariables.getSize() +
-      this.totalFees.size
+      this.totalFees.size +
+      this.totalManaUsed.size
     );
   }
 
@@ -100,6 +104,7 @@ export class Header {
       reader.readObject(StateReference),
       reader.readObject(GlobalVariables),
       reader.readObject(Fr),
+      reader.readObject(Fr),
     );
   }
 
@@ -112,6 +117,7 @@ export class Header {
       StateReference.fromFields(reader),
       GlobalVariables.fromFields(reader),
       reader.readField(),
+      reader.readField(),
     );
   }
 
@@ -122,6 +128,7 @@ export class Header {
       state: StateReference.empty(),
       globalVariables: GlobalVariables.empty(),
       totalFees: Fr.ZERO,
+      totalManaUsed: Fr.ZERO,
       ...fields,
     });
   }
@@ -131,7 +138,9 @@ export class Header {
       this.lastArchive.isZero() &&
       this.contentCommitment.isEmpty() &&
       this.state.isEmpty() &&
-      this.globalVariables.isEmpty()
+      this.globalVariables.isEmpty() &&
+      this.totalFees.isZero() &&
+      this.totalManaUsed.isZero()
     );
   }
 
@@ -165,6 +174,7 @@ export class Header {
   state.publicDataTree: ${inspect(this.state.partial.publicDataTree)},
   globalVariables: ${inspect(this.globalVariables)},
   totalFees: ${this.totalFees},
+  totalManaUsed: ${this.totalManaUsed},
 }`;
   }
 
@@ -174,6 +184,7 @@ export class Header {
       this.state.equals(other.state) &&
       this.globalVariables.equals(other.globalVariables) &&
       this.totalFees.equals(other.totalFees) &&
+      this.totalManaUsed.equals(other.totalManaUsed) &&
       this.lastArchive.equals(other.lastArchive)
     );
   }

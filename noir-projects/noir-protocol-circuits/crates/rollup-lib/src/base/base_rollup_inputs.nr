@@ -168,6 +168,7 @@ impl BaseRollupInputs {
             txs_effects_hash: tx_effects_hash,
             out_hash,
             accumulated_fees: self.transaction_fee,
+            accumulated_mana_used: self.kernel_data.public_inputs.end.gas_used.l2_gas as Field,
         }
     }
 
