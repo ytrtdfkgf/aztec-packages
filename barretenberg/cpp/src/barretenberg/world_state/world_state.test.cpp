@@ -28,10 +28,12 @@ class WorldStateTest : public testing::Test {
     static std::string data_dir;
     uint64_t map_size = 10240;
     uint64_t thread_pool_size = 1;
+
+    // TODO(): https://github.com/AztecProtocol/aztec-packages/issues/8084
     std::unordered_map<MerkleTreeId, uint32_t> tree_heights{
-        { MerkleTreeId::NULLIFIER_TREE, 20 },   { MerkleTreeId::NOTE_HASH_TREE, 32 },
-        { MerkleTreeId::PUBLIC_DATA_TREE, 40 }, { MerkleTreeId::L1_TO_L2_MESSAGE_TREE, 16 },
-        { MerkleTreeId::ARCHIVE, 16 },
+        { MerkleTreeId::NULLIFIER_TREE, 40 },   { MerkleTreeId::NOTE_HASH_TREE, 40 },
+        { MerkleTreeId::PUBLIC_DATA_TREE, 40 }, { MerkleTreeId::L1_TO_L2_MESSAGE_TREE, 39 },
+        { MerkleTreeId::ARCHIVE, 29 },
     };
     std::unordered_map<MerkleTreeId, index_t> tree_prefill{
         { MerkleTreeId::NULLIFIER_TREE, 128 },
@@ -139,14 +141,14 @@ TEST_F(WorldStateTest, GetInitialTreeInfoForAllTrees)
         auto info = ws.get_tree_info(WorldStateRevision::committed(), MerkleTreeId::NULLIFIER_TREE);
         EXPECT_EQ(info.meta.size, 128);
         EXPECT_EQ(info.meta.depth, tree_heights.at(MerkleTreeId::NULLIFIER_TREE));
-        EXPECT_EQ(info.meta.root, bb::fr("0x19a8c197c12bb33da6314c4ef4f8f6fcb9e25250c085df8672adf67c8f1e3dbc"));
+        EXPECT_EQ(info.meta.root, bb::fr("0x0c499b373a1f0fe1b510a63563546d2d39e206895056a5af0143c5f30d639073"));
     }
 
     {
         auto info = ws.get_tree_info(WorldStateRevision::committed(), MerkleTreeId::NOTE_HASH_TREE);
         EXPECT_EQ(info.meta.size, 0);
         EXPECT_EQ(info.meta.depth, tree_heights.at(MerkleTreeId::NOTE_HASH_TREE));
-        EXPECT_EQ(info.meta.root, bb::fr("0x0b59baa35b9dc267744f0ccb4e3b0255c1fc512460d91130c6bc19fb2668568d"));
+        EXPECT_EQ(info.meta.root, bb::fr("0x1fd848aa69e1633722fe249a5b7f53b094f1c9cef9f5c694b073fd1cc5850dfb"));
     }
 
     {
@@ -160,7 +162,7 @@ TEST_F(WorldStateTest, GetInitialTreeInfoForAllTrees)
         auto info = ws.get_tree_info(WorldStateRevision::committed(), MerkleTreeId::L1_TO_L2_MESSAGE_TREE);
         EXPECT_EQ(info.meta.size, 0);
         EXPECT_EQ(info.meta.depth, tree_heights.at(MerkleTreeId::L1_TO_L2_MESSAGE_TREE));
-        EXPECT_EQ(info.meta.root, bb::fr("0x14f44d672eb357739e42463497f9fdac46623af863eea4d947ca00a497dcdeb3"));
+        EXPECT_EQ(info.meta.root, bb::fr("0x2e33ee2008411c04b99c24b313513d097a0d21a5040b6193d1f978b8226892d6"));
     }
 
     {
@@ -182,14 +184,14 @@ TEST_F(WorldStateTest, GetStateReference)
             auto snapshot = state_ref.at(MerkleTreeId::NULLIFIER_TREE);
             EXPECT_EQ(
                 snapshot,
-                std::make_pair(bb::fr("0x19a8c197c12bb33da6314c4ef4f8f6fcb9e25250c085df8672adf67c8f1e3dbc"), 128UL));
+                std::make_pair(bb::fr("0x0c499b373a1f0fe1b510a63563546d2d39e206895056a5af0143c5f30d639073"), 128UL));
         }
 
         {
             auto snapshot = state_ref.at(MerkleTreeId::NOTE_HASH_TREE);
             EXPECT_EQ(
                 snapshot,
-                std::make_pair(bb::fr("0x0b59baa35b9dc267744f0ccb4e3b0255c1fc512460d91130c6bc19fb2668568d"), 0UL));
+                std::make_pair(bb::fr("0x1fd848aa69e1633722fe249a5b7f53b094f1c9cef9f5c694b073fd1cc5850dfb"), 0UL));
         }
 
         {
@@ -203,7 +205,7 @@ TEST_F(WorldStateTest, GetStateReference)
             auto snapshot = state_ref.at(MerkleTreeId::L1_TO_L2_MESSAGE_TREE);
             EXPECT_EQ(
                 snapshot,
-                std::make_pair(bb::fr("0x14f44d672eb357739e42463497f9fdac46623af863eea4d947ca00a497dcdeb3"), 0UL));
+                std::make_pair(bb::fr("0x2e33ee2008411c04b99c24b313513d097a0d21a5040b6193d1f978b8226892d6"), 0UL));
         }
     }
 
@@ -215,14 +217,14 @@ TEST_F(WorldStateTest, GetStateReference)
             auto snapshot = state_ref.at(MerkleTreeId::NULLIFIER_TREE);
             EXPECT_EQ(
                 snapshot,
-                std::make_pair(bb::fr("0x19a8c197c12bb33da6314c4ef4f8f6fcb9e25250c085df8672adf67c8f1e3dbc"), 128UL));
+                std::make_pair(bb::fr("0x0c499b373a1f0fe1b510a63563546d2d39e206895056a5af0143c5f30d639073"), 128UL));
         }
 
         {
             auto snapshot = state_ref.at(MerkleTreeId::NOTE_HASH_TREE);
             EXPECT_EQ(
                 snapshot,
-                std::make_pair(bb::fr("0x12dbc0ae893e0aa914df8ed20837148c89d78fbef9471ede1d39416d9660c169"), 1UL));
+                std::make_pair(bb::fr("0x0f031292dfc64353244dfc38871cbeac74ddbd03df4a0856c411bb1ddfb494f0"), 1UL));
         }
 
         {
@@ -236,7 +238,7 @@ TEST_F(WorldStateTest, GetStateReference)
             auto snapshot = state_ref.at(MerkleTreeId::L1_TO_L2_MESSAGE_TREE);
             EXPECT_EQ(
                 snapshot,
-                std::make_pair(bb::fr("0x14f44d672eb357739e42463497f9fdac46623af863eea4d947ca00a497dcdeb3"), 0UL));
+                std::make_pair(bb::fr("0x2e33ee2008411c04b99c24b313513d097a0d21a5040b6193d1f978b8226892d6"), 0UL));
         }
     }
 }
@@ -489,13 +491,13 @@ TEST_F(WorldStateTest, SyncExternalBlockFromEmpty)
     WorldState ws(thread_pool_size, data_dir, map_size, tree_heights, tree_prefill, initial_header_generator_point);
     StateReference block_state_ref = {
         { MerkleTreeId::NULLIFIER_TREE,
-          { fr("0x0342578609a7358092788d0eed7d1ee0ec8e0c596c0b1e85ba980ddd5cc79d04"), 129 } },
+          { fr("0x187a19972150cd1e76d8201d720da7682fcf4d93ec6a3c7b0d84bbefde5bd927"), 129 } },
         { MerkleTreeId::NOTE_HASH_TREE,
-          { fr("0x15dad063953d8d216c1db77739d6fb27e1b73a5beef748a1208898b3428781eb"), 1 } },
+          { fr("0x2467e5f90736b4ea977e7d21cfb3714181e16b7d6cd867768b59e2ea90fa3eaf"), 1 } },
         { MerkleTreeId::PUBLIC_DATA_TREE,
           { fr("0x0278dcf9ff541da255ee722aecfad849b66af0d42c2924d949b5a509f2e1aec9"), 129 } },
         { MerkleTreeId::L1_TO_L2_MESSAGE_TREE,
-          { fr("0x20ea8ca97f96508aaed2d6cdc4198a41c77c640bfa8785a51bb905b9a672ba0b"), 1 } },
+          { fr("0x24ffd0fab86555ab2e86cffc706d4cfb4b8c405c3966af805de954504ffc27ac"), 1 } },
     };
 
     WorldStateStatus status = ws.sync_block(
@@ -521,13 +523,13 @@ TEST_F(WorldStateTest, SyncBlockFromDirtyState)
     WorldState ws(thread_pool_size, data_dir, map_size, tree_heights, tree_prefill, initial_header_generator_point);
     StateReference block_state_ref = {
         { MerkleTreeId::NULLIFIER_TREE,
-          { fr("0x0342578609a7358092788d0eed7d1ee0ec8e0c596c0b1e85ba980ddd5cc79d04"), 129 } },
+          { fr("0x187a19972150cd1e76d8201d720da7682fcf4d93ec6a3c7b0d84bbefde5bd927"), 129 } },
         { MerkleTreeId::NOTE_HASH_TREE,
-          { fr("0x15dad063953d8d216c1db77739d6fb27e1b73a5beef748a1208898b3428781eb"), 1 } },
+          { fr("0x2467e5f90736b4ea977e7d21cfb3714181e16b7d6cd867768b59e2ea90fa3eaf"), 1 } },
         { MerkleTreeId::PUBLIC_DATA_TREE,
           { fr("0x0278dcf9ff541da255ee722aecfad849b66af0d42c2924d949b5a509f2e1aec9"), 129 } },
         { MerkleTreeId::L1_TO_L2_MESSAGE_TREE,
-          { fr("0x20ea8ca97f96508aaed2d6cdc4198a41c77c640bfa8785a51bb905b9a672ba0b"), 1 } },
+          { fr("0x24ffd0fab86555ab2e86cffc706d4cfb4b8c405c3966af805de954504ffc27ac"), 1 } },
     };
 
     ws.append_leaves<fr>(MerkleTreeId::NOTE_HASH_TREE, { fr(142) });
@@ -564,13 +566,13 @@ TEST_F(WorldStateTest, SyncCurrentBlock)
     bb::fr block_hash(1);
     StateReference block_state_ref = {
         { MerkleTreeId::NULLIFIER_TREE,
-          { fr("0x0342578609a7358092788d0eed7d1ee0ec8e0c596c0b1e85ba980ddd5cc79d04"), 129 } },
+          { fr("0x187a19972150cd1e76d8201d720da7682fcf4d93ec6a3c7b0d84bbefde5bd927"), 129 } },
         { MerkleTreeId::NOTE_HASH_TREE,
-          { fr("0x15dad063953d8d216c1db77739d6fb27e1b73a5beef748a1208898b3428781eb"), 1 } },
+          { fr("0x2467e5f90736b4ea977e7d21cfb3714181e16b7d6cd867768b59e2ea90fa3eaf"), 1 } },
         { MerkleTreeId::PUBLIC_DATA_TREE,
           { fr("0x0278dcf9ff541da255ee722aecfad849b66af0d42c2924d949b5a509f2e1aec9"), 129 } },
         { MerkleTreeId::L1_TO_L2_MESSAGE_TREE,
-          { fr("0x20ea8ca97f96508aaed2d6cdc4198a41c77c640bfa8785a51bb905b9a672ba0b"), 1 } },
+          { fr("0x24ffd0fab86555ab2e86cffc706d4cfb4b8c405c3966af805de954504ffc27ac"), 1 } },
     };
 
     ws.append_leaves<fr>(MerkleTreeId::NOTE_HASH_TREE, { 42 });
@@ -602,13 +604,13 @@ TEST_F(WorldStateTest, RejectSyncBlockWithBadPublicWriteBatches)
     WorldState ws(thread_pool_size, data_dir, map_size, tree_heights, tree_prefill, initial_header_generator_point);
     StateReference block_state_ref = {
         { MerkleTreeId::NULLIFIER_TREE,
-          { fr("0x0342578609a7358092788d0eed7d1ee0ec8e0c596c0b1e85ba980ddd5cc79d04"), 129 } },
+          { fr("0x187a19972150cd1e76d8201d720da7682fcf4d93ec6a3c7b0d84bbefde5bd927"), 129 } },
         { MerkleTreeId::NOTE_HASH_TREE,
-          { fr("0x15dad063953d8d216c1db77739d6fb27e1b73a5beef748a1208898b3428781eb"), 1 } },
+          { fr("0x2467e5f90736b4ea977e7d21cfb3714181e16b7d6cd867768b59e2ea90fa3eaf"), 1 } },
         { MerkleTreeId::PUBLIC_DATA_TREE,
           { fr("0x0278dcf9ff541da255ee722aecfad849b66af0d42c2924d949b5a509f2e1aec9"), 129 } },
         { MerkleTreeId::L1_TO_L2_MESSAGE_TREE,
-          { fr("0x20ea8ca97f96508aaed2d6cdc4198a41c77c640bfa8785a51bb905b9a672ba0b"), 1 } },
+          { fr("0x24ffd0fab86555ab2e86cffc706d4cfb4b8c405c3966af805de954504ffc27ac"), 1 } },
     };
 
     auto sync = [&]() {
@@ -629,13 +631,13 @@ TEST_F(WorldStateTest, RejectSyncBlockWithInvalidStateRef)
     WorldState ws(thread_pool_size, data_dir, map_size, tree_heights, tree_prefill, initial_header_generator_point);
     StateReference block_state_ref = {
         { MerkleTreeId::NULLIFIER_TREE,
-          { fr("0x0342578609a7358092788d0eed7d1ee0ec8e0c596c0b1e85ba980ddd5cc79d04"), 129 } },
+          { fr("0x187a19972150cd1e76d8201d720da7682fcf4d93ec6a3c7b0d84bbefde5bd927"), 129 } },
         { MerkleTreeId::NOTE_HASH_TREE,
-          { fr("0x15dad063953d8d216c1db77739d6fb27e1b73a5beef748a1208898b3428781eb"), 1 } },
+          { fr("0x2467e5f90736b4ea977e7d21cfb3714181e16b7d6cd867768b59e2ea90fa3eaf"), 1 } },
         { MerkleTreeId::PUBLIC_DATA_TREE,
           { fr("0x0278dcf9ff541da255ee722aecfad849b66af0d42c2924d949b5a509f2e1aec9"), 129 } },
         { MerkleTreeId::L1_TO_L2_MESSAGE_TREE,
-          { fr("0x20ea8ca97f96508aaed2d6cdc4198a41c77c640bfa8785a51bb905b9a672ba0b"), 1 } },
+          { fr("0x24ffd0fab86555ab2e86cffc706d4cfb4b8c405c3966af805de954504ffc27ac"), 1 } },
     };
 
     auto sync = [&]() {

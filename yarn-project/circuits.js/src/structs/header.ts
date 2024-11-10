@@ -38,6 +38,7 @@ export class Header {
         state: StateReference.schema,
         globalVariables: GlobalVariables.schema,
         totalFees: schemas.Fr,
+        totalManaUsed: schemas.Fr,
       })
       .transform(Header.from);
   }

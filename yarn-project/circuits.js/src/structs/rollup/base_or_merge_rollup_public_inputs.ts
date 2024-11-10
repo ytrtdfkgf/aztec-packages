@@ -63,6 +63,7 @@ export class BaseOrMergeRollupPublicInputs {
       Fr.zero(),
       Fr.zero(),
       Fr.zero(),
+      Fr.zero(),
     );
   }
 
