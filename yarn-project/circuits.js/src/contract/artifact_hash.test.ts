@@ -1,7 +1,10 @@
 import { type ContractArtifact } from '@aztec/foundation/abi';
 
 import { computeArtifactHash } from './artifact_hash.js';
-import { getTestContractArtifact } from '../tests/fixtures.js';
+import { getPathToFixture, getTestContractArtifact } from '../tests/fixtures.js';
+import { loadContractArtifact } from '@aztec/types/abi';
+import type { NoirCompiledContract } from '@aztec/types/noir';
+import { readFileSync } from 'fs';
 
 describe('ArtifactHash', () => {
   it('calculates the artifact hash', () => {
@@ -17,7 +20,7 @@ describe('ArtifactHash', () => {
       notes: {},
     };
     expect(computeArtifactHash(emptyArtifact).toString()).toMatchInlineSnapshot(
-      `"0x0c6fd9b48570721c5d36f978d084d77cacbfd2814f1344985f40e62bea6e61be"`,
+      `"0x0dea64e7fa0688017f77bcb7075485485afb4a5f1f8508483398869439f82fdf"`,
     );
   });
 
@@ -26,8 +29,20 @@ describe('ArtifactHash', () => {
 
     for (let i = 0; i < 1000; i++) {
       expect(computeArtifactHash(testArtifact).toString()).toMatchInlineSnapshot(
-        `"0x193c8f0e49d2a1b865f8afec829f3cf0bc136232ce7d09f823192dcc3e876df2"`,
+        `"0x0daa596e37c780de679311a601bd8b371c40d5a6898f452a06180bfef69e7df8"`,
       );
     }
+  });
+
+  it('calculates the test contract artifact hash', () => {
+    const path = getPathToFixture('Test.test.json');
+    const content = JSON.parse(readFileSync(path).toString()) as NoirCompiledContract;
+    content.outputs.structs.functions.reverse();
+
+    const testArtifact = loadContractArtifact(content);
+
+    expect(computeArtifactHash(testArtifact).toString()).toMatchInlineSnapshot(
+      `"0x0daa596e37c780de679311a601bd8b371c40d5a6898f452a06180bfef69e7df8"`,
+    );
   });
 });
