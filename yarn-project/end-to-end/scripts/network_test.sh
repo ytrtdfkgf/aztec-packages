@@ -86,18 +86,18 @@ handle_network_shaping() {
             fi
         fi
 
-        echo "Deploying network shaping configuration..."
-        if ! helm upgrade --install network-shaping "$REPO/spartan/network-shaping/" \
+        echo "Deploying Aztec Chaos Scenarios..."
+        if ! helm upgrade --install aztec-chaos-scenarios "$REPO/spartan/aztec-chaos-scenarios/" \
             --namespace chaos-mesh \
-            --values "$REPO/spartan/network-shaping/values/$CHAOS_VALUES" \
+            --values "$REPO/spartan/aztec-chaos-scenarios/values/$CHAOS_VALUES" \
             --set global.targetNamespace="$NAMESPACE" \
             --wait \
             --timeout=5m; then
-            echo "Error: failed to deploy network shaping configuration!"
+            echo "Error: failed to deploy Aztec Chaos Scenarios!"
             return 1
         fi
 
-        echo "Network shaping configuration applied successfully"
+        echo "Aztec Chaos Scenarios applied successfully"
         return 0
     fi
     return 0

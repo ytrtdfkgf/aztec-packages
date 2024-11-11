@@ -1,3 +1,6 @@
+nameOverride: null
+fullnameOverride: null
+
 global:
   # When deploying, override the namespace to where spartan will deploy to, this will apply all chaos experiments to all pods within that namespace
   # run deployment with --values global.namespace=your-namespace
@@ -7,7 +10,7 @@ global:
 # Network shaping configuration
 networkShaping:
   # Master switch to enable network shaping
-  enabled: true
+  enabled: false
 
   # Default settings
   defaultSettings:
@@ -62,9 +65,13 @@ networkShaping:
       # Buffer = smoother bandwidth restriction but higher memory usage
       buffer: 1000
 
-    killProvers:
-      enabled: false
-      duration: 13m
+proverFailure:
+  enabled: false
+  duration: 13m
+
+validatorKill:
+  enabled: false
+  percent: 30
 ## Here are some exciting example configurations created by claude:
 # Example use cases for different configurations:
 

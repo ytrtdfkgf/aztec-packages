@@ -1,0 +1,12 @@
+# Simulates congested network conditions
+# High latency, limited bandwidth, packet loss
+global:
+  namespace: "smoke"
+
+networkShaping:
+  enabled: false
+proverFailure:
+  enabled: false
+validatorRestarts:
+  enabled: true
+  percent: 30

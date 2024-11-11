@@ -160,7 +160,7 @@ function valuesToArgs(values: Record<string, string>) {
  *
  * Example usage:
  * ```typescript
- * const stdout = await installChaosMeshChart({ instanceName: 'force-reorg', targetNamespace: 'smoke', valuesFile: 'kill-provers.yaml'});
+ * const stdout = await installChaosMeshChart({ instanceName: 'force-reorg', targetNamespace: 'smoke', valuesFile: 'prover-failure.yaml'});
  * console.log(stdout);
  * ```
  */
@@ -211,12 +211,12 @@ export function applyKillProvers({
   durationSeconds: number;
 }) {
   return installChaosMeshChart({
-    instanceName: 'kill-provers',
+    instanceName: 'prover-failure',
     targetNamespace: namespace,
-    valuesFile: 'kill-provers.yaml',
-    helmChartDir: getChartDir(spartanDir, 'network-shaping'),
+    valuesFile: 'prover-failure.yaml',
+    helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
     values: {
-      'networkShaping.conditions.killProvers.duration': `${durationSeconds}s`,
+      'proverFailure.duration': `${durationSeconds}s`,
     },
   });
 }
