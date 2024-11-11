@@ -4,6 +4,7 @@ import { createDebugLogger } from '@aztec/foundation/log';
 import { expect, jest } from '@jest/globals';
 
 import { RollupCheatCodes } from '../../../aztec.js/src/utils/cheat_codes.js';
+import { type TestWallets, performTransfers, setupTestWalletsWithTokens } from './setup_test_wallets.js';
 import {
   applyKillProvers,
   deleteResourceByLabel,
@@ -11,8 +12,7 @@ import {
   isK8sConfig,
   startPortForward,
   waitForResourceByLabel,
-} from './k8_utils.js';
-import { type TestWallets, performTransfers, setupTestWalletsWithTokens } from './setup_test_wallets.js';
+} from './utils.js';
 
 const config = getConfig(process.env);
 if (!isK8sConfig(config)) {

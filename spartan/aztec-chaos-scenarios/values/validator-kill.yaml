@@ -3,10 +3,6 @@
 global:
   namespace: "smoke"
 
-networkShaping:
-  enabled: false
-proverFailure:
-  enabled: false
-validatorRestarts:
+validatorKill:
   enabled: true
   percent: 30

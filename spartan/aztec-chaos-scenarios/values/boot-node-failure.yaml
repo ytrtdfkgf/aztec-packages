@@ -1,0 +1,8 @@
+# Simulates congested network conditions
+# High latency, limited bandwidth, packet loss
+global:
+  namespace: "smoke"
+
+bootNodeFailure:
+  enabled: true
+  duration: 60m

@@ -1,9 +1,11 @@
-import { createDebugLogger } from '@aztec/aztec.js';
+import { createDebugLogger, sleep } from '@aztec/aztec.js';
 
 import { exec, spawn } from 'child_process';
 import path from 'path';
 import { promisify } from 'util';
 import { z } from 'zod';
+
+import type { RollupCheatCodes } from '../../../aztec.js/src/utils/cheat_codes.js';
 
 const execAsync = promisify(exec);
 
@@ -219,4 +221,34 @@ export function applyKillProvers({
       'proverFailure.duration': `${durationSeconds}s`,
     },
   });
+}
+
+export function applyNetworkShaping({
+  valuesFile,
+  namespace,
+  spartanDir,
+}: {
+  valuesFile: string;
+  namespace: string;
+  spartanDir: string;
+}) {
+  return installChaosMeshChart({
+    instanceName: 'network-shaping',
+    targetNamespace: namespace,
+    valuesFile,
+    helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
+  });
+}
+
+export async function awaitL2BlockNumber(
+  rollupCheatCodes: RollupCheatCodes,
+  blockNumber: bigint,
+  timeoutSeconds: number,
+) {
+  let tips = await rollupCheatCodes.getTips();
+  const endTime = Date.now() + timeoutSeconds * 1000;
+  while (tips.pending < blockNumber && Date.now() < endTime) {
+    await sleep(1000);
+    tips = await rollupCheatCodes.getTips();
+  }
 }

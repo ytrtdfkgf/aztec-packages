@@ -15,7 +15,7 @@ networkShaping:
   # Default settings
   defaultSettings:
     mode: all
-    # Set duration to 1 year so the the experiment will run indefinitely unless overridden
+    # Set duration to 1 year so the experiment will run indefinitely unless overridden
     duration: 8760h
 
   # Network conditions to apply
@@ -72,6 +72,10 @@ proverFailure:
 validatorKill:
   enabled: false
   percent: 30
+
+bootNodeFailure:
+  enabled: false
+  duration: 60m
 ## Here are some exciting example configurations created by claude:
 # Example use cases for different configurations:
 
