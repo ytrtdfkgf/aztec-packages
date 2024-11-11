@@ -91,7 +91,7 @@ opentelemetry-collector:
             # - debug
 
 # Enable and configure the Loki subchart
-# https://artifacthub.io/packages/helm/grafana/loki
+# https://artifacthub.io/packages/helm/grafana/loki-simple-scalable
 loki:
   loki:
     schemaConfig:
@@ -120,6 +120,8 @@ loki:
 
   deploymentMode: SimpleScalable
 
+  singleBinary:
+    replicas: 0
   backend:
     replicas: 2
   read:
@@ -129,8 +131,6 @@ loki:
 
   minio:
     enabled: true
-    rootUser: grafana-loki
-    rootPassword: supersecret
     persistence:
       size: 64Gi
 

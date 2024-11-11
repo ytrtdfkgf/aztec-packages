@@ -1,0 +1,3 @@
+prometheus:
+  prometheus-node-exporter:
+    enabled: false
