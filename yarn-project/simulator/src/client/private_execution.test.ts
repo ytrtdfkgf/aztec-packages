@@ -307,6 +307,9 @@ describe('Private Execution test suite', () => {
   describe('stateful test contract', () => {
     const valueNoteTypeId = StatefulTestContractArtifact.notes['ValueNote'].id;
 
+    console.log(valueNoteTypeId);
+    console.log(StatefulTestContractArtifact.notes['ValueNote']);
+
     const contractAddress = defaultContractAddress;
     const mockFirstNullifier = new Fr(1111);
     let currentNoteIndex = 0n;
