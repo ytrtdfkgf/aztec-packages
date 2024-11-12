@@ -1,4 +1,5 @@
 import { createDebugLogger, sleep } from '@aztec/aztec.js';
+import type { Logger } from '@aztec/foundation/log';
 
 import { exec, spawn } from 'child_process';
 import path from 'path';
@@ -94,12 +95,16 @@ export async function deleteResourceByName({
   resource,
   namespace,
   name,
+  force = false,
 }: {
   resource: string;
   namespace: string;
   name: string;
+  force?: boolean;
 }) {
-  const command = `kubectl delete ${resource} ${name} -n ${namespace} --ignore-not-found=true --wait=true`;
+  const command = `kubectl delete ${resource} ${name} -n ${namespace} --ignore-not-found=true --wait=true ${
+    force ? '--force' : ''
+  }`;
   logger.info(`command: ${command}`);
   const { stdout } = await execAsync(command);
   return stdout;
@@ -175,6 +180,7 @@ export async function installChaosMeshChart({
   timeout = '5m',
   clean = true,
   values = {},
+  logger,
 }: {
   instanceName: string;
   targetNamespace: string;
@@ -184,21 +190,30 @@ export async function installChaosMeshChart({
   timeout?: string;
   clean?: boolean;
   values?: Record<string, string | number>;
+  logger: Logger;
 }) {
   if (clean) {
     // uninstall the helm chart if it exists
+    logger.info(`Uninstalling helm chart ${instanceName}`);
     await execAsync(`helm uninstall ${instanceName} --namespace ${chaosMeshNamespace} --wait --ignore-not-found`);
     // and delete the podchaos resource
-    await deleteResourceByName({
+    const deleteArgs = {
       resource: 'podchaos',
       namespace: chaosMeshNamespace,
       name: `${targetNamespace}-${instanceName}`,
+    };
+    logger.info(`Deleting podchaos resource`);
+    await deleteResourceByName(deleteArgs).catch(e => {
+      logger.error(`Error deleting podchaos resource: ${e}`);
+      logger.info(`Force deleting podchaos resource`);
+      return deleteResourceByName({ ...deleteArgs, force: true });
     });
   }
 
   const helmCommand = `helm upgrade --install ${instanceName} ${helmChartDir} --namespace ${chaosMeshNamespace} --values ${helmChartDir}/values/${valuesFile} --wait --timeout=${timeout} --set global.targetNamespace=${targetNamespace}  ${valuesToArgs(
     values,
   )}`;
+  logger.info(`helm command: ${helmCommand}`);
   const { stdout } = await execAsync(helmCommand);
   return stdout;
 }
@@ -207,10 +222,12 @@ export function applyProverFailure({
   namespace,
   spartanDir,
   durationSeconds,
+  logger,
 }: {
   namespace: string;
   spartanDir: string;
   durationSeconds: number;
+  logger: Logger;
 }) {
   return installChaosMeshChart({
     instanceName: 'prover-failure',
@@ -220,6 +237,7 @@ export function applyProverFailure({
     values: {
       'proverFailure.duration': `${durationSeconds}s`,
     },
+    logger,
   });
 }
 
@@ -227,10 +245,12 @@ export function applyBootNodeFailure({
   namespace,
   spartanDir,
   durationSeconds,
+  logger,
 }: {
   namespace: string;
   spartanDir: string;
   durationSeconds: number;
+  logger: Logger;
 }) {
   return installChaosMeshChart({
     instanceName: 'boot-node-failure',
@@ -240,15 +260,25 @@ export function applyBootNodeFailure({
     values: {
       'bootNodeFailure.duration': `${durationSeconds}s`,
     },
+    logger,
   });
 }
 
-export function applyValidatorKill({ namespace, spartanDir }: { namespace: string; spartanDir: string }) {
+export function applyValidatorKill({
+  namespace,
+  spartanDir,
+  logger,
+}: {
+  namespace: string;
+  spartanDir: string;
+  logger: Logger;
+}) {
   return installChaosMeshChart({
     instanceName: 'validator-kill',
     targetNamespace: namespace,
     valuesFile: 'validator-kill.yaml',
     helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
+    logger,
   });
 }
 
@@ -256,16 +286,19 @@ export function applyNetworkShaping({
   valuesFile,
   namespace,
   spartanDir,
+  logger,
 }: {
   valuesFile: string;
   namespace: string;
   spartanDir: string;
+  logger: Logger;
 }) {
   return installChaosMeshChart({
     instanceName: 'network-shaping',
     targetNamespace: namespace,
     valuesFile,
     helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
+    logger,
   });
 }
 
@@ -273,11 +306,23 @@ export async function awaitL2BlockNumber(
   rollupCheatCodes: RollupCheatCodes,
   blockNumber: bigint,
   timeoutSeconds: number,
+  logger: Logger,
 ) {
+  logger.info(`Waiting for L2 Block ${blockNumber}`);
   let tips = await rollupCheatCodes.getTips();
   const endTime = Date.now() + timeoutSeconds * 1000;
   while (tips.pending < blockNumber && Date.now() < endTime) {
+    logger.info(`At L2 Block ${tips.pending}`);
     await sleep(1000);
     tips = await rollupCheatCodes.getTips();
   }
+  logger.info(`Reached L2 Block ${tips.pending}`);
+}
+
+export async function restartBot(namespace: string, logger: Logger) {
+  logger.info(`Restarting bot`);
+  await deleteResourceByLabel({ resource: 'pods', namespace, label: 'app=bot' });
+  await sleep(10 * 1000);
+  await waitForResourceByLabel({ resource: 'pods', namespace, label: 'app=bot' });
+  logger.info(`Bot restarted`);
 }

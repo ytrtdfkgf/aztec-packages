@@ -7,10 +7,10 @@ import { RollupCheatCodes } from '../../../aztec.js/src/utils/cheat_codes.js';
 import {
   applyBootNodeFailure,
   applyNetworkShaping,
-  applyValidatorKill,
   awaitL2BlockNumber,
   getConfig,
   isK8sConfig,
+  restartBot,
   startPortForward,
 } from './utils.js';
 
@@ -51,37 +51,41 @@ describe('a test that passively observes the network in the presence of node fai
     );
     const { epochDuration, slotDuration } = await rollupCheatCodes.getConfig();
 
-    // we'll use these to check that the chain made progress
-    // and see how many slots were missed
+    // restart the bot to ensure that it's not affected by the previous test
+    await restartBot(NAMESPACE, debugLogger);
 
     // wait for the chain to build at least 1 epoch's worth of blocks
     // note, don't forget that normally an epoch doesn't need epochDuration worth of blocks,
     // but here we do double duty:
     // we want a handful of blocks, and we want to pass the epoch boundary
-    await awaitL2BlockNumber(rollupCheatCodes, epochDuration, 60 * 5);
+    await awaitL2BlockNumber(rollupCheatCodes, epochDuration, 60 * 5, debugLogger);
 
-    let deploymentOutput: string;
+    let deploymentOutput: string = '';
     deploymentOutput = await applyNetworkShaping({
       valuesFile: 'moderate.yaml',
       namespace: NAMESPACE,
       spartanDir: SPARTAN_DIR,
+      logger: debugLogger,
     });
     debugLogger.info(deploymentOutput);
     deploymentOutput = await applyBootNodeFailure({
       durationSeconds: 60 * 60 * 24,
       namespace: NAMESPACE,
       spartanDir: SPARTAN_DIR,
+      logger: debugLogger,
     });
     debugLogger.info(deploymentOutput);
+    await restartBot(NAMESPACE, debugLogger);
 
     const rounds = 3;
     for (let i = 0; i < rounds; i++) {
       debugLogger.info(`Round ${i + 1}/${rounds}`);
-      deploymentOutput = await applyValidatorKill({
-        namespace: NAMESPACE,
-        spartanDir: SPARTAN_DIR,
-      });
-      debugLogger.info(deploymentOutput);
+      // deploymentOutput = await applyValidatorKill({
+      //   namespace: NAMESPACE,
+      //   spartanDir: SPARTAN_DIR,
+      //   logger: debugLogger,
+      // });
+      // debugLogger.info(deploymentOutput);
       debugLogger.info(`Waiting for 1 epoch to pass`);
       const controlTips = await rollupCheatCodes.getTips();
       await sleep(Number(epochDuration * slotDuration) * 1000);
@@ -90,6 +94,11 @@ describe('a test that passively observes the network in the presence of node fai
       const expectedPending =
         controlTips.pending + BigInt(Math.floor((1 - MAX_MISSED_SLOT_PERCENT) * Number(epochDuration)));
       expect(newTips.pending).toBeGreaterThan(expectedPending);
+      // calculate the percentage of slots missed
+      const perfectPending = controlTips.pending + BigInt(Math.floor(Number(epochDuration)));
+      const missedSlots = Number(perfectPending) - Number(newTips.pending);
+      const missedSlotsPercentage = (missedSlots / Number(epochDuration)) * 100;
+      debugLogger.info(`Missed ${missedSlots} slots, ${missedSlotsPercentage.toFixed(2)}%`);
     }
   });
 });

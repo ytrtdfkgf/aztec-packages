@@ -120,6 +120,7 @@ proverNode:
   storage: "8Gi"
 
 pxe:
+  proverEnabled: false
   externalHost: ""
   logLevel: "debug"
   proverEnable: false

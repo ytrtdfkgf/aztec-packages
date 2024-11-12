@@ -82,6 +82,7 @@ describe('reorg test', () => {
       namespace: NAMESPACE,
       spartanDir: SPARTAN_DIR,
       durationSeconds: Number(epochDuration * slotDuration) * 2,
+      logger: debugLogger,
     });
     debugLogger.info(stdout);
 
