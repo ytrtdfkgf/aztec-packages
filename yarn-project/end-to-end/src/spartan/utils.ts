@@ -243,23 +243,12 @@ export function applyBootNodeFailure({
   });
 }
 
-export function applyValidatorKill({
-  namespace,
-  spartanDir,
-  percent,
-}: {
-  namespace: string;
-  spartanDir: string;
-  percent: number;
-}) {
+export function applyValidatorKill({ namespace, spartanDir }: { namespace: string; spartanDir: string }) {
   return installChaosMeshChart({
     instanceName: 'validator-kill',
     targetNamespace: namespace,
     valuesFile: 'validator-kill.yaml',
     helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
-    values: {
-      'validatorKill.percent': percent,
-    },
   });
 }
 

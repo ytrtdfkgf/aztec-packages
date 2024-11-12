@@ -80,7 +80,6 @@ describe('a test that passively observes the network in the presence of node fai
       deploymentOutput = await applyValidatorKill({
         namespace: NAMESPACE,
         spartanDir: SPARTAN_DIR,
-        percent: 30,
       });
       debugLogger.info(deploymentOutput);
       debugLogger.info(`Waiting for 1 epoch to pass`);
