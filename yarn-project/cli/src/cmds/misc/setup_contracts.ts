@@ -29,7 +29,7 @@ export async function setupCanonicalL2FeeJuice(
   } catch (e: any) {
     // TODO: make this less brittle, e.g. using a 204 http code
     // It's "okay" at the time of this writing because the only assertion made is `storage.portal_address.read_public().is_zero()`
-    if (e instanceof Error && e.message.includes('Assertion failed')) {
+    if (e instanceof Error && (e.message.includes('Assertion failed') || e.message.includes('app_logic_reverted'))) {
       log('setupCanonicalL2FeeJuice: Fee juice contract already initialized');
     } else {
       log('setupCanonicalL2FeeJuice: Error initializing fee juice contract', e);
