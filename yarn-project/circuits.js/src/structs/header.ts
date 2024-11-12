@@ -50,6 +50,7 @@ export class Header {
       state: this.state,
       globalVariables: this.globalVariables,
       totalFees: this.totalFees,
+      totalManaUsed: this.totalManaUsed,
     };
   }
 
