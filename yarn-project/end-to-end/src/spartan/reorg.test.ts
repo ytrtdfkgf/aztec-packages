@@ -6,7 +6,7 @@ import { expect, jest } from '@jest/globals';
 import { RollupCheatCodes } from '../../../aztec.js/src/utils/cheat_codes.js';
 import { type TestWallets, performTransfers, setupTestWalletsWithTokens } from './setup_test_wallets.js';
 import {
-  applyKillProvers,
+  applyProverFailure,
   deleteResourceByLabel,
   getConfig,
   isK8sConfig,
@@ -78,7 +78,7 @@ describe('reorg test', () => {
     const { pending: preReorgPending, proven: preReorgProven } = await rollupCheatCodes.getTips();
 
     // kill the provers
-    const stdout = await applyKillProvers({
+    const stdout = await applyProverFailure({
       namespace: NAMESPACE,
       spartanDir: SPARTAN_DIR,
       durationSeconds: Number(epochDuration * slotDuration) * 2,

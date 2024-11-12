@@ -1,11 +1,18 @@
-import { EthCheatCodes, sleep } from '@aztec/aztec.js';
+import { EthCheatCodes, createCompatibleClient, sleep } from '@aztec/aztec.js';
 import { createDebugLogger } from '@aztec/foundation/log';
 
 import { expect, jest } from '@jest/globals';
 
 import { RollupCheatCodes } from '../../../aztec.js/src/utils/cheat_codes.js';
-import { type TestWallets, setupTestWalletsWithTokens } from './setup_test_wallets.js';
-import { applyNetworkShaping, awaitL2BlockNumber, getConfig, isK8sConfig, startPortForward } from './utils.js';
+import {
+  applyBootNodeFailure,
+  applyNetworkShaping,
+  applyValidatorKill,
+  awaitL2BlockNumber,
+  getConfig,
+  isK8sConfig,
+  startPortForward,
+} from './utils.js';
 
 const config = getConfig(process.env);
 if (!isK8sConfig(config)) {
@@ -18,13 +25,12 @@ const debugLogger = createDebugLogger('aztec:spartan-test:reorg');
 describe('a test that passively observes the network in the presence of node failures and network shaping', () => {
   jest.setTimeout(60 * 60 * 1000); // 60 minutes
 
-  const MINT_AMOUNT = 2_000_000n;
   const ETHEREUM_HOST = `http://127.0.0.1:${HOST_ETHEREUM_PORT}`;
   const PXE_URL = `http://127.0.0.1:${HOST_PXE_PORT}`;
+  // 50% is the max that we expect to miss
+  const MAX_MISSED_SLOT_PERCENT = 0.5;
 
-  let testWallets: TestWallets;
-
-  it('survives a reorg', async () => {
+  it('survives network shaping', async () => {
     await startPortForward({
       resource: 'svc/spartan-aztec-network-pxe',
       namespace: NAMESPACE,
@@ -37,11 +43,11 @@ describe('a test that passively observes the network in the presence of node fai
       containerPort: CONTAINER_ETHEREUM_PORT,
       hostPort: HOST_ETHEREUM_PORT,
     });
-    testWallets = await setupTestWalletsWithTokens(PXE_URL, MINT_AMOUNT, debugLogger);
+    const client = await createCompatibleClient(PXE_URL, debugLogger);
     const ethCheatCodes = new EthCheatCodes(ETHEREUM_HOST);
     const rollupCheatCodes = new RollupCheatCodes(
       ethCheatCodes,
-      await testWallets.pxe.getNodeInfo().then(n => n.l1ContractAddresses),
+      await client.getNodeInfo().then(n => n.l1ContractAddresses),
     );
     const { epochDuration, slotDuration } = await rollupCheatCodes.getConfig();
 
@@ -54,22 +60,36 @@ describe('a test that passively observes the network in the presence of node fai
     // we want a handful of blocks, and we want to pass the epoch boundary
     await awaitL2BlockNumber(rollupCheatCodes, epochDuration, 60 * 5);
 
-    // kill the provers
-    const stdout = await applyNetworkShaping({
+    let deploymentOutput: string;
+    deploymentOutput = await applyNetworkShaping({
       valuesFile: 'moderate.yaml',
       namespace: NAMESPACE,
       spartanDir: SPARTAN_DIR,
     });
-    debugLogger.info(stdout);
+    debugLogger.info(deploymentOutput);
+    deploymentOutput = await applyBootNodeFailure({
+      durationSeconds: 60 * 60 * 24,
+      namespace: NAMESPACE,
+      spartanDir: SPARTAN_DIR,
+    });
+    debugLogger.info(deploymentOutput);
 
-    for (let i = 0; i < 3; i++) {
+    const rounds = 3;
+    for (let i = 0; i < rounds; i++) {
+      debugLogger.info(`Round ${i + 1}/${rounds}`);
+      deploymentOutput = await applyValidatorKill({
+        namespace: NAMESPACE,
+        spartanDir: SPARTAN_DIR,
+        percent: 30,
+      });
+      debugLogger.info(deploymentOutput);
       debugLogger.info(`Waiting for 1 epoch to pass`);
       const controlTips = await rollupCheatCodes.getTips();
       await sleep(Number(epochDuration * slotDuration) * 1000);
       const newTips = await rollupCheatCodes.getTips();
 
-      // if we advanced 3 epochs, we should have built at least 90% of the epoch's worth of slots
-      const expectedPending = controlTips.pending + BigInt(0.9 * Number(epochDuration));
+      const expectedPending =
+        controlTips.pending + BigInt(Math.floor((1 - MAX_MISSED_SLOT_PERCENT) * Number(epochDuration)));
       expect(newTips.pending).toBeGreaterThan(expectedPending);
     }
   });

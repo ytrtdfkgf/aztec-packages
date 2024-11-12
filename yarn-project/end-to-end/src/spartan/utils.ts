@@ -143,7 +143,7 @@ export function getChartDir(spartanDir: string, chartName: string) {
   return path.join(spartanDir.trim(), chartName);
 }
 
-function valuesToArgs(values: Record<string, string>) {
+function valuesToArgs(values: Record<string, string | number>) {
   return Object.entries(values)
     .map(([key, value]) => `--set ${key}=${value}`)
     .join(' ');
@@ -183,7 +183,7 @@ export async function installChaosMeshChart({
   chaosMeshNamespace?: string;
   timeout?: string;
   clean?: boolean;
-  values?: Record<string, string>;
+  values?: Record<string, string | number>;
 }) {
   if (clean) {
     // uninstall the helm chart if it exists
@@ -203,7 +203,7 @@ export async function installChaosMeshChart({
   return stdout;
 }
 
-export function applyKillProvers({
+export function applyProverFailure({
   namespace,
   spartanDir,
   durationSeconds,
@@ -219,6 +219,46 @@ export function applyKillProvers({
     helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
     values: {
       'proverFailure.duration': `${durationSeconds}s`,
+    },
+  });
+}
+
+export function applyBootNodeFailure({
+  namespace,
+  spartanDir,
+  durationSeconds,
+}: {
+  namespace: string;
+  spartanDir: string;
+  durationSeconds: number;
+}) {
+  return installChaosMeshChart({
+    instanceName: 'boot-node-failure',
+    targetNamespace: namespace,
+    valuesFile: 'boot-node-failure.yaml',
+    helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
+    values: {
+      'bootNodeFailure.duration': `${durationSeconds}s`,
+    },
+  });
+}
+
+export function applyValidatorKill({
+  namespace,
+  spartanDir,
+  percent,
+}: {
+  namespace: string;
+  spartanDir: string;
+  percent: number;
+}) {
+  return installChaosMeshChart({
+    instanceName: 'validator-kill',
+    targetNamespace: namespace,
+    valuesFile: 'validator-kill.yaml',
+    helmChartDir: getChartDir(spartanDir, 'aztec-chaos-scenarios'),
+    values: {
+      'validatorKill.percent': percent,
     },
   });
 }

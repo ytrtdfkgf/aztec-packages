@@ -12,7 +12,7 @@ metadata:
 spec:
   action: pod-kill
   mode: fixed-percent
-  value: {{ .Values.validatorKill.percent }}
+  value: "{{ .Values.validatorKill.percent }}"
   selector:
     namespaces:
       - {{ .Values.global.targetNamespace }}
