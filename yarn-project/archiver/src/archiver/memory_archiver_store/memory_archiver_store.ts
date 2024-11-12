@@ -5,6 +5,7 @@ import {
   ExtendedUnencryptedL2Log,
   type FromLogType,
   type GetUnencryptedLogsResponse,
+  type InBlock,
   type InboxLeaf,
   type L2Block,
   type L2BlockL2Logs,
@@ -16,6 +17,7 @@ import {
   TxReceipt,
   TxScopedL2Log,
   type UnencryptedL2BlockL2Logs,
+  wrapInBlock,
 } from '@aztec/circuit-types';
 import {
   type ContractClassPublic,
@@ -49,7 +51,7 @@ export class MemoryArchiverStore implements ArchiverDataStore {
   /**
    * An array containing all the tx effects in the L2 blocks that have been fetched so far.
    */
-  private txEffects: TxEffect[] = [];
+  private txEffects: InBlock<TxEffect>[] = [];
 
   private noteEncryptedLogsPerBlock: Map<number, EncryptedNoteL2BlockL2Logs> = new Map();
 
@@ -178,7 +180,7 @@ export class MemoryArchiverStore implements ArchiverDataStore {
 
     this.lastL1BlockNewBlocks = blocks[blocks.length - 1].l1.blockNumber;
     this.l2Blocks.push(...blocks);
-    this.txEffects.push(...blocks.flatMap(b => b.data.body.txEffects));
+    this.txEffects.push(...blocks.flatMap(b => b.data.body.txEffects.map(txEffect => wrapInBlock(txEffect, b.data))));
 
     return Promise.resolve(true);
   }
@@ -360,8 +362,8 @@ export class MemoryArchiverStore implements ArchiverDataStore {
    * @param txHash - The txHash of the tx effect.
    * @returns The requested tx effect.
    */
-  public getTxEffect(txHash: TxHash): Promise<TxEffect | undefined> {
-    const txEffect = this.txEffects.find(tx => tx.txHash.equals(txHash));
+  public getTxEffect(txHash: TxHash): Promise<InBlock<TxEffect> | undefined> {
+    const txEffect = this.txEffects.find(tx => tx.data.txHash.equals(txHash));
     return Promise.resolve(txEffect);
   }
 

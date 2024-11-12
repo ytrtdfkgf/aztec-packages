@@ -12,14 +12,14 @@ export class L2BlockStream {
   private readonly log = createDebugLogger('aztec:l2_block_stream');
 
   constructor(
-    private l2BlockSource: L2BlockSource,
+    private l2BlockSource: Pick<L2BlockSource, 'getBlocks' | 'getBlockHeader' | 'getL2Tips'>,
     private localData: L2BlockStreamLocalDataProvider,
     private handler: L2BlockStreamEventHandler,
     private opts: {
       proven?: boolean;
       pollIntervalMS?: number;
       batchSize?: number;
-    },
+    } = {},
   ) {
     this.runningPromise = new RunningPromise(() => this.work(), this.opts.pollIntervalMS ?? 1000);
   }

@@ -22,6 +22,10 @@ export class IncomingNoteDao implements NoteData {
     public noteTypeId: NoteSelector,
     /** The hash of the tx the note was created in. */
     public txHash: TxHash,
+    /** The L2 block number in which the tx with this note was included. */
+    public l2BlockNumber: number,
+    /** The L2 block hash in which the tx with this note was included. */
+    public l2BlockHash: string,
     /** The nonce of the note. */
     public nonce: Fr,
     /**
@@ -44,6 +48,8 @@ export class IncomingNoteDao implements NoteData {
     note: Note,
     payload: L1NotePayload,
     noteInfo: NoteInfo,
+    l2BlockNumber: number,
+    l2BlockHash: string,
     dataStartIndexForTx: number,
     addressPoint: PublicKey,
   ) {
@@ -54,6 +60,8 @@ export class IncomingNoteDao implements NoteData {
       payload.storageSlot,
       payload.noteTypeId,
       noteInfo.txHash,
+      l2BlockNumber,
+      l2BlockHash,
       noteInfo.nonce,
       noteInfo.noteHash,
       noteInfo.siloedNullifier,
@@ -69,6 +77,8 @@ export class IncomingNoteDao implements NoteData {
       this.storageSlot,
       this.noteTypeId,
       this.txHash.buffer,
+      this.l2BlockNumber,
+      Fr.fromString(this.l2BlockHash),
       this.nonce,
       this.noteHash,
       this.siloedNullifier,
@@ -84,6 +94,8 @@ export class IncomingNoteDao implements NoteData {
     const storageSlot = Fr.fromBuffer(reader);
     const noteTypeId = reader.readObject(NoteSelector);
     const txHash = reader.readObject(TxHash);
+    const l2BlockNumber = reader.readNumber();
+    const l2BlockHash = Fr.fromBuffer(reader).toString();
     const nonce = Fr.fromBuffer(reader);
     const noteHash = Fr.fromBuffer(reader);
     const siloedNullifier = Fr.fromBuffer(reader);
@@ -96,6 +108,8 @@ export class IncomingNoteDao implements NoteData {
       storageSlot,
       noteTypeId,
       txHash,
+      l2BlockNumber,
+      l2BlockHash,
       nonce,
       noteHash,
       siloedNullifier,

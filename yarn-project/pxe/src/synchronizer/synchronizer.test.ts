@@ -30,7 +30,7 @@ describe('Synchronizer', () => {
 
   it('sets header from aztec node on initial sync', async () => {
     aztecNode.getBlockNumber.mockResolvedValue(initialSyncBlockNumber);
-    aztecNode.getHeader.mockResolvedValue(headerBlock3);
+    aztecNode.getBlockHeader.mockResolvedValue(headerBlock3);
 
     await synchronizer.initialSync();
 
@@ -51,7 +51,7 @@ describe('Synchronizer', () => {
   it('overrides header from initial sync once current block number is larger', async () => {
     // Initial sync is done on block with height 3
     aztecNode.getBlockNumber.mockResolvedValue(initialSyncBlockNumber);
-    aztecNode.getHeader.mockResolvedValue(headerBlock3);
+    aztecNode.getBlockHeader.mockResolvedValue(headerBlock3);
 
     await synchronizer.initialSync();
     const header0 = database.getHeader();

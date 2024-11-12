@@ -214,6 +214,14 @@ export class KVPxeDatabase implements PxeDatabase {
     });
   }
 
+  public async removeNotesAfter(blockNumber: number): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+
+  public async unnullifyNotesAfter(blockNumber: number): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+
   getIncomingNotes(filter: IncomingNotesFilter): Promise<IncomingNoteDao[]> {
     const publicKey: PublicKey | undefined = filter.owner ? computePoint(filter.owner) : undefined;
 

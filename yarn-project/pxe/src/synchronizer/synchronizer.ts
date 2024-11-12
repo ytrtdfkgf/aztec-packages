@@ -1,8 +1,12 @@
-import { type AztecNode, type L2Block } from '@aztec/circuit-types';
+import {
+  type AztecNode,
+  L2BlockStream,
+  type L2BlockStreamEvent,
+  type L2BlockStreamEventHandler,
+} from '@aztec/circuit-types';
 import { INITIAL_L2_BLOCK_NUM } from '@aztec/circuits.js';
 import { type DebugLogger, createDebugLogger } from '@aztec/foundation/log';
-import { type SerialQueue } from '@aztec/foundation/queue';
-import { RunningPromise } from '@aztec/foundation/running-promise';
+import { type L2TipsStore } from '@aztec/kv-store/stores';
 
 import { type PxeDatabase } from '../database/index.js';
 
@@ -13,14 +17,30 @@ import { type PxeDatabase } from '../database/index.js';
  * details, and fetch transactions by hash. The Synchronizer ensures that it maintains the note processors
  * in sync with the blockchain while handling retries and errors gracefully.
  */
-export class Synchronizer {
-  private runningPromise?: RunningPromise;
+export class Synchronizer implements L2BlockStreamEventHandler {
   private running = false;
   private initialSyncBlockNumber = INITIAL_L2_BLOCK_NUM - 1;
   private log: DebugLogger;
+  private blockStream: L2BlockStream;
 
-  constructor(private node: AztecNode, private db: PxeDatabase, private jobQueue: SerialQueue, logSuffix = '') {
+  constructor(private node: AztecNode, private db: PxeDatabase, private l2TipsStore: L2TipsStore, logSuffix = '') {
     this.log = createDebugLogger(logSuffix ? `aztec:pxe_synchronizer_${logSuffix}` : 'aztec:pxe_synchronizer');
+    this.blockStream = new L2BlockStream(node, this.l2TipsStore, this);
+  }
+
+  /** Handle events emitted by the block stream. */
+  async handleBlockStreamEvent(event: L2BlockStreamEvent): Promise<void> {
+    await this.l2TipsStore.handleBlockStreamEvent(event);
+
+    switch (event.type) {
+      case 'blocks-added':
+        await this.db.setHeader(event.blocks.at(-1)!.header);
+        break;
+      case 'chain-pruned':
+        await this.db.unnullifyNotesAfter(event.blockNumber);
+        await this.db.removeNotesAfter(event.blockNumber);
+        break;
+    }
   }
 
   /**
@@ -31,77 +51,15 @@ export class Synchronizer {
    * @param limit - The maximum number of encrypted, unencrypted logs and blocks to fetch in each iteration.
    * @param retryInterval - The time interval (in ms) to wait before retrying if no data is available.
    */
-  public async start(limit = 1, retryInterval = 1000) {
+  public async start() {
     if (this.running) {
       return;
     }
     this.running = true;
-
-    await this.jobQueue.put(() => this.initialSync());
+    await this.blockStream.sync();
     this.log.info('Initial sync complete');
-    this.runningPromise = new RunningPromise(() => this.sync(limit), retryInterval);
-    this.runningPromise.start();
+    this.blockStream.start();
     this.log.debug('Started loop');
-  }
-
-  protected async initialSync() {
-    // fast forward to the latest block
-    const latestHeader = await this.node.getHeader();
-    this.initialSyncBlockNumber = Number(latestHeader.globalVariables.blockNumber.toBigInt());
-    await this.db.setHeader(latestHeader);
-  }
-
-  /**
-   * Fetches encrypted logs and blocks from the Aztec node and processes them for all note processors.
-   * If needed, catches up note processors that are lagging behind the main sync, e.g. because we just added a new account.
-   *
-   * Uses the job queue to ensure that
-   * - sync does not overlap with pxe simulations.
-   * - one sync is running at a time.
-   *
-   * @param limit - The maximum number of encrypted, unencrypted logs and blocks to fetch in each iteration.
-   * @returns a promise that resolves when the sync is complete
-   */
-  protected sync(limit: number) {
-    return this.jobQueue.put(async () => {
-      let moreWork = true;
-      // keep external this.running flag to interrupt greedy sync
-      while (moreWork && this.running) {
-        moreWork = await this.work(limit);
-      }
-    });
-  }
-
-  /**
-   * Fetches encrypted logs and blocks from the Aztec node and processes them for all note processors.
-   *
-   * @param limit - The maximum number of encrypted, unencrypted logs and blocks to fetch in each iteration.
-   * @returns true if there could be more work, false if we're caught up or there was an error.
-   */
-  protected async work(limit = 1): Promise<boolean> {
-    const from = this.getSynchedBlockNumber() + 1;
-    try {
-      const blocks = await this.node.getBlocks(from, limit);
-      if (blocks.length === 0) {
-        return false;
-      }
-
-      // Update latest tree roots from the most recent block
-      const latestBlock = blocks[blocks.length - 1];
-      await this.setHeaderFromBlock(latestBlock);
-      return true;
-    } catch (err) {
-      this.log.error(`Error in synchronizer work`, err);
-      return false;
-    }
-  }
-
-  private async setHeaderFromBlock(latestBlock: L2Block) {
-    if (latestBlock.number < this.initialSyncBlockNumber) {
-      return;
-    }
-
-    await this.db.setHeader(latestBlock.header);
   }
 
   /**
@@ -113,7 +71,7 @@ export class Synchronizer {
    */
   public async stop() {
     this.running = false;
-    await this.runningPromise?.stop();
+    await this.blockStream.stop();
     this.log.info('Stopped');
   }
 
