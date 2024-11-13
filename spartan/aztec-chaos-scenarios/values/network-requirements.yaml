@@ -1,5 +1,4 @@
-# Simulates regional network conditions
-# Higher latency, good bandwidth
+# Imposes the network conditions that are stated as requirements for node operators
 global:
   namespace: "smoke"
 
