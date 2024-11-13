@@ -1,3 +1,4 @@
+include
 ---
 id: index
 sidebar_position: 0
