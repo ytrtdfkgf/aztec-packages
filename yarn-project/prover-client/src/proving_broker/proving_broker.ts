@@ -12,8 +12,8 @@ import { PriorityMemoryQueue } from '@aztec/foundation/queue';
 
 import assert from 'assert';
 
-import { type ProvingBrokerDatabase } from './proving_broker_database.js';
 import type { ProvingJobConsumer, ProvingJobFilter, ProvingJobProducer } from './proving_broker_interface.js';
+import { type ProvingJobDatabase } from './proving_job_database.js';
 
 type InProgressMetadata = {
   id: V2ProvingJobId;
@@ -73,7 +73,7 @@ export class ProvingBroker implements ProvingJobProducer, ProvingJobConsumer {
   private maxRetries: number;
 
   public constructor(
-    private database: ProvingBrokerDatabase,
+    private database: ProvingJobDatabase,
     {
       jobTimeoutMs: proofRequestTimeoutMs = 30_000,
       timeoutIntervalMs = 10_000,
