@@ -65,6 +65,7 @@ import { type WorldStateDB } from './public_db_sources.js';
 import { type PublicKernelCircuitSimulator } from './public_kernel_circuit_simulator.js';
 import { PublicKernelTailSimulator } from './public_kernel_tail_simulator.js';
 import { PublicSideEffectTrace } from './side_effect_trace.js';
+import { assert } from 'console';
 
 const PhaseIsRevertible: Record<TxExecutionPhase, boolean> = {
   [TxExecutionPhase.SETUP]: false,
@@ -186,19 +187,13 @@ export class EnqueuedCallsProcessor {
     this.log.verbose(`Processing tx ${tx.getTxHash()}`);
 
     const constants = CombinedConstantData.combine(tx.data.constants, this.globalVariables);
-    const phases: TxExecutionPhase[] = [TxExecutionPhase.SETUP, TxExecutionPhase.APP_LOGIC, TxExecutionPhase.TEARDOWN];
-    const processedPhases: ProcessedPhase[] = [];
     let phaseGasUsed: PhaseGasUsed = {
       [TxExecutionPhase.SETUP]: Gas.empty(),
       [TxExecutionPhase.APP_LOGIC]: Gas.empty(),
       [TxExecutionPhase.TEARDOWN]: Gas.empty(),
     };
-    let avmProvingRequest: AvmProvingRequest;
     const firstPublicKernelOutput = this.getPublicKernelCircuitPublicInputs(tx.data);
     let publicKernelOutput = firstPublicKernelOutput;
-    let revertCode: RevertCode = RevertCode.OK;
-    let reverted = false;
-    let revertReason: SimulationError | undefined;
     const startStateReference = await this.db.getStateReference();
     /*
      * Don't need to fork at all during setup because it's non-revertible.
@@ -240,114 +235,74 @@ export class EnqueuedCallsProcessor {
       trace,
       nonRevertibleNullifiersFromPrivate,
     );
-    let currentlyActiveStateManager = txStateManager;
-    let forkedForAppLogic = false;
-    // TODO(dbanks12): insert all non-revertible side effects from private here.
 
-    for (let i = 0; i < phases.length; i++) {
-      const phase = phases[i];
+    const state = new PhaseStateManager(txStateManager);
 
-      const callRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, phase);
-      if (callRequests.length) {
-        if (phase === TxExecutionPhase.APP_LOGIC) {
-          // Fork the state manager so that we can rollback state if app logic or teardown reverts.
-          //// Always fork at the start of app logic even if app logic has no enqueued calls, in which case it'll
-          //// serve as a fork for teardown.
-          // Don't need to fork for setup since it's non-revertible (if setup fails, transaction is thrown out).
-          currentlyActiveStateManager = txStateManager.fork();
-          forkedForAppLogic = true;
-        }
-
-        const allocatedGas = this.getAllocatedGasForPhase(phase, tx, phaseGasUsed);
-        const transactionFee = phase !== TxExecutionPhase.TEARDOWN ? Fr.ZERO : this.getTransactionFee(tx, phaseGasUsed);
-
-        const executionRequests = EnqueuedCallsProcessor.getExecutionRequestsByPhase(tx, phase);
-        const result = await this.processPhase(
-          phase,
-          tx,
-          constants,
-          callRequests,
-          executionRequests,
-          publicKernelOutput,
-          allocatedGas,
-          transactionFee,
-          currentlyActiveStateManager,
-        ).catch(async err => {
-          await this.worldStateDB.rollbackToCommit();
-          throw err;
-        });
-
-        publicKernelOutput = result.publicKernelOutput;
-
-        // Propagate only one avmProvingRequest of a function call for now, so that we know it's still provable.
-        // Eventually this will be the proof for the entire public call stack.
-        avmProvingRequest = result.avmProvingRequest;
-
-        if (result.reverted) {
-          if (phase === TxExecutionPhase.APP_LOGIC) {
-            revertCode = RevertCode.APP_LOGIC_REVERTED;
-
-            // Trace app logic phase
-            txStateManager.trace.traceExecutionPhase(
-              currentlyActiveStateManager.trace,
-              callRequests,
-              executionRequests.map(req => req.args),
-              /*reverted=*/ true,
-            );
-            // Drop the currently active forked state manager and rollback to end of setup.
-            // Fork again for teardown so that if teardown fails we can again rollback to end of setup.
-            currentlyActiveStateManager = txStateManager.fork();
-          } else if (phase === TxExecutionPhase.TEARDOWN) {
-            if (revertCode === RevertCode.APP_LOGIC_REVERTED) {
-              revertCode = RevertCode.BOTH_REVERTED;
-            } else {
-              revertCode = RevertCode.TEARDOWN_REVERTED;
-            }
-          }
-        }
-
-        if (phase === TxExecutionPhase.TEARDOWN) {
-          // merge all state changes from app logic (if successful) and teardown into tx state
-          // or, on revert, rollback to end of setup
-          if (!result.reverted) {
-            txStateManager.mergeForkedState(currentlyActiveStateManager);
-          }
-          // trace teardown phase
-          txStateManager.trace.traceExecutionPhase(
-            currentlyActiveStateManager.trace,
-            callRequests,
-            executionRequests.map(req => req.args),
-            /*reverted=*/ result.revertReason ? true : false,
-          );
-        }
-
-        processedPhases.push({
-          phase,
-          durationMs: result.durationMs,
-          returnValues: result.returnValues,
-          reverted: result.reverted,
-          revertReason: result.revertReason,
-        });
-
-        phaseGasUsed = {
-          ...phaseGasUsed,
-          [phase]: result.gasUsed,
-        };
-
-        reverted = reverted || result.reverted;
-        revertReason ??= result.revertReason;
-      } else if (phase == TxExecutionPhase.TEARDOWN && forkedForAppLogic) {
-        // There is no teardown!
-        // Need to merge app logic's forked state as would normally happen after teardown.
-        // trace teardown phase
-        txStateManager.trace.traceExecutionPhase(
-          currentlyActiveStateManager.trace,
-          callRequests, // ????
-          [], // ????
-          /*reverted=*/ false,
-        );
-      }
+    const setupResult = await this.processSetupPhase(
+      state,
+      tx,
+      constants,
+      phaseGasUsed,
+      publicKernelOutput,
+    );
+    if (setupResult) {
+      phaseGasUsed = {
+        ...phaseGasUsed,
+        [TxExecutionPhase.SETUP]: setupResult.gasUsed,
+      };
     }
+
+    const appLogicResult = await this.processAppLogicPhase(
+      state,
+      tx,
+      constants,
+      phaseGasUsed,
+      publicKernelOutput,
+    );
+    if (appLogicResult) {
+      phaseGasUsed = {
+        ...phaseGasUsed,
+        [TxExecutionPhase.APP_LOGIC]: appLogicResult.gasUsed,
+      };
+    }
+
+    const teardownResult = await this.processTeardownPhase(
+      state,
+      tx,
+      constants,
+      phaseGasUsed,
+      publicKernelOutput,
+    );
+    if (teardownResult) {
+      phaseGasUsed = {
+        ...phaseGasUsed,
+        [TxExecutionPhase.TEARDOWN]: teardownResult.gasUsed,
+      };
+    }
+
+    //const reverted = setupResult?.reverted || appLogicResult?.reverted || teardownResult?.reverted;
+    const revertReason: SimulationError | undefined = teardownResult?.revertReason || appLogicResult?.revertReason || setupResult?.revertReason;
+    let revertCode: RevertCode;
+    if (appLogicResult?.reverted && teardownResult?.reverted) {
+      revertCode = RevertCode.BOTH_REVERTED;
+    } else if (appLogicResult?.reverted) {
+      revertCode = RevertCode.APP_LOGIC_REVERTED;
+    } else if (teardownResult?.reverted) {
+      revertCode = RevertCode.TEARDOWN_REVERTED;
+    } else {
+      revertCode = RevertCode.OK;
+    }
+
+    const phaseResults = [setupResult, appLogicResult, teardownResult];
+    const processedPhases = phaseResults.filter(res => res !== undefined).map(res => publicPhaseResultToProcessedPhase(res!));
+    //let phaseGasUsed: PhaseGasUsed = {
+    //  [TxExecutionPhase.SETUP]: setupResult?.gasUsed || Gas.empty(),
+    //  [TxExecutionPhase.APP_LOGIC]: appLogicResult?.gasUsed || Gas.empty(),
+    //  [TxExecutionPhase.TEARDOWN]: teardownResult?.gasUsed || Gas.empty(),
+    //};
+    // Propagate only one avmProvingRequest of a function call for now, so that we know it's still provable.
+    // Eventually this will be the proof for the entire public portion of the transaction.
+    const avmProvingRequest = teardownResult?.avmProvingRequest || appLogicResult?.avmProvingRequest || setupResult?.avmProvingRequest;
 
     const tailKernelOutput = await this.publicKernelTailSimulator.simulate(publicKernelOutput).catch(
       // the abstract phase manager throws if simulation gives error in non-revertible phase
@@ -385,6 +340,138 @@ export class EnqueuedCallsProcessor {
       revertCode,
       revertReason,
     };
+  }
+  private async processSetupPhase(state: PhaseStateManager, tx: Tx, constants: CombinedConstantData, phaseGasUsed: PhaseGasUsed, previousPublicKernelOutput: PublicKernelCircuitPublicInputs): Promise<PublicPhaseResult | undefined> {
+    const setupCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.SETUP);
+    if (setupCallRequests.length) {
+      const allocatedGas = this.getAllocatedGasForPhase(TxExecutionPhase.SETUP, tx, phaseGasUsed);
+      const transactionFee = Fr.ZERO; // transaction fee unknown until teardown
+
+      const executionRequests = EnqueuedCallsProcessor.getExecutionRequestsByPhase(tx, TxExecutionPhase.SETUP);
+      const result = await this.processPhase(
+        TxExecutionPhase.SETUP,
+        tx,
+        constants,
+        setupCallRequests,
+        executionRequests,
+        previousPublicKernelOutput,
+        allocatedGas,
+        transactionFee,
+        state.getActiveStateManager(),
+      ).catch(async err => {
+        await this.worldStateDB.rollbackToCommit();
+        throw err;
+      });
+
+      return {
+        avmProvingRequest: result.avmProvingRequest,
+        publicKernelOutput: result.publicKernelOutput,
+        returnValues: result.returnValues,
+        gasUsed: result.gasUsed,
+        durationMs: result.durationMs,
+        reverted: result.reverted,
+        revertReason: result.revertReason,
+      };
+    }
+  }
+
+  private async processAppLogicPhase(state: PhaseStateManager, tx: Tx, constants: CombinedConstantData, phaseGasUsed: PhaseGasUsed, previousPublicKernelOutput: PublicKernelCircuitPublicInputs): Promise<PublicPhaseResult | undefined> {
+    const appLogicCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.APP_LOGIC);
+    const teardownCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.TEARDOWN);
+    if (appLogicCallRequests.length) {
+      // Fork the state manager so that we can rollback state if app logic or teardown reverts.
+      // Don't need to fork for setup since it's non-revertible (if setup fails, transaction is thrown out).
+      state.fork();
+
+      const allocatedGas = this.getAllocatedGasForPhase(TxExecutionPhase.APP_LOGIC, tx, phaseGasUsed);
+      const transactionFee = Fr.ZERO; // transaction fee unknown until teardown
+
+      const executionRequests = EnqueuedCallsProcessor.getExecutionRequestsByPhase(tx, TxExecutionPhase.APP_LOGIC);
+      const result = await this.processPhase(
+        TxExecutionPhase.SETUP,
+        tx,
+        constants,
+        appLogicCallRequests,
+        executionRequests,
+        previousPublicKernelOutput,
+        allocatedGas,
+        transactionFee,
+        state.getActiveStateManager(),
+      ).catch(async err => {
+        await this.worldStateDB.rollbackToCommit();
+        throw err;
+      });
+
+      if (result.reverted) {
+        // Drop the currently active forked state manager and rollback to end of setup.
+        // Fork again for teardown so that if teardown fails we can again rollback to end of setup.
+        state.discardForkedState();
+      } else {
+        if (!teardownCallRequests.length) {
+          // Nothing to do after this (no teardown), so merge state in now instead of letting teardown handle it.
+          state.mergeForkedState();
+        }
+      }
+
+      return {
+        avmProvingRequest: result.avmProvingRequest,
+        publicKernelOutput: result.publicKernelOutput,
+        returnValues: result.returnValues,
+        gasUsed: result.gasUsed,
+        durationMs: result.durationMs,
+        reverted: result.reverted,
+        revertReason: result.revertReason,
+      };
+    }
+  }
+
+  private async processTeardownPhase(state: PhaseStateManager, tx: Tx, constants: CombinedConstantData, phaseGasUsed: PhaseGasUsed, previousPublicKernelOutput: PublicKernelCircuitPublicInputs): Promise<PublicPhaseResult | undefined> {
+    // there will be 0 or 1 teardown calls
+    const teardownCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.TEARDOWN);
+
+    if (teardownCallRequests.length) {
+      if (!state.isForked()) {
+        // if state isn't forked (app logic was empty or reverted), fork now
+        // so we can rollback to the end of setup on teardown revert
+        state.fork();
+      }
+
+      const allocatedGas = this.getAllocatedGasForPhase(TxExecutionPhase.TEARDOWN, tx, phaseGasUsed);
+      const transactionFee = this.getTransactionFee(tx, phaseGasUsed);
+
+      const executionRequests = EnqueuedCallsProcessor.getExecutionRequestsByPhase(tx, TxExecutionPhase.TEARDOWN);
+      const result = await this.processPhase(
+        TxExecutionPhase.SETUP,
+        tx,
+        constants,
+        teardownCallRequests,
+        executionRequests,
+        previousPublicKernelOutput,
+        allocatedGas,
+        transactionFee,
+        state.getActiveStateManager(),
+      ).catch(async err => {
+        await this.worldStateDB.rollbackToCommit();
+        throw err;
+      });
+
+      if (result.reverted) {
+        // Drop the currently active forked state manager and rollback to end of setup.
+        state.discardForkedState();
+      } else {
+        state.mergeForkedState();
+      }
+
+      return {
+        avmProvingRequest: result.avmProvingRequest,
+        publicKernelOutput: result.publicKernelOutput,
+        returnValues: result.returnValues,
+        gasUsed: result.gasUsed,
+        durationMs: result.durationMs,
+        reverted: result.reverted,
+        revertReason: result.revertReason,
+      };
+    }
   }
 
   private async processPhase(
@@ -769,3 +856,66 @@ export class EnqueuedCallsProcessor {
     return old;
   }
 }
+
+class PhaseStateManager {
+  private currentlyActiveStateManager: AvmPersistableStateManager | undefined;
+
+  constructor(private readonly txStateManager: AvmPersistableStateManager) {}
+
+  fork() {
+    assert(!this.currentlyActiveStateManager, 'Cannot fork when already forked');
+    this.currentlyActiveStateManager = this.txStateManager.fork();
+  }
+
+  getTxStateManager() {
+    return this.txStateManager;
+  }
+
+  getActiveStateManager() {
+    return this.currentlyActiveStateManager || this.txStateManager;
+  }
+
+  isForked() {
+    return !!this.currentlyActiveStateManager;
+  }
+
+  mergeForkedState() {
+    assert(this.currentlyActiveStateManager, 'No forked state to merge');
+    this.txStateManager.mergeForkedState(this.currentlyActiveStateManager!);
+
+    this.txStateManager.trace.traceExecutionPhase(
+      this.currentlyActiveStateManager!.trace,
+      [],
+      [], //executionRequests.map(req => req.args),
+      /*reverted=*/ false,
+    );
+
+    // Drop the forked state manager now that it is merged
+    this.currentlyActiveStateManager = undefined;
+  }
+
+  discardForkedState() {
+    assert(this.currentlyActiveStateManager, 'No forked state to discard');
+
+    this.txStateManager.trace.traceExecutionPhase(
+      this.currentlyActiveStateManager!.trace,
+      [],
+      [], //executionRequests.map(req => req.args),
+      /*reverted=*/ true,
+    );
+
+    // Drop the forked state manager. We don't want it!
+    this.currentlyActiveStateManager = undefined;
+  }
+}
+
+function publicPhaseResultToProcessedPhase(result: PublicPhaseResult): ProcessedPhase {
+  return {
+    phase: TxExecutionPhase.SETUP,
+    durationMs: result.durationMs,
+    returnValues: result.returnValues,
+    reverted: result.reverted,
+    revertReason: result.revertReason,
+  };
+}
+
