@@ -54,6 +54,7 @@ import { assertLength } from '@aztec/foundation/serialize';
 import { Timer } from '@aztec/foundation/timer';
 import { getVKSiblingPath } from '@aztec/noir-protocol-circuits-types';
 
+import { assert } from 'console';
 import { inspect } from 'util';
 
 import { AvmPersistableStateManager } from '../avm/journal/journal.js';
@@ -65,7 +66,6 @@ import { type WorldStateDB } from './public_db_sources.js';
 import { type PublicKernelCircuitSimulator } from './public_kernel_circuit_simulator.js';
 import { PublicKernelTailSimulator } from './public_kernel_tail_simulator.js';
 import { PublicSideEffectTrace } from './side_effect_trace.js';
-import { assert } from 'console';
 
 const PhaseIsRevertible: Record<TxExecutionPhase, boolean> = {
   [TxExecutionPhase.SETUP]: false,
@@ -193,7 +193,7 @@ export class EnqueuedCallsProcessor {
       [TxExecutionPhase.TEARDOWN]: Gas.empty(),
     };
     const firstPublicKernelOutput = this.getPublicKernelCircuitPublicInputs(tx.data);
-    let publicKernelOutput = firstPublicKernelOutput;
+    const publicKernelOutput = firstPublicKernelOutput;
     const startStateReference = await this.db.getStateReference();
     /*
      * Don't need to fork at all during setup because it's non-revertible.
@@ -238,13 +238,7 @@ export class EnqueuedCallsProcessor {
 
     const state = new PhaseStateManager(txStateManager);
 
-    const setupResult = await this.processSetupPhase(
-      state,
-      tx,
-      constants,
-      phaseGasUsed,
-      publicKernelOutput,
-    );
+    const setupResult = await this.processSetupPhase(state, tx, constants, phaseGasUsed, publicKernelOutput);
     if (setupResult) {
       phaseGasUsed = {
         ...phaseGasUsed,
@@ -252,13 +246,7 @@ export class EnqueuedCallsProcessor {
       };
     }
 
-    const appLogicResult = await this.processAppLogicPhase(
-      state,
-      tx,
-      constants,
-      phaseGasUsed,
-      publicKernelOutput,
-    );
+    const appLogicResult = await this.processAppLogicPhase(state, tx, constants, phaseGasUsed, publicKernelOutput);
     if (appLogicResult) {
       phaseGasUsed = {
         ...phaseGasUsed,
@@ -266,13 +254,7 @@ export class EnqueuedCallsProcessor {
       };
     }
 
-    const teardownResult = await this.processTeardownPhase(
-      state,
-      tx,
-      constants,
-      phaseGasUsed,
-      publicKernelOutput,
-    );
+    const teardownResult = await this.processTeardownPhase(state, tx, constants, phaseGasUsed, publicKernelOutput);
     if (teardownResult) {
       phaseGasUsed = {
         ...phaseGasUsed,
@@ -281,7 +263,8 @@ export class EnqueuedCallsProcessor {
     }
 
     //const reverted = setupResult?.reverted || appLogicResult?.reverted || teardownResult?.reverted;
-    const revertReason: SimulationError | undefined = teardownResult?.revertReason || appLogicResult?.revertReason || setupResult?.revertReason;
+    const revertReason: SimulationError | undefined =
+      teardownResult?.revertReason || appLogicResult?.revertReason || setupResult?.revertReason;
     let revertCode: RevertCode;
     if (appLogicResult?.reverted && teardownResult?.reverted) {
       revertCode = RevertCode.BOTH_REVERTED;
@@ -294,7 +277,9 @@ export class EnqueuedCallsProcessor {
     }
 
     const phaseResults = [setupResult, appLogicResult, teardownResult];
-    const processedPhases = phaseResults.filter(res => res !== undefined).map(res => publicPhaseResultToProcessedPhase(res!));
+    const processedPhases = phaseResults
+      .filter(res => res !== undefined)
+      .map(res => publicPhaseResultToProcessedPhase(res!));
     //let phaseGasUsed: PhaseGasUsed = {
     //  [TxExecutionPhase.SETUP]: setupResult?.gasUsed || Gas.empty(),
     //  [TxExecutionPhase.APP_LOGIC]: appLogicResult?.gasUsed || Gas.empty(),
@@ -302,7 +287,8 @@ export class EnqueuedCallsProcessor {
     //};
     // Propagate only one avmProvingRequest of a function call for now, so that we know it's still provable.
     // Eventually this will be the proof for the entire public portion of the transaction.
-    const avmProvingRequest = teardownResult?.avmProvingRequest || appLogicResult?.avmProvingRequest || setupResult?.avmProvingRequest;
+    const avmProvingRequest =
+      teardownResult?.avmProvingRequest || appLogicResult?.avmProvingRequest || setupResult?.avmProvingRequest;
 
     const tailKernelOutput = await this.publicKernelTailSimulator.simulate(publicKernelOutput).catch(
       // the abstract phase manager throws if simulation gives error in non-revertible phase
@@ -341,7 +327,13 @@ export class EnqueuedCallsProcessor {
       revertReason,
     };
   }
-  private async processSetupPhase(state: PhaseStateManager, tx: Tx, constants: CombinedConstantData, phaseGasUsed: PhaseGasUsed, previousPublicKernelOutput: PublicKernelCircuitPublicInputs): Promise<PublicPhaseResult | undefined> {
+  private async processSetupPhase(
+    state: PhaseStateManager,
+    tx: Tx,
+    constants: CombinedConstantData,
+    phaseGasUsed: PhaseGasUsed,
+    previousPublicKernelOutput: PublicKernelCircuitPublicInputs,
+  ): Promise<PublicPhaseResult | undefined> {
     const setupCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.SETUP);
     if (setupCallRequests.length) {
       const allocatedGas = this.getAllocatedGasForPhase(TxExecutionPhase.SETUP, tx, phaseGasUsed);
@@ -375,7 +367,13 @@ export class EnqueuedCallsProcessor {
     }
   }
 
-  private async processAppLogicPhase(state: PhaseStateManager, tx: Tx, constants: CombinedConstantData, phaseGasUsed: PhaseGasUsed, previousPublicKernelOutput: PublicKernelCircuitPublicInputs): Promise<PublicPhaseResult | undefined> {
+  private async processAppLogicPhase(
+    state: PhaseStateManager,
+    tx: Tx,
+    constants: CombinedConstantData,
+    phaseGasUsed: PhaseGasUsed,
+    previousPublicKernelOutput: PublicKernelCircuitPublicInputs,
+  ): Promise<PublicPhaseResult | undefined> {
     const appLogicCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.APP_LOGIC);
     const teardownCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.TEARDOWN);
     if (appLogicCallRequests.length) {
@@ -425,7 +423,13 @@ export class EnqueuedCallsProcessor {
     }
   }
 
-  private async processTeardownPhase(state: PhaseStateManager, tx: Tx, constants: CombinedConstantData, phaseGasUsed: PhaseGasUsed, previousPublicKernelOutput: PublicKernelCircuitPublicInputs): Promise<PublicPhaseResult | undefined> {
+  private async processTeardownPhase(
+    state: PhaseStateManager,
+    tx: Tx,
+    constants: CombinedConstantData,
+    phaseGasUsed: PhaseGasUsed,
+    previousPublicKernelOutput: PublicKernelCircuitPublicInputs,
+  ): Promise<PublicPhaseResult | undefined> {
     // there will be 0 or 1 teardown calls
     const teardownCallRequests = EnqueuedCallsProcessor.getCallRequestsByPhase(tx, TxExecutionPhase.TEARDOWN);
 
@@ -918,4 +922,3 @@ function publicPhaseResultToProcessedPhase(result: PublicPhaseResult): Processed
     revertReason: result.revertReason,
   };
 }
-
