@@ -67,7 +67,7 @@ describe('a test that passively observes the network in the presence of network 
 
     let deploymentOutput: string = '';
     deploymentOutput = await applyNetworkShaping({
-      valuesFile: 'moderate.yaml',
+      valuesFile: 'network-requirements.yaml',
       namespace: NAMESPACE,
       spartanDir: SPARTAN_DIR,
       logger: debugLogger,

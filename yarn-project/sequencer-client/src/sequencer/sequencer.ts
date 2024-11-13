@@ -167,11 +167,11 @@ export class Sequencer {
       [SequencerState.IDLE]: this.aztecSlotDuration,
       [SequencerState.SYNCHRONIZING]: this.aztecSlotDuration,
       [SequencerState.PROPOSER_CHECK]: this.aztecSlotDuration, // We always want to allow the full slot to check if we are the proposer
-      [SequencerState.WAITING_FOR_TXS]: 3,
-      [SequencerState.CREATING_BLOCK]: 5,
-      [SequencerState.PUBLISHING_BLOCK_TO_PEERS]: 5 + this.maxTxsPerBlock * 2, // if we take 5 seconds to create block, then 4 transactions at 2 seconds each
-      [SequencerState.WAITING_FOR_ATTESTATIONS]: 5 + this.maxTxsPerBlock * 2 + 3, // it shouldn't take 3 seconds to publish to peers
-      [SequencerState.PUBLISHING_BLOCK]: 5 + this.maxTxsPerBlock * 2 + 3 + 5, // wait 5 seconds for attestations
+      [SequencerState.WAITING_FOR_TXS]: 5,
+      [SequencerState.CREATING_BLOCK]: 7,
+      [SequencerState.PUBLISHING_BLOCK_TO_PEERS]: 7 + this.maxTxsPerBlock * 2, // if we take 5 seconds to create block, then 4 transactions at 2 seconds each
+      [SequencerState.WAITING_FOR_ATTESTATIONS]: 7 + this.maxTxsPerBlock * 2 + 3, // it shouldn't take 3 seconds to publish to peers
+      [SequencerState.PUBLISHING_BLOCK]: 7 + this.maxTxsPerBlock * 2 + 3 + 5, // wait 5 seconds for attestations
     };
     if (this.enforceTimeTable && newTimeTable[SequencerState.PUBLISHING_BLOCK] > this.aztecSlotDuration) {
       throw new Error('Sequencer cannot publish block in less than a slot');
@@ -558,7 +558,7 @@ export class Sequencer {
       await this.publisher.validateBlockForSubmission(block.header);
 
       const workDuration = workTimer.ms();
-      this.log.verbose(
+      this.log.info(
         `Assembled block ${block.number} (txEffectsHash: ${block.header.contentCommitment.txsEffectsHash.toString(
           'hex',
         )})`,
@@ -573,19 +573,19 @@ export class Sequencer {
       );
 
       if (this.isFlushing) {
-        this.log.verbose(`Flushing completed`);
+        this.log.info(`Flushing completed`);
       }
 
       const txHashes = validTxs.map(tx => tx.getTxHash());
 
       this.isFlushing = false;
-      this.log.verbose('Collecting attestations');
+      this.log.info('Collecting attestations');
       const attestations = await this.collectAttestations(block, txHashes);
-      this.log.verbose('Attestations collected');
+      this.log.info('Attestations collected');
 
-      this.log.verbose('Collecting proof quotes');
+      this.log.info('Collecting proof quotes');
       const proofQuote = await this.createProofClaimForPreviousEpoch(newGlobalVariables.slotNumber.toBigInt());
-      this.log.verbose(proofQuote ? `Using proof quote ${inspect(proofQuote.payload)}` : 'No proof quote available');
+      this.log.info(proofQuote ? `Using proof quote ${inspect(proofQuote.payload)}` : 'No proof quote available');
 
       try {
         await this.publishL2Block(block, attestations, txHashes, proofQuote);
@@ -633,16 +633,16 @@ export class Sequencer {
 
     const numberOfRequiredAttestations = Math.floor((committee.length * 2) / 3) + 1;
 
-    this.log.verbose('Creating block proposal');
+    this.log.info('Creating block proposal');
     const proposal = await this.validatorClient.createBlockProposal(block.header, block.archive.root, txHashes);
 
     this.setState(SequencerState.PUBLISHING_BLOCK_TO_PEERS);
-    this.log.verbose('Broadcasting block proposal to validators');
+    this.log.info('Broadcasting block proposal to validators');
     this.validatorClient.broadcastBlockProposal(proposal);
 
     this.setState(SequencerState.WAITING_FOR_ATTESTATIONS);
     const attestations = await this.validatorClient.collectAttestations(proposal, numberOfRequiredAttestations);
-    this.log.verbose(`Collected attestations from validators, number of attestations: ${attestations.length}`);
+    this.log.info(`Collected attestations from validators, number of attestations: ${attestations.length}`);
 
     // note: the smart contract requires that the signatures are provided in the order of the committee
     return orderAttestations(attestations, committee);
@@ -659,7 +659,7 @@ export class Sequencer {
 
       // Get quotes for the epoch to be proven
       const quotes = await this.p2pClient.getEpochProofQuotes(epochToProve);
-      this.log.verbose(`Retrieved ${quotes.length} quotes, slot: ${slotNumber}, epoch to prove: ${epochToProve}`);
+      this.log.info(`Retrieved ${quotes.length} quotes, slot: ${slotNumber}, epoch to prove: ${epochToProve}`);
       for (const quote of quotes) {
         this.log.verbose(inspect(quote.payload));
       }
@@ -670,7 +670,7 @@ export class Sequencer {
 
       const validQuotes = (await validQuotesPromise).filter((q): q is EpochProofQuote => !!q);
       if (!validQuotes.length) {
-        this.log.verbose(`Failed to find any valid proof quotes`);
+        this.log.warn(`Failed to find any valid proof quotes`);
         return undefined;
       }
       // pick the quote with the lowest fee

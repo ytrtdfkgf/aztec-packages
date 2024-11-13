@@ -129,6 +129,7 @@ export class SentTx {
   protected async waitForReceipt(opts?: WaitOpts): Promise<TxReceipt> {
     const txHash = await this.getTxHash();
     const startTime = Date.now();
+    const ignoreDroppedReceiptsFor = opts?.ignoreDroppedReceiptsFor ?? DefaultWaitOpts.ignoreDroppedReceiptsFor;
 
     return await retryUntil(
       async () => {
@@ -142,7 +143,7 @@ export class SentTx {
         // If we don't allow a short grace period, we could incorrectly return a TxReceipt with status DROPPED.
         if (txReceipt.status === TxStatus.DROPPED) {
           const elapsedSeconds = (Date.now() - startTime) / 1000;
-          if (!opts?.ignoreDroppedReceiptsFor || elapsedSeconds > opts.ignoreDroppedReceiptsFor) {
+          if (!ignoreDroppedReceiptsFor || elapsedSeconds > ignoreDroppedReceiptsFor) {
             return txReceipt;
           }
           return undefined;
