@@ -83,7 +83,7 @@ validator:
     p2pUdpPort: 40400
     nodePort: 8080
   logLevel: "debug"
-  debug: "aztec:*,-aztec:avm_simulator*,discv5*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
+  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:l2_block_stream,-aztec:world-state:database"
   sequencer:
     maxSecondsBetweenBlocks: 0
     minTxsPerBlock: 1
@@ -114,7 +114,7 @@ proverNode:
     p2pUdpPort: 40400
     nodePort: 8080
   logLevel: "debug"
-  debug: "aztec:*,-aztec:avm_simulator*,discv5*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
+  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:l2_block_stream,-aztec:world-state:database"
   realProofs: false
   proverAgentEnabled: false
   resources:
@@ -147,6 +147,7 @@ pxe:
 
 bot:
   enabled: true
+  nodeUrl: ""
   logLevel: "debug"
   debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:l2_block_stream,-aztec:world-state:database"
   replicas: 1
