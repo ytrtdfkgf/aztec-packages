@@ -116,7 +116,7 @@ export class PublicExecutor {
     const innerCallTrace = new PublicSideEffectTrace(startSideEffectCounter);
     const enqueuedCallTrace = new PublicEnqueuedCallSideEffectTrace(startSideEffectCounter);
     const trace = new DualSideEffectTrace(innerCallTrace, enqueuedCallTrace);
-    const stateManager = new AvmPersistableStateManager(this.worldStateDB, trace);
+    const stateManager = await AvmPersistableStateManager.create(this.worldStateDB, trace);
     return (await this.simulate(
       stateManager,
       executionRequest,

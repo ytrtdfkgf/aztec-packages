@@ -49,6 +49,7 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { AvmEphemeralForest } from '../../simulator/src/avm/avm_tree.js';
 import { MockPublicKernelCircuit, witnessGenMockPublicKernelCircuit } from './index.js';
 
 // Auto-generated types from noir are not in camel case.
@@ -161,6 +162,11 @@ const proveAvmTestContract = async (
   assertionErrString?: string,
 ): Promise<BBSuccess> => {
   const worldStateDB = mock<WorldStateDB>();
+  const tmp = openTmpStore();
+  const telemetryClient = new NoopTelemetryClient();
+  const merkleTree = await (await MerkleTrees.new(tmp, telemetryClient)).fork();
+  worldStateDB.getMerkleInterface.mockReturnValue(merkleTree);
+
   const startSideEffectCounter = 0;
   const functionSelector = getAvmTestContractFunctionSelector(functionName);
   calldata = [functionSelector.toField(), ...calldata];
@@ -200,9 +206,7 @@ const proveAvmTestContract = async (
   worldStateDB.storageRead.mockResolvedValue(storageValue);
 
   const trace = new PublicSideEffectTrace(startSideEffectCounter);
-  const telemetry = new NoopTelemetryClient();
-  const merkleTrees = await (await MerkleTrees.new(openTmpStore(), telemetry)).fork();
-  worldStateDB.getMerkleInterface.mockReturnValue(merkleTrees);
+  const merkleTrees = await AvmEphemeralForest.create(worldStateDB.getMerkleInterface());
   const persistableState = initPersistableStateManager({ worldStateDB, trace, merkleTrees, doMerkleOperations: true });
   const environment = initExecutionEnvironment({
     functionSelector,

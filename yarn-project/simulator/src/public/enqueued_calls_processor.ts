@@ -207,7 +207,7 @@ export class EnqueuedCallsProcessor {
     const trace = new DualSideEffectTrace(innerCallTrace, enqueuedCallTrace);
 
     // Transaction level state manager that will be forked for revertible phases.
-    const txStateManager = AvmPersistableStateManager.newWithPendingSiloedNullifiers(
+    const txStateManager = await AvmPersistableStateManager.newWithPendingSiloedNullifiers(
       this.worldStateDB,
       trace,
       nonRevertibleNullifiersFromPrivate,

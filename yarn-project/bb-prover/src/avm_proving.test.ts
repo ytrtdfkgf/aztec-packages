@@ -30,6 +30,7 @@ import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'path';
 
+import { AvmEphemeralForest } from '../../simulator/src/avm/avm_tree.js';
 import { type BBSuccess, BB_RESULT, generateAvmProof, verifyAvmProof } from './bb/execute.js';
 import { getPublicInputs } from './test/test_avm.js';
 import { extractAvmVkData } from './verification_key/verification_key_data.js';
@@ -71,7 +72,11 @@ const proveAndVerifyAvmTestContract = async (
   globals.timestamp = TIMESTAMP;
 
   const worldStateDB = mock<WorldStateDB>();
-  //
+  const tmp = openTmpStore();
+  const telemetryClient = new NoopTelemetryClient();
+  const merkleTree = await (await MerkleTrees.new(tmp, telemetryClient)).fork();
+  worldStateDB.getMerkleInterface.mockReturnValue(merkleTree);
+
   // Top level contract call
   const bytecode = getAvmTestContractBytecode('public_dispatch');
   const fnSelector = getAvmTestContractFunctionSelector('public_dispatch');
@@ -106,9 +111,7 @@ const proveAndVerifyAvmTestContract = async (
   worldStateDB.storageRead.mockResolvedValue(Promise.resolve(storageValue));
 
   const trace = new PublicSideEffectTrace(startSideEffectCounter);
-  const telemetry = new NoopTelemetryClient();
-  const merkleTrees = await (await MerkleTrees.new(openTmpStore(), telemetry)).fork();
-  worldStateDB.getMerkleInterface.mockReturnValue(merkleTrees);
+  const merkleTrees = await AvmEphemeralForest.create(worldStateDB.getMerkleInterface());
   const persistableState = initPersistableStateManager({ worldStateDB, trace, merkleTrees, doMerkleOperations: true });
   const environment = initExecutionEnvironment({
     functionSelector,
