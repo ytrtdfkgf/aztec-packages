@@ -67,6 +67,10 @@ bootNode:
   storage: "8Gi"
 
 validator:
+  # If true, the validator will use its peers to serve as the boot node.
+  # This cannot be used when the network first starts up.
+  # But it must be used if the boot node is killed, and the validator is restarted.
+  dynamicBootNode: false
   externalTcpHost: ""
   externalUdpHost: ""
   replicas: 1
@@ -79,7 +83,7 @@ validator:
     p2pUdpPort: 40400
     nodePort: 8080
   logLevel: "debug"
-  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
+  debug: "aztec:*,-aztec:avm_simulator*,discv5*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
   sequencer:
     maxSecondsBetweenBlocks: 0
     minTxsPerBlock: 1
@@ -110,7 +114,7 @@ proverNode:
     p2pUdpPort: 40400
     nodePort: 8080
   logLevel: "debug"
-  debug: "aztec:*,-aztec:avm_simulator*,-aztec:libp2p_service*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
+  debug: "aztec:*,-aztec:avm_simulator*,discv5*,-aztec:circuits:artifact_hash,-json-rpc*,-aztec:world-state:database,-aztec:l2_block_stream*"
   realProofs: false
   proverAgentEnabled: false
   resources:

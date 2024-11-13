@@ -154,6 +154,7 @@ fi
 docker run --rm --network=host \
   -v ~/.kube:/root/.kube \
   -e K8S=true \
+  -e INSTANCE_NAME="spartan" \
   -e SPARTAN_DIR="/usr/src/spartan" \
   -e NAMESPACE="$NAMESPACE" \
   -e HOST_PXE_PORT=$PXE_PORT \

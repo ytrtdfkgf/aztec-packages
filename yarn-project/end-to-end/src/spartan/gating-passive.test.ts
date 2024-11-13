@@ -5,9 +5,9 @@ import { expect, jest } from '@jest/globals';
 
 import { RollupCheatCodes } from '../../../aztec.js/src/utils/cheat_codes.js';
 import {
-  applyBootNodeFailure,
-  applyNetworkShaping,
+  applyValidatorKill,
   awaitL2BlockNumber,
+  enableValidatorDynamicBootNode,
   getConfig,
   isK8sConfig,
   restartBot,
@@ -51,6 +51,9 @@ describe('a test that passively observes the network in the presence of node fai
     );
     const { epochDuration, slotDuration } = await rollupCheatCodes.getConfig();
 
+    // make it so the validator will use its peers to bootstrap
+    await enableValidatorDynamicBootNode('spartan', NAMESPACE, SPARTAN_DIR, debugLogger);
+
     // restart the bot to ensure that it's not affected by the previous test
     await restartBot(NAMESPACE, debugLogger);
 
@@ -61,31 +64,31 @@ describe('a test that passively observes the network in the presence of node fai
     await awaitL2BlockNumber(rollupCheatCodes, epochDuration, 60 * 5, debugLogger);
 
     let deploymentOutput: string = '';
-    deploymentOutput = await applyNetworkShaping({
-      valuesFile: 'moderate.yaml',
-      namespace: NAMESPACE,
-      spartanDir: SPARTAN_DIR,
-      logger: debugLogger,
-    });
-    debugLogger.info(deploymentOutput);
-    deploymentOutput = await applyBootNodeFailure({
-      durationSeconds: 60 * 60 * 24,
-      namespace: NAMESPACE,
-      spartanDir: SPARTAN_DIR,
-      logger: debugLogger,
-    });
-    debugLogger.info(deploymentOutput);
-    await restartBot(NAMESPACE, debugLogger);
+    // deploymentOutput = await applyNetworkShaping({
+    //   valuesFile: 'moderate.yaml',
+    //   namespace: NAMESPACE,
+    //   spartanDir: SPARTAN_DIR,
+    //   logger: debugLogger,
+    // });
+    // debugLogger.info(deploymentOutput);
+    // deploymentOutput = await applyBootNodeFailure({
+    //   durationSeconds: 60 * 60 * 24,
+    //   namespace: NAMESPACE,
+    //   spartanDir: SPARTAN_DIR,
+    //   logger: debugLogger,
+    // });
+    // debugLogger.info(deploymentOutput);
+    // await restartBot(NAMESPACE, debugLogger);
 
     const rounds = 3;
     for (let i = 0; i < rounds; i++) {
       debugLogger.info(`Round ${i + 1}/${rounds}`);
-      // deploymentOutput = await applyValidatorKill({
-      //   namespace: NAMESPACE,
-      //   spartanDir: SPARTAN_DIR,
-      //   logger: debugLogger,
-      // });
-      // debugLogger.info(deploymentOutput);
+      deploymentOutput = await applyValidatorKill({
+        namespace: NAMESPACE,
+        spartanDir: SPARTAN_DIR,
+        logger: debugLogger,
+      });
+      debugLogger.info(deploymentOutput);
       debugLogger.info(`Waiting for 1 epoch to pass`);
       const controlTips = await rollupCheatCodes.getTips();
       await sleep(Number(epochDuration * slotDuration) * 1000);

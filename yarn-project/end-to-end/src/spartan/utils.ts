@@ -13,6 +13,7 @@ const execAsync = promisify(exec);
 const logger = createDebugLogger('k8s-utils');
 
 const k8sConfigSchema = z.object({
+  INSTANCE_NAME: z.string().min(1, 'INSTANCE_NAME env variable must be set'),
   NAMESPACE: z.string().min(1, 'NAMESPACE env variable must be set'),
   HOST_PXE_PORT: z.coerce.number().min(1, 'HOST_PXE_PORT env variable must be set'),
   CONTAINER_PXE_PORT: z.coerce.number().default(8080),
@@ -154,6 +155,37 @@ function valuesToArgs(values: Record<string, string | number>) {
     .join(' ');
 }
 
+function createHelmCommand({
+  instanceName,
+  helmChartDir,
+  namespace,
+  valuesFile,
+  timeout,
+  values,
+  reuseValues = false,
+}: {
+  instanceName: string;
+  helmChartDir: string;
+  namespace: string;
+  valuesFile: string | undefined;
+  timeout: string;
+  values: Record<string, string | number>;
+  reuseValues?: boolean;
+}) {
+  const valuesFileArgs = valuesFile ? `--values ${helmChartDir}/values/${valuesFile}` : '';
+  const reuseValuesArgs = reuseValues ? '--reuse-values' : '';
+  return `helm upgrade --install ${instanceName} ${helmChartDir} --namespace ${namespace} ${valuesFileArgs} ${reuseValuesArgs} --wait --timeout=${timeout} ${valuesToArgs(
+    values,
+  )}`;
+}
+
+async function execHelmCommand(args: Parameters<typeof createHelmCommand>[0]) {
+  const helmCommand = createHelmCommand(args);
+  logger.info(`helm command: ${helmCommand}`);
+  const { stdout } = await execAsync(helmCommand);
+  return stdout;
+}
+
 /**
  * Installs a Helm chart with the given parameters.
  * @param instanceName - The name of the Helm chart instance.
@@ -210,12 +242,14 @@ export async function installChaosMeshChart({
     });
   }
 
-  const helmCommand = `helm upgrade --install ${instanceName} ${helmChartDir} --namespace ${chaosMeshNamespace} --values ${helmChartDir}/values/${valuesFile} --wait --timeout=${timeout} --set global.targetNamespace=${targetNamespace}  ${valuesToArgs(
-    values,
-  )}`;
-  logger.info(`helm command: ${helmCommand}`);
-  const { stdout } = await execAsync(helmCommand);
-  return stdout;
+  return execHelmCommand({
+    instanceName,
+    helmChartDir,
+    namespace: chaosMeshNamespace,
+    valuesFile,
+    timeout,
+    values: { ...values, 'global.targetNamespace': targetNamespace },
+  });
 }
 
 export function applyProverFailure({
@@ -325,4 +359,26 @@ export async function restartBot(namespace: string, logger: Logger) {
   await sleep(10 * 1000);
   await waitForResourceByLabel({ resource: 'pods', namespace, label: 'app=bot' });
   logger.info(`Bot restarted`);
+}
+
+export async function enableValidatorDynamicBootNode(
+  instanceName: string,
+  namespace: string,
+  spartanDir: string,
+  logger: Logger,
+) {
+  logger.info(`Enabling validator dynamic boot node`);
+  await execHelmCommand({
+    instanceName,
+    namespace,
+    helmChartDir: getChartDir(spartanDir, 'aztec-network'),
+    values: {
+      'validator.dynamicBootNode': 'true',
+    },
+    valuesFile: undefined,
+    timeout: '10m',
+    reuseValues: true,
+  });
+
+  logger.info(`Validator dynamic boot node enabled`);
 }
