@@ -5,6 +5,8 @@ import { expect, jest } from '@jest/globals';
 
 import { RollupCheatCodes } from '../../../aztec.js/src/utils/cheat_codes.js';
 import {
+  applyBootNodeFailure,
+  applyNetworkShaping,
   applyValidatorKill,
   awaitL2BlockNumber,
   enableValidatorDynamicBootNode,
@@ -22,7 +24,7 @@ const { NAMESPACE, HOST_PXE_PORT, HOST_ETHEREUM_PORT, CONTAINER_PXE_PORT, CONTAI
   config;
 const debugLogger = createDebugLogger('aztec:spartan-test:reorg');
 
-describe('a test that passively observes the network in the presence of node failures and network shaping', () => {
+describe('a test that passively observes the network in the presence of network chaos', () => {
   jest.setTimeout(60 * 60 * 1000); // 60 minutes
 
   const ETHEREUM_HOST = `http://127.0.0.1:${HOST_ETHEREUM_PORT}`;
@@ -30,7 +32,7 @@ describe('a test that passively observes the network in the presence of node fai
   // 50% is the max that we expect to miss
   const MAX_MISSED_SLOT_PERCENT = 0.5;
 
-  it('survives network shaping', async () => {
+  it('survives network chaos', async () => {
     await startPortForward({
       resource: 'svc/spartan-aztec-network-pxe',
       namespace: NAMESPACE,
@@ -64,21 +66,21 @@ describe('a test that passively observes the network in the presence of node fai
     await awaitL2BlockNumber(rollupCheatCodes, epochDuration, 60 * 5, debugLogger);
 
     let deploymentOutput: string = '';
-    // deploymentOutput = await applyNetworkShaping({
-    //   valuesFile: 'moderate.yaml',
-    //   namespace: NAMESPACE,
-    //   spartanDir: SPARTAN_DIR,
-    //   logger: debugLogger,
-    // });
-    // debugLogger.info(deploymentOutput);
-    // deploymentOutput = await applyBootNodeFailure({
-    //   durationSeconds: 60 * 60 * 24,
-    //   namespace: NAMESPACE,
-    //   spartanDir: SPARTAN_DIR,
-    //   logger: debugLogger,
-    // });
-    // debugLogger.info(deploymentOutput);
-    // await restartBot(NAMESPACE, debugLogger);
+    deploymentOutput = await applyNetworkShaping({
+      valuesFile: 'moderate.yaml',
+      namespace: NAMESPACE,
+      spartanDir: SPARTAN_DIR,
+      logger: debugLogger,
+    });
+    debugLogger.info(deploymentOutput);
+    deploymentOutput = await applyBootNodeFailure({
+      durationSeconds: 60 * 60 * 24,
+      namespace: NAMESPACE,
+      spartanDir: SPARTAN_DIR,
+      logger: debugLogger,
+    });
+    debugLogger.info(deploymentOutput);
+    await restartBot(NAMESPACE, debugLogger);
 
     const rounds = 3;
     for (let i = 0; i < rounds; i++) {
